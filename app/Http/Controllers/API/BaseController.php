@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Symfony\Component\HttpFoundation\Response;
 
 class BaseController extends Controller
 {
@@ -19,8 +20,8 @@ class BaseController extends Controller
     {
         $response = [
             'success' => true,
-            'data'    => $result,
             'message' => $message,
+            'data'    => $result,
         ];
 
         return response()->json($response, Response::HTTP_OK);
