@@ -23,6 +23,7 @@ class MerchantResource extends JsonResource
             'state' => $this->state,
             'phone_number' => $this->phone_number,
             'approved' => $this->approved == 0 ? 'Not Approved' : 'Approved',
+            'confirmation_status' => $this->confirmation_status == true ? 'Confirm' : 'Pending',
             'user_id' => $this->user_id,
             'merchant_id' => $this->merchant_id,
             'iccid_number' => $this->iccid_number,

@@ -9,7 +9,8 @@ use Illuminate\Support\Str;
 class Merchant extends Model
 {
     protected $fillable = [
-        'name', 'address', 'country', 'city', 'state', 'phone_number', 'approved', 'user_id' ,'surename','merchant_id','iccid_number'
+        'name', 'address', 'country', 'city', 'state', 'phone_number', 'approved', 'user_id' ,'surename',
+        'merchant_id','iccid_number','confirmation_status'
     ];
 
     protected static function boot()

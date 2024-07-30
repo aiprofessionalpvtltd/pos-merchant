@@ -2,18 +2,34 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
-// use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
+use Laravel\Passport\ClientRepository;
 
 class DatabaseSeeder extends Seeder
 {
     /**
-     * Seed the application's database.
+     * Run the database seeds.
+     *
+     * @return void
      */
     public function run(): void
     {
         $this->call(UserSeeder::class);
+        $this->createPersonalAccessClient();
+    }
 
+    /**
+     * Create a personal access client for Passport.
+     *
+     * @return void
+     */
+    private function createPersonalAccessClient()
+    {
+        $clientRepository = new ClientRepository();
+        $clientRepository->createPersonalAccessClient(
+            null, 'POS', env('APP_URL')
+        );
+
+        $this->command->info('Personal access client created successfully.');
     }
 }

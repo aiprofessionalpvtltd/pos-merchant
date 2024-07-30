@@ -25,7 +25,8 @@ return new class extends Migration
             $table->string('iccid_number');
             $table->string('phone_number')->unique();
             $table->boolean('approved')->default(false);
-            $table->timestamps();
+            $table->boolean('confirmation_status')->default(false);
+             $table->timestamps();
             $table->softDeletes();
         });
     }

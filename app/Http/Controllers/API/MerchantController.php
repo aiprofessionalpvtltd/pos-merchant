@@ -35,9 +35,15 @@ class MerchantController extends BaseController
         return $this->sendResponse(new MerchantResource($merchant), 'Merchant registered successfully. Your request has been sent to the admin for approval.');
     }
 
-    public function show(Merchant $merchant)
+    public function show($id)
     {
-        return $this->sendResponse(new MerchantResource($merchant), 'Merchant retrieved successfully.');
+        $merchant = Merchant::find($id);
+
+        if (is_null($merchant)) {
+            return $this->sendError('Merchant not found.');
+        }
+
+        return $this->sendResponse($merchant, 'Merchant retrieved successfully.');
     }
 
     public function update(Request $request, Merchant $merchant)
