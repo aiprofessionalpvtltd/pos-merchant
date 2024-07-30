@@ -18,6 +18,7 @@ return new class extends Migration
             $table->enum('user_type', ['teleoperator', 'merchant','mobileoperator','admin'])->default('merchant');
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
+            $table->string('pin')->nullable();
             $table->rememberToken();
             $table->timestamps();
             $table->softDeletes();

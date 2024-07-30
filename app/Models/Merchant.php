@@ -10,7 +10,7 @@ class Merchant extends Model
 {
     protected $fillable = [
         'name', 'address', 'country', 'city', 'state', 'phone_number', 'approved', 'user_id' ,'surename',
-        'merchant_id','iccid_number','confirmation_status'
+        'merchant_id','iccid_number','confirmation_status','otp','otp_expires_at'
     ];
 
     protected static function boot()

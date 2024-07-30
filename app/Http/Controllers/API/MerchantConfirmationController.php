@@ -39,7 +39,7 @@ class MerchantConfirmationController extends BaseController
             if ($merchant->confirmation_status) {
                 return $this->sendResponse(new MerchantResource($merchant), 'Merchant already confirmed.');
             }
-            
+
             // Simulate sending confirmation text/USSD to the merchant's phone
             $confirmationStatus = $this->sendConfirmationToPhone($merchant->phone_number, $request->confirmation_method);
 

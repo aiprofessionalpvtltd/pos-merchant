@@ -27,18 +27,7 @@ class UserSeeder extends Seeder
             'user_type' => 'teleoperator',
         ]);
 
-        User::create([
-            'name' => 'Merchant User',
-            'email' => 'merchant@example.com',
-            'password' => Hash::make('1234'),
-            'user_type' => 'merchant',
-        ]);
 
-        User::create([
-            'name' => 'Mobile Operator User',
-            'email' => 'mobileoperator@example.com',
-            'password' => Hash::make('1234'),
-            'user_type' => 'mobileoperator',
-        ]);
+ 
     }
 }

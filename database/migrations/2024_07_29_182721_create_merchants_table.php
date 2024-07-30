@@ -24,8 +24,10 @@ return new class extends Migration
             $table->string('state');
             $table->string('iccid_number');
             $table->string('phone_number')->unique();
-            $table->boolean('approved')->default(false);
+            $table->boolean('is_approved')->default(false);
             $table->boolean('confirmation_status')->default(false);
+            $table->integer('otp')->nullable();
+            $table->timestamp('otp_expires_at')->nullable();
              $table->timestamps();
             $table->softDeletes();
         });
