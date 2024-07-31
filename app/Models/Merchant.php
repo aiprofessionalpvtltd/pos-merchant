@@ -41,5 +41,10 @@ class Merchant extends Model
         return $this->belongsTo(User::class);
     }
 
+    public function subscriptions()
+    {
+        return $this->hasMany(MerchantSubscription::class);
+    }
+
 
 }
