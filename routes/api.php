@@ -5,6 +5,7 @@ use App\Http\Controllers\API\MerchantController;
 use App\Http\Controllers\API\MerchantSubscriptionController;
 use App\Http\Controllers\API\MerchantVerificationController;
 use App\Http\Controllers\API\PassportAuthController;
+use App\Http\Controllers\API\SaleController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
@@ -30,5 +31,8 @@ Route::middleware('auth:api')->group(function () {
     Route::put('merchants/subscriptions/{id}', [MerchantSubscriptionController::class, 'update'])->name('subscriptions.update');
     Route::delete('merchants/subscriptions/{id}', [MerchantSubscriptionController::class, 'destroy'])->name('subscriptions.destroy');
     Route::post('merchants/subscriptions/{id}/cancel', [MerchantSubscriptionController::class, 'cancel'])->name('subscriptions.cancel');
+
+    Route::post('merchants/sales/process', [SaleController::class, 'processSale'])->name('sales.process');
+    Route::post('merchants/sales/confirm-payment', [SaleController::class, 'confirmPayment'])->name('sales.confirm-payment');
 
 });
