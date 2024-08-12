@@ -33,10 +33,10 @@ function showBoolean($status)
 {
 
     if ($status == 1) {
-        echo '<span class="badge badge-success">YES</span>';
+        echo '<span class="badge bg-success rounded-pill">YES</span>';
 
     } else {
-        echo '<span class="badge badge-danger">NO</span>';
+        echo '<span class="badge bg-danger rounded-pill">NO</span>';
 
     }
 

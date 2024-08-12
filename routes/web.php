@@ -3,6 +3,7 @@
 use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\Admin\Dashboard\SuperAdminDashboardController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\MerchantController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\UserController;
 use Illuminate\Support\Facades\Auth;
@@ -38,6 +39,17 @@ Route::middleware(['auth'])->group(function () {
     Route::get('role/{id}/edit', [RoleController::class, 'edit'])->name('edit-role');
     Route::put('update-role{id}', [RoleController::class, 'update'])->name('update-role');
     Route::post('destroy-role', [RoleController::class, 'destroy'])->name('destroy-role');
+
+
+    //Merchant Controllers
+    Route::get('show-merchant', [MerchantController::class, 'show'])->name('show-merchant');
+    Route::get('add-merchant', [MerchantController::class, 'index'])->name('add-merchant');
+    Route::post('store-merchant', [MerchantController::class, 'store'])->name('store-merchant');
+    Route::get('merchant/{id}/edit', [MerchantController::class, 'edit'])->name('edit-merchant');
+    Route::put('update-merchant{id}', [MerchantController::class, 'update'])->name('update-merchant');
+    Route::post('changeStatus-merchant', [MerchantController::class, 'changeStatus'])->name('changeStatus-merchant');
+    Route::post('delete-merchant', [MerchantController::class, 'delete'])->name('delete-merchant');
+
 
 
 });

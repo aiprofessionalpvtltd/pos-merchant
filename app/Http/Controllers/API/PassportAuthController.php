@@ -34,7 +34,7 @@ class PassportAuthController extends BaseController
 
             if (Auth::attempt($credentials)) {
                 $user = Auth::user();
-                $token = $user->createToken('PassportAuth')->accessToken;
+                $token = $user->createToken('POS')->accessToken;
 
                 return $this->sendResponse([
                     'user' => $user,

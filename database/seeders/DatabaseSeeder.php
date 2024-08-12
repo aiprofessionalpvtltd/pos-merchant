@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
+use Illuminate\Support\Facades\Artisan;
 use Laravel\Passport\ClientRepository;
 
 class DatabaseSeeder extends Seeder
@@ -25,6 +26,8 @@ class DatabaseSeeder extends Seeder
 
         $this->createPersonalAccessClient();
 
+        $this->runPermissionUpdateCommand();
+
     }
 
     /**
@@ -40,5 +43,16 @@ class DatabaseSeeder extends Seeder
         );
 
         $this->command->info('Personal access client created successfully.');
+    }
+
+    /**
+     * Run the custom Artisan command to update permissions.
+     *
+     * @return void
+     */
+    private function runPermissionUpdateCommand()
+    {
+        Artisan::call('permission:update');
+        $this->command->info('Permissions updated successfully.');
     }
 }

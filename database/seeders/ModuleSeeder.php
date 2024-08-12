@@ -18,7 +18,6 @@ class ModuleSeeder extends Seeder
             'Users',
             'Roles',
             'Merchant',
-
         );
 
         foreach ($modules as $row) {
