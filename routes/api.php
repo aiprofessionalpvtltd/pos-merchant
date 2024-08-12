@@ -3,6 +3,7 @@
 use App\Http\Controllers\API\MerchantConfirmationController;
 use App\Http\Controllers\API\MerchantController;
 use App\Http\Controllers\API\MerchantSubscriptionController;
+use App\Http\Controllers\API\MerchantTransactionController;
 use App\Http\Controllers\API\MerchantVerificationController;
 use App\Http\Controllers\API\PassportAuthController;
 use App\Http\Controllers\API\SaleController;
@@ -34,5 +35,10 @@ Route::middleware('auth:api')->group(function () {
 
     Route::post('merchants/sales/process', [SaleController::class, 'processSale'])->name('sales.process');
     Route::post('merchants/sales/confirm-payment', [SaleController::class, 'confirmPayment'])->name('sales.confirm-payment');
+
+
+    Route::post('/merchant/verify-transaction', [MerchantTransactionController::class, 'verifyTransaction']);
+
+
 
 });

@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'edahab' => [
+        'api_key' => env('API_KEY', 'eip8thzONw0sFHt8M7A53dnj8cWPDhL0tBfp57'),
+        'agent_code' => env('AGENT_CODE', '711674'),
+        'currency' => env('CURRENCY', 'SLSH'),
+        'pin' => env('PIN', '1234'),
+    ],
+
 ];
