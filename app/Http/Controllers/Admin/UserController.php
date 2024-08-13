@@ -38,9 +38,11 @@ class UserController extends Controller
         $title = 'Add User';
         $users = User::with('roles')
             ->where('id', '>', auth()->user()->id)
+            ->whereDoesntHave('roles', function($query) {
+                $query->where('name', 'Super Admin');
+            })
             ->orderBy('created_at', 'DESC')
             ->get();
-
 //        dd($users);
         return view('admin.user.index', compact('title', 'users', 'data'));
     }
@@ -52,7 +54,13 @@ class UserController extends Controller
      */
     public function index()
     {
-        $roles = Role::where('id', '!=', 1)->get();
+        $authUserRole = auth()->user()->roles->pluck('id')->toArray();
+
+// Retrieve roles excluding the authenticated user's role and the "Super Admin" role
+        $roles = Role::whereNotIn('id', $authUserRole)
+            ->where('name', '!=', 'Super Admin')
+            ->get();
+
         $title = 'Add User';
         return view('admin.user.create', compact('roles', 'title'));
     }
@@ -69,7 +77,7 @@ class UserController extends Controller
             'name' => 'required',
             'email' => 'required|email|unique:users',
             'role_id' => 'required|exists:roles,id',
-            'password' => 'required|min:8|confirmed',
+            'password' => 'required|min:4|confirmed',
             'password_confirmation' => 'required'
         ]);
 
@@ -127,7 +135,12 @@ class UserController extends Controller
     {
         $title = 'Edit User';
         $user = User::with('roles')->find($id);
-        $roles = Role::where('id', '!=', 1)->get();
+        $authUserRole = auth()->user()->roles->pluck('id')->toArray();
+
+        // Retrieve roles excluding the authenticated user's role and the "Super Admin" role
+        $roles = Role::whereNotIn('id', $authUserRole)
+            ->where('name', '!=', 'Super Admin')
+            ->get();
         return view('admin.user.edit', compact('title', 'user', 'roles'));
     }
 
@@ -165,7 +178,7 @@ class UserController extends Controller
 
             if ($request->filled('password')) {
                 $validatorPassword = Validator::make($request->all(), [
-                    'password' => 'required|min:8|confirmed',
+                    'password' => 'required|min:4|confirmed',
                     'password_confirmation' => 'required'
                 ]);
 

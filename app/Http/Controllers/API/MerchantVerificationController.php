@@ -11,6 +11,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
 use App\Http\Resources\MerchantResource;
+use Spatie\Permission\Models\Role;
 
 class MerchantVerificationController extends BaseController
 {
@@ -83,6 +84,8 @@ class MerchantVerificationController extends BaseController
                     'user_type' => 'merchant',
                 ]);
 
+                $user->assignRole(Role::where('name', 'Merchant')->first());
+
                 // Update merchant approval status and link to the new user
                 $merchant->is_approved = true;
                 $merchant->user_id = $user->id;
@@ -106,7 +109,6 @@ class MerchantVerificationController extends BaseController
     public function storePin(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'merchant_id' => 'required|exists:merchants,id',
             'pin' => 'required|string|size:4'
         ]);
 
@@ -115,13 +117,13 @@ class MerchantVerificationController extends BaseController
         }
 
         try {
-            $merchant = Merchant::find($request->merchant_id);
+            $user = auth()->user();
+            $authUser = $user->merchant;
+             $merchant = Merchant::find($authUser->id);
 
             if (!$merchant) {
                 return $this->sendError('Merchant not found.');
             }
-
-            $user = $merchant->user;
 
             if (!$user) {
                 return $this->sendError('User not found for the merchant.');

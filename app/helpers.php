@@ -26,7 +26,31 @@ function showStatus($status)
 
 }
 
+function showApproval($status)
+{
 
+    if ($status == 1) {
+        echo '<span class="badge bg-success rounded-pill">Approved</span>';
+
+    } else {
+        echo '<span class="badge bg-danger rounded-pill">Not Approved</span>';
+
+    }
+
+}
+
+function showConfirmation($status)
+{
+
+    if ($status == 1) {
+        echo '<span class="badge bg-success rounded-pill">Confirmed</span>';
+
+    } else {
+        echo '<span class="badge bg-danger rounded-pill">Not Confirmed</span>';
+
+    }
+
+}
 
 
 function showBoolean($status)
@@ -58,34 +82,6 @@ function showBooleanStatus($status)
 
 
 
-function settingImagePath($image)
-{
-    if ($image != null)
-        return asset('storage/settings/' . $image);
-}
-
-function uploadImage($file, $dir)
-{
-//    $imageName = $request->file('image')->store('courses/images', 'public');
-    $filename = $file->store($dir, 'public');
-
-//    $filename = date('YmdHi') . $file->getClientOriginalName();
-//    $file->move(public_path('public' . '/' . $dir), $filename);
-    return $filename;
-
-}
-
-function showImage($image, $dir)
-{
-     if (!empty($image)) {
-        return asset('storage/' . $image);
-    } else {
-        $image = 'placeholder.jpg';
-        return asset('assets/' . $image);
-
-    }
-
-}
 
 
 function currentDate()
@@ -237,30 +233,9 @@ function calculatePercentage($score, $total)
     return $formatted_percentage;
 }
 
-function createLogs($generatedFor, $detail, $action): bool
-{
-    $generatedBy = Auth::user()->id;
-    $logData = [
-        'generated_by' => $generatedBy,
-        'generated_for' => $generatedFor,
-        'detail' => $detail,
-        'action' => $action
-    ];
-    InternLog::create($logData);
-    return true;
-}
 
-function createLogsWithOutAuth($generatedFor, $detail, $action): bool
-{
-    $logData = [
-        'generated_by' => 0,
-        'generated_for' => $generatedFor,
-        'detail' => $detail,
-        'action' => $action
-    ];
-    InternLog::create($logData);
-    return true;
-}
+
+
 
 function generateTransactionCode(){
     $number = mt_rand(100000000000000, 999999999999999);

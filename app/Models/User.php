@@ -53,4 +53,9 @@ class User extends Authenticatable
             'password' => 'hashed',
         ];
     }
+
+    public function merchant()
+    {
+        return $this->hasOne(Merchant::class)->withDefault();
+    }
 }

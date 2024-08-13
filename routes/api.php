@@ -24,7 +24,7 @@ Route::middleware('auth:api')->group(function () {
 
     Route::get('merchants/verify/{merchant_id}', [MerchantVerificationController::class, 'verifyMerchant']);
     Route::post('merchants/approve', [MerchantVerificationController::class, 'approveMerchant']);
-    Route::post('merchants/store-pin', [MerchantVerificationController::class, 'storePin']);
+    Route::post('merchants/store-pin', [MerchantVerificationController::class, 'storePin'])->middleware('merchant');
 
     Route::get('merchants/subscriptions', [MerchantSubscriptionController::class, 'index'])->name('subscriptions.index');
     Route::post('merchants/subscriptions', [MerchantSubscriptionController::class, 'store'])->name('subscriptions.store');
@@ -33,8 +33,8 @@ Route::middleware('auth:api')->group(function () {
     Route::delete('merchants/subscriptions/{id}', [MerchantSubscriptionController::class, 'destroy'])->name('subscriptions.destroy');
     Route::post('merchants/subscriptions/{id}/cancel', [MerchantSubscriptionController::class, 'cancel'])->name('subscriptions.cancel');
 
-    Route::post('merchants/sales/process', [SaleController::class, 'processSale'])->name('sales.process');
-    Route::post('merchants/sales/confirm-payment', [SaleController::class, 'confirmPayment'])->name('sales.confirm-payment');
+    Route::post('merchants/sales/process', [SaleController::class, 'processSale'])->name('sales.process')->middleware('merchant');
+    Route::post('merchants/sales/confirm-payment', [SaleController::class, 'confirmPayment'])->name('sales.confirm-payment')->middleware('merchant');
 
 
     Route::post('/merchant/verify-transaction', [MerchantTransactionController::class, 'verifyTransaction']);

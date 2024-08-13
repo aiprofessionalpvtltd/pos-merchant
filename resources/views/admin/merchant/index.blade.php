@@ -60,8 +60,8 @@
                         <td>{{$merchant->name}}</td>
                          <td>{{$merchant->phone_number}}</td>
                         <td>{{$merchant->city}} , {{$merchant->country}} ,  {{$merchant->address}} </td>
-                        <td>{{showBoolean($merchant->is_approved)}}</td>
-                        <td>{{showBoolean($merchant->confirmation_status)}}</td>
+                        <td>{{showApproval($merchant->is_approved)}}</td>
+                        <td>{{showConfirmation($merchant->confirmation_status)}}</td>
                         <td>`
                             <div class="d-flex">
                                 @can('edit-merchant')
