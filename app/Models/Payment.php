@@ -15,6 +15,8 @@ class Payment extends Model
         'payment_method',
         'transaction_id',
         'is_successful',
+        'amount_to_merchant',
+        'amount_to_exelo',
     ];
 
     public function sale()

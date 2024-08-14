@@ -27,7 +27,7 @@ return new class extends Migration {
             $table->decimal('amount_sent_to_exelo', 10, 2)->nullable();
             $table->decimal('total_amount_charge_to_customer', 10, 2)->nullable();
             $table->decimal('conversion_rate', 10, 2)->nullable();
-            $table->decimal('currency', 10, 2)->nullable();
+            $table->string('currency')->nullable();
 
             $table->timestamps();
         });

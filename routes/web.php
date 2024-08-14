@@ -43,12 +43,8 @@ Route::middleware(['auth'])->group(function () {
 
     //Merchant Controllers
     Route::get('show-merchant', [MerchantController::class, 'show'])->name('show-merchant');
-    Route::get('add-merchant', [MerchantController::class, 'index'])->name('add-merchant');
-    Route::post('store-merchant', [MerchantController::class, 'store'])->name('store-merchant');
-    Route::get('merchant/{id}/edit', [MerchantController::class, 'edit'])->name('edit-merchant');
-    Route::put('update-merchant{id}', [MerchantController::class, 'update'])->name('update-merchant');
-    Route::post('changeStatus-merchant', [MerchantController::class, 'changeStatus'])->name('changeStatus-merchant');
-    Route::post('delete-merchant', [MerchantController::class, 'delete'])->name('delete-merchant');
+    Route::get('view-merchant/{id}', [MerchantController::class, 'view'])->name('view-merchant');
+     Route::post('delete-merchant', [MerchantController::class, 'delete'])->name('delete-merchant');
 
 
 

@@ -22,8 +22,9 @@ class Sale extends Model
         'transaction_fee_amount',
         'total_fee_charge_to_customer',
         'amount_sent_to_exelo',
-        'total_amount_after_conversion',
-        'total_amount_after_conversion',
+        'total_amount_charge_to_customer',
+        'conversion_rate',
+        'currency',
 
      ];
 
@@ -31,5 +32,10 @@ class Sale extends Model
     public function merchant()
     {
         return $this->belongsTo(Merchant::class);
+    }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class);
     }
 }

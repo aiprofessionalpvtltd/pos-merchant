@@ -9,6 +9,7 @@ use App\Models\Sale;
 use App\Models\Payment;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Exception;
 
@@ -31,6 +32,7 @@ class SaleController extends BaseController
         }
 
         try {
+            DB::beginTransaction();
             $user = auth()->user();
             $authUser = $user->merchant;
 
@@ -41,12 +43,7 @@ class SaleController extends BaseController
             $amount_to_merchant = $paymentDetails['amount_to_merchant'];
             $amount_to_exelo = $paymentDetails['amount_to_exelo'];
 
-            // Simulate payment gateway requests
-            $this->sendPaymentToMerchant($amount_to_merchant, $authUser->id);
-            $this->sendPaymentToExelo($amount_to_exelo);
-
-            dd($paymentDetails);
-            // Create the sale
+            // Create the sale record
             $sale = Sale::create([
                 'merchant_id' => $authUser->id,
                 'amount' => $request->amount,
@@ -65,22 +62,40 @@ class SaleController extends BaseController
                 'currency' => $paymentDetails['currency'],
             ]);
 
-            $payment = null;
-            if ($request->payment_method === 'card') {
-                // Simulate sending payment details to payment gateway
-                $paymentDetails = $this->initiateCardPayment($sale);
+            // Simulate sending payment details to the payment gateway for Merchant
+            $merchantPayment = $this->initiatePaymentGatewayForMerchant($sale);
 
-                $payment = Payment::create([
-                    'sale_id' => $sale->id,
-                    'amount' => $sale->amount,
-                    'payment_method' => $sale->payment_method,
-                    'transaction_id' => $paymentDetails['transaction_id'],
-                    'is_successful' => false,
-                ]);
-            }
+            // Simulate sending payment details to the payment gateway for Exelo
+            $exeloPayment = $this->initiatePaymentGatewayForExelo($sale);
 
-            return $this->sendResponse(['sale' => new SaleResource($sale), 'payment' => $payment ? new PaymentResource($payment) : null], 'Sale processed successfully.');
+//            dd($merchantPayment,$exeloPayment);
+            // Create payment record for Merchant
+            $merchantPaymentRecord = Payment::create([
+                'sale_id' => $sale->id,
+                'amount' => $sale->amount,
+                'payment_method' => $sale->payment_method,
+                'transaction_id' => $merchantPayment['transaction_id'],
+                'amount_to_merchant' => $merchantPayment['amount_to_merchant'],
+                'is_successful' => true,
+            ]);
+
+            // Create payment record for Exelo
+            $exeloPaymentRecord = Payment::create([
+                'sale_id' => $sale->id,
+                'amount' => $sale->amount,
+                'payment_method' => $sale->payment_method,
+                'transaction_id' => $exeloPayment['transaction_id'],
+                'amount_to_exelo' => $exeloPayment['amount_to_exelo'],
+                'is_successful' => true,
+            ]);
+            DB::commit();
+            return $this->sendResponse([
+                'sale' => new SaleResource($sale),
+                'merchant_payment' => new PaymentResource($merchantPaymentRecord),
+                'exelo_payment' => new PaymentResource($exeloPaymentRecord)
+            ], 'Sale processed successfully.');
         } catch (Exception $e) {
+            DB::rollBack();
             return $this->sendError('An error occurred during the sale process.', ['error' => $e->getMessage()]);
         }
     }
@@ -101,14 +116,26 @@ class SaleController extends BaseController
     /**
      * Simulate initiating card payment
      */
-    private function initiateCardPayment(Sale $sale)
+    private function initiatePaymentGatewayForMerchant($sale)
     {
-        // Simulate interaction with payment gateway here
         // Generate a random transaction ID
         $transactionId = 'TXN' . strtoupper(uniqid());
 
         return [
-            'transaction_id' => $transactionId
+            'transaction_id' => $transactionId,
+            'amount_to_merchant' => $sale->amount_to_merchant,
+            'merchant_id' => $sale->merchant_id,
+        ];
+    }
+
+    private function initiatePaymentGatewayForExelo($sale)
+    {
+        // Generate a random transaction ID
+        $transactionId = 'TXN' . strtoupper(uniqid());
+
+        return [
+            'transaction_id' => $transactionId,
+            'amount_to_exelo' => $sale->amount_sent_to_exelo,
         ];
     }
 
@@ -155,92 +182,6 @@ class SaleController extends BaseController
             'currency' => $currency,
         ];
     }
-
-
-//    private function calculatePaymentDetails($transaction_amount, $selected_currency)
-//    {
-//        // Define the conversion rate
-//        $conversion_rate = 8000; // 1 USD = 8,000 SLS
-//
-//        // Define fees
-//        $conversion_fee_rate = 0.005; // 0.5%
-//        $transaction_fee_rate = 0.02; // 2%
-//
-//        // Initialize variables
-//        $currency = 'SLS'; // Default currency is SLS
-//
-//        if ($transaction_amount >= 800000) {
-//            // If transaction amount is greater than or equal to 800,000 SLS
-//            if ($selected_currency === 'USD') {
-//                // Perform calculations in USD
-//                $currency = 'USD';
-//
-//                // Convert transaction amount to USD
-//                $transaction_amount_usd = $transaction_amount / $conversion_rate;
-//
-//                // Calculate the conversion fee in USD
-//                $conversion_fee_amount = $transaction_amount_usd * $conversion_fee_rate;
-//
-//                // Calculate the transaction fee in USD
-//                $transaction_fee_amount = $transaction_amount_usd * $transaction_fee_rate;
-//
-//                // Calculate the total fee charged to the customer in USD
-//                $total_fee_charge_to_customer = $conversion_fee_amount + $transaction_fee_amount;
-//
-//                // Calculate the total amount charged to the customer in USD
-//                $total_amount_charge_to_customer = $transaction_amount_usd + $total_fee_charge_to_customer;
-//
-//                // Return the calculated values for USD
-//                return [
-//                    'total_amount_after_conversion' => round($transaction_amount_usd, 2),
-//                    'conversion_fee_amount' => round($conversion_fee_amount, 2),
-//                    'transaction_fee_amount' => round($transaction_fee_amount, 2),
-//                    'total_fee_charge_to_customer' => round($total_fee_charge_to_customer, 2),
-//                    'total_amount_charge_to_customer' => round($total_amount_charge_to_customer, 2),
-//                    'conversion_rate' => $conversion_rate,
-//                    'currency' => $currency,
-//                ];
-//            } else {
-//                // Perform calculations in SLS
-//                $currency = 'SLS';
-//
-//                // Calculate the transaction fee in SLS
-//                $transaction_fee_amount = $transaction_amount * $transaction_fee_rate;
-//
-//                // Calculate the total amount charged to the customer in SLS
-//                $total_amount_charge_to_customer = $transaction_amount + $transaction_fee_amount;
-//
-//                // Return the calculated values for SLS
-//                return [
-//                    'total_amount_after_conversion' => round($transaction_amount, 2), // No conversion, remains in SLS
-//                    'conversion_fee_amount' => 0, // No conversion fee in SLS
-//                    'transaction_fee_amount' => round($transaction_fee_amount, 2),
-//                    'total_fee_charge_to_customer' => round($transaction_fee_amount, 2), // Only transaction fee
-//                    'total_amount_charge_to_customer' => round($total_amount_charge_to_customer, 2),
-//                    'conversion_rate' => $conversion_rate,
-//                    'currency' => $currency,
-//                ];
-//            }
-//        } else {
-//            // For transaction amounts less than 800,000 SLS, default to SLS
-//            // Calculate the transaction fee in SLS
-//            $transaction_fee_amount = $transaction_amount * $transaction_fee_rate;
-//
-//            // Calculate the total amount charged to the customer in SLS
-//            $total_amount_charge_to_customer = $transaction_amount + $transaction_fee_amount;
-//
-//            // Return the calculated values for SLS
-//            return [
-//                'total_amount_after_conversion' => round($transaction_amount, 2), // No conversion, remains in SLS
-//                'conversion_fee_amount' => 0, // No conversion fee in SLS
-//                'transaction_fee_amount' => round($transaction_fee_amount, 2),
-//                'total_fee_charge_to_customer' => round($transaction_fee_amount, 2), // Only transaction fee
-//                'total_amount_charge_to_customer' => round($total_amount_charge_to_customer, 2),
-//                'conversion_rate' => $conversion_rate,
-//                'currency' => $currency,
-//            ];
-//        }
-//    }
 
 
     /**

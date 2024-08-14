@@ -39,7 +39,7 @@ class UserController extends Controller
         $users = User::with('roles')
             ->where('id', '>', auth()->user()->id)
             ->whereDoesntHave('roles', function($query) {
-                $query->where('name', 'Super Admin');
+                $query->where('name', 'Super Admin')->orwhere('name', 'Merchant');
             })
             ->orderBy('created_at', 'DESC')
             ->get();
@@ -59,6 +59,7 @@ class UserController extends Controller
 // Retrieve roles excluding the authenticated user's role and the "Super Admin" role
         $roles = Role::whereNotIn('id', $authUserRole)
             ->where('name', '!=', 'Super Admin')
+            ->where('name', '!=', 'Merchant')
             ->get();
 
         $title = 'Add User';
@@ -140,6 +141,7 @@ class UserController extends Controller
         // Retrieve roles excluding the authenticated user's role and the "Super Admin" role
         $roles = Role::whereNotIn('id', $authUserRole)
             ->where('name', '!=', 'Super Admin')
+            ->where('name', '!=', 'Merchant')
             ->get();
         return view('admin.user.edit', compact('title', 'user', 'roles'));
     }

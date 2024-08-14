@@ -18,6 +18,8 @@ return new class extends Migration
             $table->string('payment_method');
             $table->string('transaction_id')->nullable();
             $table->boolean('is_successful')->default(false);
+            $table->decimal('amount_to_merchant', 10, 2)->nullable();
+            $table->decimal('amount_to_exelo', 10, 2)->nullable();
             $table->timestamps();
         });
     }

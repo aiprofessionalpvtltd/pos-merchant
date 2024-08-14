@@ -4,10 +4,12 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Str;
 
 class Merchant extends Model
 {
+    use SoftDeletes;
     protected $fillable = [
         'name', 'address', 'country', 'city', 'state', 'phone_number', 'approved', 'user_id' ,'surename',
         'merchant_id','iccid_number','confirmation_status','otp','otp_expires_at'
@@ -45,6 +47,9 @@ class Merchant extends Model
     {
         return $this->hasMany(MerchantSubscription::class);
     }
-
+    public function sales()
+    {
+        return $this->hasMany(Sale::class);
+    }
 
 }

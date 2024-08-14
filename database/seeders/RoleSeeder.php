@@ -19,7 +19,6 @@ class RoleSeeder extends Seeder
             'Super Admin',
             'Admin',
             'Tele Operator',
-            'Mobile Operator',
             'Merchant',
         );
 

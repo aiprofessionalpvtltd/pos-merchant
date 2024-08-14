@@ -30,7 +30,7 @@ class SaleResource extends JsonResource
             'amount_sent_to_exelo' => round($this->amount_sent_to_exelo, 2),
             'total_amount_charge_to_customer' => round($this->total_amount_charge_to_customer, 2),
             'conversion_rate' => round($this->conversion_rate, 2),
-            'currency' => round($this->currency, 2),
+            'currency' => $this->currency
 
         ];
     }

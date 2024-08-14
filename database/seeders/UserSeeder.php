@@ -40,14 +40,7 @@ class UserSeeder extends Seeder
 
         $user->assignRole(Role::where('name', 'Tele Operator')->first());
 
-        $user = User::create([
-            'name' => 'Mobile Operator',
-            'email' => 'mobileoperator@example.com',
-            'password' => Hash::make('1234'),
-            'user_type' => 'mobileoperator',
-        ]);
 
-        $user->assignRole(Role::where('name', 'Mobile Operator')->first());
 
     }
 }

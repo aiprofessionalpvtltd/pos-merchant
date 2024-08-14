@@ -52,6 +52,19 @@ function showConfirmation($status)
 
 }
 
+function showVerification($status)
+{
+
+    if ($status == 1) {
+        echo '<span class="badge bg-success rounded-pill">Verified</span>';
+
+    } else {
+        echo '<span class="badge bg-danger rounded-pill">Not Verified</span>';
+
+    }
+
+}
+
 
 function showBoolean($status)
 {
@@ -81,7 +94,12 @@ function showBooleanStatus($status)
 
 
 
-
+function showCurrency($currency,$amount){
+    if($amount){
+        return $amount.' ' . $currency;
+    }
+    return '-';
+}
 
 
 function currentDate()

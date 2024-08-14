@@ -28,15 +28,7 @@
             <div class="card-header header-elements-inline">
                 <h5 class="card-title"></h5>
                 <div class="header-elements">
-                    @can('create-merchants')
-                        <div class="col-md-12 mt-5">
 
-                            <a href="{{route('add-merchant')}}"
-                               class="btn btn-outline-primary float-end"><b><i
-                                        class="fas fa-plus"></i></b> {{$title}}
-                            </a>
-                        </div>
-                    @endcan
                 </div>
             </div>
 
@@ -61,17 +53,17 @@
                          <td>{{$merchant->phone_number}}</td>
                         <td>{{$merchant->city}} , {{$merchant->country}} ,  {{$merchant->address}} </td>
                         <td>{{showApproval($merchant->is_approved)}}</td>
-                        <td>{{showConfirmation($merchant->confirmation_status)}}</td>
+                        <td>{{showVerification($merchant->confirmation_status)}}</td>
                         <td>`
                             <div class="d-flex">
-                                @can('edit-merchant')
-                                    <a title="Edit" href="{{ route('edit-merchant', $merchant->id) }}"
+                                @can('view-merchant')
+                                    <a title="Edit" href="{{ route('view-merchant', $merchant->id) }}"
                                        class="badge bg-primary m-1"><i
-                                            class="fas fa-fw fa-edit"></i></a>
+                                            class="fas fa-fw fa-eye"></i></a>
                                 @endcan
 
                                 @can('delete-merchant')
-                                    <a href="javascript:void(0)" data-url="{{route('changeStatus-merchant')}}"
+                                    <a href="javascript:void(0)" data-url="{{route('delete-merchant')}}"
                                        data-status='0' data-label="delete"
                                        data-id="{{$merchant->id}}"
                                        class="badge bg-danger m-1 change-status-record"
