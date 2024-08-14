@@ -38,13 +38,14 @@ class SaleController extends BaseController
             $paymentDetails = $this->calculatePaymentDetails($request->amount, $request->currency);
 
             // Extract relevant details for Merchant and Exelo transactions
-            $amount_to_merchant = $paymentDetails['total_amount_after_conversion'];
-            $amount_to_exelo = $paymentDetails['total_fee_charge_to_customer'];
+            $amount_to_merchant = $paymentDetails['amount_to_merchant'];
+            $amount_to_exelo = $paymentDetails['amount_to_exelo'];
 
             // Simulate payment gateway requests
             $this->sendPaymentToMerchant($amount_to_merchant, $authUser->id);
             $this->sendPaymentToExelo($amount_to_exelo);
 
+            dd($paymentDetails);
             // Create the sale
             $sale = Sale::create([
                 'merchant_id' => $authUser->id,

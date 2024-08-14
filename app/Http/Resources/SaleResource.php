@@ -21,19 +21,17 @@ class SaleResource extends JsonResource
             'payment_method' => $this->payment_method,
             'is_completed' => $this->is_completed,
             'is_successful' => $this->is_successful,
-            'total_customer_charge' => round($this->total_customer_charge, 2),
-            'total_customer_charge_usd' => round($this->total_customer_charge_usd, 2),
+
+            'total_amount_after_conversion' => round($this->total_amount_after_conversion, 2),
+            'amount_to_merchant' => round($this->amount_to_merchant, 2),
+            'conversion_fee_amount' => round($this->conversion_fee_amount, 2),
+            'transaction_fee_amount' => round($this->transaction_fee_amount, 2),
+            'total_fee_charge_to_customer' => round($this->total_fee_charge_to_customer, 2),
             'amount_sent_to_exelo' => round($this->amount_sent_to_exelo, 2),
-            'amount_sent_to_exelo_usd' => round($this->amount_sent_to_exelo_usd, 2),
-            'merchant_receives' => round($this->merchant_receives, 2),
-            'merchant_receives_usd' => round($this->merchant_receives_usd, 2),
-            'zaad_fee_from_exelo' => round($this->zaad_fee_from_exelo, 2),
-            'zaad_fee_from_exelo_usd' => round($this->zaad_fee_from_exelo_usd, 2),
-            'zaad_fee' => round($this->zaad_fee, 2),
-            'zaad_fee_usd' => round($this->zaad_fee_usd, 2),
+            'total_amount_charge_to_customer' => round($this->total_amount_charge_to_customer, 2),
             'conversion_rate' => round($this->conversion_rate, 2),
-            'created_at' => $this->created_at,
-            'updated_at' => $this->updated_at,
+            'currency' => round($this->currency, 2),
+
         ];
     }
 }

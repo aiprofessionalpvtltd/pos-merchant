@@ -15,18 +15,17 @@ class Sale extends Model
         'payment_method',
         'is_completed',
         'is_successful',
-        'total_customer_charge',
-        'total_customer_charge_usd',
+
+        'total_amount_after_conversion',
+        'amount_to_merchant',
+        'conversion_fee_amount',
+        'transaction_fee_amount',
+        'total_fee_charge_to_customer',
         'amount_sent_to_exelo',
-        'amount_sent_to_exelo_usd',
-        'merchant_receives',
-        'merchant_receives_usd',
-        'zaad_fee_from_exelo',
-        'zaad_fee_from_exelo_usd',
-        'zaad_fee',
-        'zaad_fee_usd',
-        'conversion_rate',
-    ];
+        'total_amount_after_conversion',
+        'total_amount_after_conversion',
+
+     ];
 
 
     public function merchant()
