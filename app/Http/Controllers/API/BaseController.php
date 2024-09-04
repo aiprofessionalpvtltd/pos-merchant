@@ -60,4 +60,19 @@ class BaseController extends Controller
     {
         return Validator::make($request->all(), $rules);
     }
+
+    public function getInitials($name) {
+        // Explode the name into words
+        $words = explode(' ', $name);
+
+        // Get the first character of each word
+        $initials = '';
+        foreach ($words as $word) {
+            if (!empty($word)) {
+                $initials .= strtoupper($word[0]);
+            }
+        }
+
+        return $initials;
+    }
 }

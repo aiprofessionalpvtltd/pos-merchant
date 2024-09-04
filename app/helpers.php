@@ -251,10 +251,6 @@ function calculatePercentage($score, $total)
     return $formatted_percentage;
 }
 
-
-
-
-
 function generateTransactionCode(){
     $number = mt_rand(100000000000000, 999999999999999);
     return $number;

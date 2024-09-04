@@ -15,22 +15,24 @@ return new class extends Migration
             $table->id();
             $table->unsignedBigInteger('user_id')->nullable();
             $table->foreign('user_id')->references('id')->on('users')->onDelete('cascade');
-            $table->string('name');
-            $table->string('merchant_id')->unique();
-            $table->string('surename');
-            $table->string('address');
-            $table->string('country');
-            $table->string('city');
-            $table->string('state');
-            $table->string('iccid_number');
+
+             $table->string('first_name')->nullable();
+            $table->string('last_name')->nullable();
+            $table->date('dob')->nullable();
+            $table->string('location')->nullable();
+            $table->string('business_name')->nullable();
+            $table->string('merchant_code')->unique()->nullable();
+            $table->string('email')->nullable(); // Adding nullable since email is empty in the input
             $table->string('phone_number')->unique();
+
             $table->boolean('is_approved')->default(false);
             $table->boolean('confirmation_status')->default(false);
             $table->integer('otp')->nullable();
             $table->timestamp('otp_expires_at')->nullable();
-             $table->timestamps();
+            $table->timestamps();
             $table->softDeletes();
         });
+
     }
 
     /**

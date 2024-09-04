@@ -6,14 +6,21 @@ use App\Http\Controllers\API\MerchantSubscriptionController;
 use App\Http\Controllers\API\MerchantTransactionController;
 use App\Http\Controllers\API\MerchantVerificationController;
 use App\Http\Controllers\API\PassportAuthController;
+use App\Http\Controllers\API\PaymentController;
 use App\Http\Controllers\API\SaleController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 Route::post('login', [PassportAuthController::class, 'login']);
+Route::post('login/verifyUser', [PassportAuthController::class, 'verifyUser']);
 Route::post('merchants', [MerchantController::class, 'store']);
+Route::post('merchants/signup', [MerchantController::class, 'signup']);
+
 Route::post('merchants/request-otp', [MerchantController::class, 'requestOtp']);
 Route::post('merchants/verify-otp', [MerchantController::class, 'verifyOtp']);
+Route::post('merchants/store-pin', [MerchantVerificationController::class, 'storePin']);
+
+Route::post('merchant/make-payment', [PaymentController::class, 'makePayment']);
 
 
 Route::middleware('auth:api')->group(function () {
@@ -24,7 +31,6 @@ Route::middleware('auth:api')->group(function () {
 
     Route::get('merchants/verify/{merchant_id}', [MerchantVerificationController::class, 'verifyMerchant']);
     Route::post('merchants/approve', [MerchantVerificationController::class, 'approveMerchant']);
-    Route::post('merchants/store-pin', [MerchantVerificationController::class, 'storePin'])->middleware('merchant');
 
     Route::get('merchants/subscriptions', [MerchantSubscriptionController::class, 'index'])->name('subscriptions.index');
     Route::post('merchants/subscriptions', [MerchantSubscriptionController::class, 'store'])->name('subscriptions.store');

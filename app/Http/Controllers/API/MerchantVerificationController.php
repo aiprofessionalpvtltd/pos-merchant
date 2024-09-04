@@ -8,9 +8,11 @@ use App\Models\Merchant;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
 use App\Http\Resources\MerchantResource;
+use Illuminate\Testing\Fluent\Concerns\Has;
 use Spatie\Permission\Models\Role;
 
 class MerchantVerificationController extends BaseController
@@ -109,35 +111,41 @@ class MerchantVerificationController extends BaseController
     public function storePin(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'pin' => 'required|string|size:4'
+            'phone_number' => 'required|string|max:15',
+            'pin' => 'required|string|size:4',
+            'repeat_pin' => 'required|string|same:pin'
         ]);
 
         if ($validator->fails()) {
             return $this->sendError('Validation Error.', $validator->errors());
         }
 
+        DB::beginTransaction();
+
         try {
-            $user = auth()->user();
-            $authUser = $user->merchant;
-             $merchant = Merchant::find($authUser->id);
+             // Check if a merchant with the provided phone number already exists
+            $phoneNumber = str_replace(' ','',$request->phone_number);
+            $merchant = Merchant::where('phone_number', $phoneNumber)->first();
 
-            if (!$merchant) {
-                return $this->sendError('Merchant not found.');
+            if ($merchant->count() == 0) {
+                return $this->sendError('Merchant mobile number is not registered', '');
             }
 
-            if (!$user) {
-                return $this->sendError('User not found for the merchant.');
-            }
+            $user = User::find($merchant->user_id);
 
             // Update the user's PIN and password
             $user->pin = $request->pin;
             $user->password = Hash::make($request->pin);
             $user->save();
 
-            return $this->sendResponse(['merchant'=>new MerchantResource($merchant), 'user'=>new UserResource($user)], 'PIN code stored and password updated.');
+            DB::commit();
+
+            return $this->sendResponse(['merchant' => new MerchantResource($merchant), 'user' => new UserResource($user)], 'PIN code stored and password updated.');
         } catch (\Exception $e) {
+            DB::rollBack();
             return $this->sendError('An error occurred while storing the PIN code.', ['error' => $e->getMessage()]);
         }
     }
+
 
 }

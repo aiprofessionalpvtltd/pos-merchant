@@ -11,17 +11,29 @@ class Merchant extends Model
 {
     use SoftDeletes;
     protected $fillable = [
-        'name', 'address', 'country', 'city', 'state', 'phone_number', 'approved', 'user_id' ,'surename',
-        'merchant_id','iccid_number','confirmation_status','otp','otp_expires_at'
+        'first_name',
+        'last_name',
+        'dob',
+        'location',
+        'business_name',
+        'merchant_code',
+        'email',
+        'phone_number',
+        'is_approved',
+        'confirmation_status',
+        'otp',
+        'otp_expires_at',
+        'user_id'
     ];
+
 
     protected static function boot()
     {
         parent::boot();
 
         static::creating(function ($merchant) {
-            $merchant->merchant_id = 'MER' . strtoupper(Str::random(10));
-            $merchant->iccid_number = self::generateIccidNumber();
+//            $merchant->merchant_id = 'MER' . strtoupper(Str::random(10));
+//            $merchant->iccid_number = self::generateIccidNumber();
         });
     }
 

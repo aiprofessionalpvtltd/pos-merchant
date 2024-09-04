@@ -9,8 +9,10 @@ use App\Models\Merchant;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Spatie\Permission\Models\Role;
 use function Lcobucci\JWT\Token\all;
 
 class MerchantController extends BaseController
@@ -21,15 +23,34 @@ class MerchantController extends BaseController
         return $this->sendResponse(MerchantResource::collection($merchants), 'Merchants retrieved successfully.');
     }
 
+    public function signup(Request $request)
+    {
+        $validator = $this->validateRequest($request, [
+            'phone_number' => 'required|string|max:15|unique:merchants,phone_number',
+
+        ]);
+
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
+
+
+        $merchant = Merchant::create($request->all());
+        return $this->sendResponse(new MerchantResource($merchant), 'Merchant Phone Number Registered successfully');
+    }
+
+
     public function store(Request $request)
     {
         $validator = $this->validateRequest($request, [
-            'name' => 'required|string|max:255',
-            'address' => 'required|string|max:255',
-            'country' => 'required|string|max:255',
-            'city' => 'required|string|max:255',
-            'state' => 'required|string|max:255',
-            'phone_number' => 'required|string|max:15|unique:merchants,phone_number',
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+            'dob' => 'required|date',
+            'location' => 'required|string|max:255',
+            'business_name' => 'required|string|max:255',
+            'merchant_code' => 'required|string|max:255',
+            'email' => 'nullable|email|max:255',
+            'phone_number' => 'required|string|max:15',
             'user_id' => 'nullable|exists:users,id',
         ]);
 
@@ -37,9 +58,62 @@ class MerchantController extends BaseController
             return $this->sendError('Validation Error.', $validator->errors());
         }
 
-        $merchant = Merchant::create($request->all());
-        return $this->sendResponse(new MerchantResource($merchant), 'Merchant registered successfully. Your request has been sent to the admin for approval.');
+        DB::beginTransaction();
+
+        try {
+            // Check if a merchant with the provided phone number already exists
+            $merchantCount = Merchant::where('phone_number', $request->input('phone_number'))->count();
+
+            if ($merchantCount == 0) {
+                return $this->sendError('Merchant mobile number is not registered', '');
+            }
+
+            // Find the merchant by phone number or create a new one
+            $merchant = Merchant::updateOrCreate(
+                ['phone_number' => $request->input('phone_number')],
+                $request->all()
+            );
+
+            if($request->input('email')){
+                $email = $request->input('email');
+            }else{
+                $email = $request->input('phone_number') . '@email.com';
+            }
+
+            $user = User::find($merchant->user_id);
+
+             if ($user && $user->id) {
+                return $this->sendResponse(['merchant'=>new MerchantResource($merchant), 'user'=>new UserResource($user)], 'Merchant is already Registered.');
+            }
+
+            // Create a new user account linked to the merchant
+            $user = User::create([
+                'name' => $merchant->first_name . ' ' . $merchant->last_name,
+                'email' => $email,
+                'password' => Hash::make('1234'), // Set a default or random password
+                'user_type' => 'merchant',
+            ]);
+
+            $user->assignRole(Role::where('name', 'Merchant')->first());
+
+            // Update merchant approval status and link to the new user
+            $merchant->is_approved = true;
+            $merchant->user_id = $user->id;
+            $merchant->save();
+
+            DB::commit();
+
+            return $this->sendResponse(
+                ['merchant' => new MerchantResource($merchant), 'user' => new UserResource($user) ,'short_name' => $this->getInitials($user->name)],
+                'Merchant registered/updated successfully.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->sendError('An error occurred while processing your request.', $e->getMessage(),400);
+        }
     }
+
+
 
     public function show($id)
     {

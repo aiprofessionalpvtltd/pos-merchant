@@ -7,6 +7,7 @@ use App\Http\Resources\UserResource;
 use App\Models\Merchant;
 use Illuminate\Http\Request;
 use App\Http\Controllers\API\BaseController;
+use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
 
@@ -18,46 +19,57 @@ class PassportAuthController extends BaseController
      * @param \Illuminate\Http\Request $request
      * @return \Illuminate\Http\JsonResponse
      */
+
+
     public function login(Request $request)
     {
+
+        $this->validateRequest($request, [
+            'phone_number' => 'required|string|max:20',
+        ]);
+
+        $phoneNumber = str_replace(' ','',$request->phone_number);
+        $merchant = Merchant::where('phone_number', $phoneNumber)->first();
+
+        if (!$merchant) {
+            return $this->sendError('Phone number not found.', 404);
+        }
+
+
+        $user = $merchant->user;
+
+        // Check if the user has a PIN
+        $isPin = !is_null($user->pin);
+
+        // Return response
+        return $this->sendResponse([
+            'user' => new UserResource($user),
+            'merchant' => new MerchantResource($merchant),
+            'user_type' => $user->user_type,
+            'is_pin' => $isPin,
+            'short_name' => $this->getInitials($user->name)
+        ], 'Enter the PIN Code');
+
+    }
+
+     public function verifyUser(Request $request)
+    {
         // Validate the request based on user type
-        if ($request->has('email')) {
-            $this->validateRequest($request, [
-                'email' => 'required|email',
-                'password' => 'required',
-            ]);
 
-            $credentials = [
-                'email' => $request->email,
-                'password' => $request->password,
-            ];
-
-            if (Auth::attempt($credentials)) {
-                $user = Auth::user();
-                $token = $user->createToken('POS')->accessToken;
-
-                return $this->sendResponse([
-                    'user' => $user,
-                    'token' => $token,
-                    'user_type' => $user->user_type
-                ], 'Login successful.');
-            } else {
-                return $this->sendError('Unauthorized', 401);
-            }
-        } elseif ($request->has('phone_number')) {
             $this->validateRequest($request, [
                 'phone_number' => 'required|string|max:15',
-                'pin_code' => 'required|string|size:4',
+                'pin' => 'required|string|size:4',
             ]);
 
-            $merchant = Merchant::where('phone_number', $request->phone_number)->first();
+            $phoneNumber = str_replace(' ','',$request->phone_number);
+            $merchant = Merchant::where('phone_number', $phoneNumber)->first();
 
             if (!$merchant) {
-                return $this->sendError('Phone number not found.', 404);
+                return $this->sendError('Phone number not found.', '',404);
             }
 
-            if (!Hash::check($request->pin_code, $merchant->user->password)) {
-                return $this->sendError('Invalid PIN code.', 401);
+             if (!Hash::check($request->pin, $merchant->user->password)) {
+                return $this->sendError('Invalid PIN code.', '',401);
             }
 
             $user = $merchant->user;
@@ -67,11 +79,10 @@ class PassportAuthController extends BaseController
                 'user' => new UserResource($user),
                 'merchant' => new MerchantResource($merchant),
                 'token' => $token,
-                'user_type' => $user->user_type
+                'user_type' => $user->user_type,
+                 'short_name' => $this->getInitials($user->name)
             ], 'Merchant Login successful.');
-        } else {
-            return $this->sendError('Invalid login credentials.', 400);
-        }
+
     }
 
     /**
