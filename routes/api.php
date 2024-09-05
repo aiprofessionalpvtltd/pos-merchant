@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\API\CategoryController;
 use App\Http\Controllers\API\MerchantConfirmationController;
 use App\Http\Controllers\API\MerchantController;
 use App\Http\Controllers\API\MerchantSubscriptionController;
@@ -45,6 +46,18 @@ Route::middleware('auth:api')->group(function () {
 
     Route::post('/merchant/verify-transaction', [MerchantTransactionController::class, 'verifyTransaction']);
 
+
+    // List all categories
+    Route::get('categories', [CategoryController::class, 'index'])->name('categories.index');
+    Route::get('categories/merchant', [CategoryController::class, 'getByMerchant'])->name('categories.merchant');
+    // Store (Create) a category
+    Route::post('categories', [CategoryController::class, 'store'])->name('categories.store');
+    // Show a specific category
+    Route::get('categories/{id}', [CategoryController::class, 'show'])->name('categories.show');
+    // Update a category
+    Route::post('categories/{id}', [CategoryController::class, 'update'])->name('categories.update');
+    // Delete a category
+    Route::delete('categories/{id}', [CategoryController::class, 'destroy'])->name('categories.destroy');
 
 
 });
