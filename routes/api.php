@@ -20,10 +20,16 @@ Route::post('merchants/request-otp', [MerchantController::class, 'requestOtp']);
 Route::post('merchants/verify-otp', [MerchantController::class, 'verifyOtp']);
 Route::post('merchants/store-pin', [MerchantVerificationController::class, 'storePin']);
 
-Route::post('merchant/make-payment', [PaymentController::class, 'makePayment']);
-
+Route::post('merchant/transaction/process', [PaymentController::class, 'processTransaction']);
+Route::post('merchant/invoice/issue', [PaymentController::class, 'issueInvoice']);
+Route::post('merchant/invoice/status', [PaymentController::class, 'checkInvoiceStatus']);
 
 Route::middleware('auth:api')->group(function () {
+
+    Route::post('merchant/invoice/route', [PaymentController::class, 'routePaymentAPI']);
+    Route::post('merchant/payment', [PaymentController::class, 'makeMerchantPayment']);
+
+
     Route::get('merchants', [MerchantController::class, 'index']);
     Route::get('merchants/{id}', [MerchantController::class, 'show']);
 
