@@ -27,7 +27,7 @@ Route::post('merchant/invoice/status', [PaymentController::class, 'checkInvoiceS
 Route::middleware('auth:api')->group(function () {
 
     Route::post('merchant/invoice/route', [PaymentController::class, 'routePaymentAPI']);
-    Route::post('merchant/payment', [PaymentController::class, 'makeMerchantPayment']);
+    Route::post('merchant/invoice/payment', [PaymentController::class, 'makeMerchantPayment']);
 
 
     Route::get('merchants', [MerchantController::class, 'index']);

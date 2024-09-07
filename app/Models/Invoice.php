@@ -30,6 +30,7 @@ class Invoice extends Model
         'currency',
         'status',
         'e_transaction_id',
+        'type',
     ];
 
 }

@@ -11,6 +11,7 @@ use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class PaymentController extends BaseController
@@ -23,13 +24,25 @@ class PaymentController extends BaseController
 
         $phoneNumber = $request->input('edahab_number');
 
+        $phoneNumber = str_replace(['+252', ' '], '', $phoneNumber);
+
         // Extract the first two digits of the phone number
         $prefix = substr($phoneNumber, 0, 2);
 
         // Check if the prefix matches any of the Dahab prefixes
         if (in_array($prefix, $dahabPrefixes)) {
             // Connect to Dahab API
-            return $this->connectToDahabAPI($request);
+            $finalResponse = $this->connectToDahabAPI($request);
+
+            $finalResponse = $finalResponse->getData(true);
+
+            if ($finalResponse['error']) {
+                Log::error('error in payment proceeding in final response');
+
+                return $this->sendError($finalResponse['error'], '');
+            }
+
+            return $this->sendResponse($finalResponse, 'Payment Proceed Successfully');
         } else {
             // Connect to Waafi API
             return $this->connectToWaafiAPI($request);
@@ -70,23 +83,35 @@ class PaymentController extends BaseController
             $checkInvoiceStatusData = $checkInvoiceStatusResponse->getData(true);
 
             // Add the checkInvoiceStatus response to the responses array
-            $responses['checkInvoiceStatus'] = $checkInvoiceStatusData;
+
+            if ($checkInvoiceStatusData['error']) {
+                $responses['error'] = $checkInvoiceStatusData['error'];
+            } else {
+                 $responses['checkInvoiceStatus'] = $checkInvoiceStatusData;
+            }
+
 
             // Step 3: If merchantPayment is true, call the makeMerchantPayment function
-            if ($merchantPayment) {
-
-                $makeMerchantPaymentResponse = $this->makeMerchantPayment($request);
-
-                // Convert JsonResponse to an associative array
-                $makeMerchantPaymentData = $makeMerchantPaymentResponse->getData(true);
-
-                // Add the makeMerchantPayment response to the responses array
-                $responses['makeMerchantPayment'] = $makeMerchantPaymentData;
-            }
+//            if ($merchantPayment) {
+//
+//                $makeMerchantPaymentResponse = $this->makeMerchantPayment($request);
+//
+//                // Convert JsonResponse to an associative array
+//                $makeMerchantPaymentData = $makeMerchantPaymentResponse->getData(true);
+//
+//                if ($makeMerchantPaymentData['error']) {
+//                    $responses['error'] = $makeMerchantPaymentData['error'];
+//                } else {
+//                    // Add the makeMerchantPayment response to the responses array
+//                    $responses['makeMerchantPayment'] = $makeMerchantPaymentData;
+//                }
+//
+//            }
         } else {
             // If issueInvoice failed, add the error response
-            $responses['error'] = 'Failed to issue invoice';
-        }
+            Log::error('Failed to issue invoice');
+            $responses['error'] = $issueInvoiceData['error'];
+         }
 
         // Return all the responses as one combined array
         return response()->json($responses);
@@ -181,12 +206,22 @@ class PaymentController extends BaseController
         $phoneNumber = $request->input('edahab_number');
         $totalCustomerCharge = $request->input('total_customer_charge');
         $currency = $request->input('currency');
+        $type = $request->input('type');
         $iteration = 1;
 
         $transactionId = 'txn_' . $iteration . '_' . round(microtime(true) * 1000);
 
 // Remove the country code and spaces
         $edahabNumber = str_replace(['+252', ' '], '', $phoneNumber);
+
+        // Check if a merchant with the provided phone number already exists
+        $merchantCount = Merchant::where('phone_number', $edahabNumber)->count();
+
+        if ($merchantCount > 0) {
+            Log::error('Merchant mobile number is already registered');
+
+            return $this->sendError('Merchant mobile number is already registered', '');
+        }
 
         $payload = [
             "apiKey" => $apiKey,
@@ -206,7 +241,7 @@ class PaymentController extends BaseController
             DB::beginTransaction();
 
             // Make API request to issue invoice
-            $response = Http::timeout(60)->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
+            $response = Http::timeout(env('API_TIMEOUT'))->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
 
             if ($response->status() === 200) {
                 $invoiceData = $response->json();
@@ -219,6 +254,9 @@ class PaymentController extends BaseController
                     'hash' => $hashValue,
                     'amount' => $totalCustomerCharge,
                     'currency' => $currency,
+                    'status' => 'Pending',
+                    'e_transaction_id' => $transactionId,
+                    'type' => $type,
                 ]);
 
 
@@ -240,13 +278,13 @@ class PaymentController extends BaseController
                 DB::rollBack();
                 Log::error('Failed to issue invoice', ['response' => $response->body()]);
 
-                return $this->sendError('error', 'Failed to issue invoice', 500);
+                return $this->sendError('error', 'Failed to issue invoice ' . $response->body(), 500);
             }
         } catch (\Exception $e) {
             // Rollback the transaction if any exception occurs
             DB::rollBack();
             Log::error('Error in issueInvoice: ' . $e->getMessage());
-            return $this->sendError('error', 'An error occurred while issuing the invoice', 500);
+            return $this->sendError('error', 'An error occurred while issuing the invoice ' . $e->getMessage(), 500);
         }
     }
 
@@ -271,64 +309,80 @@ class PaymentController extends BaseController
             // Start database transaction
             DB::beginTransaction();
             // Send the API request
-            $response = Http::timeout(60)->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
+            $response = Http::timeout(env('API_TIMEOUT'))->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
 
             if ($response->status() === 200) {
                 $responseData = $response->json();
                 $invoiceStatus = $responseData['InvoiceStatus'];  // Assuming the API returns 'InvoiceStatus'
-                $eTransactionId = $responseData['TransactionId'];  // Assuming the API returns 'InvoiceStatus'
+                $eTransactionId = $responseData['TransactionId'];  // Assuming the API returns 'TransactionId'
 
-                if ($invoiceStatus) {
-                    // Update the invoice status in the database
-                    $invoice = Invoice::where('invoice_id', $invoiceId)->first();
+                // Get the current invoice from the database
+                $invoice = Invoice::where('invoice_id', $invoiceId)->first();
 
-                    if ($invoice) {
+                if ($invoice) {
+                    // If the invoice status from API is 'Pending', return the status from the database
+                    if ($invoiceStatus == 'Pending') {
+                        DB::rollBack();  // No need to commit since we are not making any changes
+                        return $this->sendResponse(
+                            [
+                                'invoice_status' => $invoice->status,
+                                'e_transaction_id' => $invoice->e_transaction_id
+                            ],
+                            'Invoice status retrieved successfully from database (Pending)'
+                        );
+                    }
+
+                    // Otherwise, update the invoice status in the database if needed
+                    if ($invoiceStatus != 'Pending') {
                         $invoice->update([
                             'status' => $invoiceStatus, // Assuming 'status' column exists in the table
                             'e_transaction_id' => $eTransactionId
                         ]);
                     }
+
                     DB::commit();
 
                     return $this->sendResponse(
                         [
-                            'invoice_status' => $invoiceStatus,
+                            'invoice_status' => $invoice->status,
                             'e_transaction_id' => $eTransactionId
                         ],
                         'Invoice status updated successfully'
                     );
-
                 } else {
                     DB::rollBack();
-                    return $this->sendError('error', 'Failed to retrieve invoice status from API', 500);
+                    return $this->sendError('error', 'Invoice not found in the database', 404);
                 }
             } else {
                 DB::rollBack();
-                return $this->sendError('error', 'Failed to check invoice status', 500);
+                Log::error('Failed to issue invoice', ['response' => $response->body()]);
 
+                return $this->sendError('error', 'Failed to check invoice status from API ' . $response->body(), 500);
             }
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error in checkInvoiceStatus: ' . $e->getMessage());
-            return $this->sendError('error', 'An error occurred while checking the invoice status', 500);
+            return $this->sendError('error', 'An error occurred while checking the invoice status ' . $e->getMessage(), 500);
         }
     }
 
     // Initiate merchant payment
     public function makeMerchantPayment(Request $request)
     {
-        $apiKey = $request->input('api_key');
-        $amountSentToMerchant = (int)$request->input('amount_sent_to_merchant');
+         $apiKey = $request->input('api_key');
+        $amountSentToMerchant = $request->input('amount_sent_to_merchant');
         $currency = $request->input('currency');
         $transactionId = 'mp_' . round(microtime(true) * 1000);
 
 
         if ($request->phone_number) {
+            // for Zaad payment
             $phoneNumber = $request->input('phone_number');
             $phoneNo = '+252' . $request->input('phone_number');
             // Check if a merchant with the provided phone number already exists
             $merchant = Merchant::where('phone_number', $phoneNo)->first();
         } else {
+
             $apiKey = env('EXELO_API_KEY'); // From .env
             $authUser = auth()->user();
             $phoneNumber = $authUser->merchant->phone_number;
@@ -343,25 +397,27 @@ class PaymentController extends BaseController
 
         $payload = [
             "apiKey" => $apiKey,
-//            "phoneNumber" => str_replace('+252', '', $phoneNumber),
-            "phoneNumber" => 6656566565665,
+            "phoneNumber" => str_replace('+252', '', $phoneNumber),
             "transactionAmount" => $amountSentToMerchant,
             "transactionId" => $transactionId,
             "currency" => $currency
         ];
+
+//        return response()->json($payload,200);
 
         $bodyStr = json_encode($payload);
         $secret = 'kgBnW9Paa7ZErxB4GFo81FaASDFTQKhiOLxryw';
         $hashValue = $this->generateHash($bodyStr, $secret);
         $url = "https://edahab.net/api/api/agentPayment?hash=$hashValue";
 
-        $response = Http::timeout(60)->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
+        $response = Http::timeout(env('API_TIMEOUT'))->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
 
         if ($response->status() === 200) {
             $responseData = $response->json();
 
             if ($responseData['TransactionId'] == null) {
-                return response()->json(['error' => $responseData['TransactionMesage']], 500);
+                return $this->sendError($responseData['TransactionMesage'],'',500);
+//                return response()->json(['error' => $responseData['TransactionMesage']], 500);
             }
 
             // Save the response data to the database
@@ -384,10 +440,10 @@ class PaymentController extends BaseController
                 'Merchant payment processed successfully.'
             );
 
-
-//            return response()->json($response->json());
         } else {
-            return response()->json(['error' => 'Failed to make merchant payment'], 500);
+            Log::error('Failed to make merchant payment', ['response' => $response->body()]);
+
+            return response()->json(['error' => 'Failed to make merchant payment ' . $response->body()], 500);
         }
     }
 
@@ -431,7 +487,7 @@ class PaymentController extends BaseController
 
         try {
             // Send the API request using Guzzle (Http facade)
-            $response = Http::timeout(60)
+            $response = Http::timeout(env('API_TIMEOUT'))
                 ->withHeaders([
                     'Content-Type' => 'application/json',
                 ])
@@ -533,7 +589,7 @@ class PaymentController extends BaseController
 
         try {
             // Make the HTTP request to Waafi API
-            $response = Http::timeout(60)
+            $response = Http::timeout(env('API_TIMEOUT'))
                 ->withHeaders([
                     'Content-Type' => 'application/json'
                 ])

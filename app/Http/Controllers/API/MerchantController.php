@@ -61,16 +61,18 @@ class MerchantController extends BaseController
         DB::beginTransaction();
 
         try {
-            // Check if a merchant with the provided phone number already exists
-            $merchantCount = Merchant::where('phone_number', $request->input('phone_number'))->count();
 
-            if ($merchantCount == 0) {
-                return $this->sendError('Merchant mobile number is not registered', '');
+            $phoneNumber =  str_replace('+252', '', $request->input('phone_number'));
+            // Check if a merchant with the provided phone number already exists
+            $merchantCount = Merchant::where('phone_number', $phoneNumber)->count();
+
+            if ($merchantCount > 0) {
+                return $this->sendError('Merchant mobile number is already registered', '');
             }
 
             // Find the merchant by phone number or create a new one
             $merchant = Merchant::updateOrCreate(
-                ['phone_number' => $request->input('phone_number')],
+                ['phone_number' => str_replace(' ', '', $request->input('phone_number')) ],
                 $request->all()
             );
 

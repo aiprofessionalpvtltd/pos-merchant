@@ -21,6 +21,7 @@ return new class extends Migration
             $table->string('currency');
             $table->string('status')->nullable();
             $table->string('e_transaction_id')->nullable();
+            $table->string('type')->nullable();
             $table->timestamps();
         });
     }
