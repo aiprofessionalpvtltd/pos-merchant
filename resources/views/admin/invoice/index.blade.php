@@ -37,6 +37,7 @@
                 <thead>
                 <tr>
                     <th>ID</th>
+                    <th>Type</th>
                     <th>Phone No</th>
                     <th>Transaction ID</th>
                     <th>Amount</th>
@@ -48,13 +49,13 @@
                 @foreach($invoices as $invoice)
                     <tr>
                         <td>{{$invoice->invoice_id}}</td>
+                        <td>{{$invoice->type}} </td>
                         <td>{{$invoice->mobile_number}}</td>
                         <td>{{$invoice->transaction_id}}</td>
                         <td>{{$invoice->amount}} </td>
                         <td>{{$invoice->currency}} </td>
                         <td>{{$invoice->status}} </td>
-
-
+                        
                     </tr>
                 @endforeach
                 </tbody>

@@ -72,11 +72,14 @@ class MerchantController extends BaseController
                 return $this->sendError('Merchant mobile number is already registered', '');
             }
 
-            // Find the merchant by phone number or create a new one
-            $merchant = Merchant::updateOrCreate(
-                ['phone_number' => str_replace(' ', '',$phoneNumber) ],
-                $request->all()
-            );
+            // Remove spaces from phone number
+            $phoneNumber = str_replace(' ', '', $request->input('phone_number'));
+
+            // Merge the modified phone number back into the request data
+            $request->merge(['phone_number' => $phoneNumber]);
+
+            // Create the merchant with the modified request data
+            $merchant = Merchant::create($request->all());
 
             if($request->input('email')){
                 $email = $request->input('email');
