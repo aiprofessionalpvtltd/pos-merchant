@@ -84,6 +84,25 @@
                     </a>
                 </li>
             @endcan
+
+
+            @can('view-invoice')
+
+                <li class="sidebar-item  ">
+                    <a class="sidebar-link" href="{{ route('show-invoice') }}">
+                        <i class="fas fa-file-alt"></i>
+                        <span class="align-middle">Invoices</span>
+                    </a>
+                </li>
+            @endcan
+            @can('view-transaction')
+                <li class="sidebar-item  ">
+                    <a class="sidebar-link" href="{{ route('show-transaction') }}">
+                        <i class="fas fa-dollar"></i>
+                        <span class="align-middle">Transaction</span>
+                    </a>
+                </li>
+            @endcan
         </ul>
     </div>
 </nav>

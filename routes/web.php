@@ -3,8 +3,10 @@
 use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\Admin\Dashboard\SuperAdminDashboardController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\MerchantController;
 use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\UserController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
@@ -47,6 +49,17 @@ Route::middleware(['auth'])->group(function () {
     Route::get('view-merchant/{id}', [MerchantController::class, 'view'])->name('view-merchant');
      Route::post('delete-merchant', [MerchantController::class, 'delete'])->name('delete-merchant');
 
+
+    //Invoice Controllers
+    Route::get('show-invoice', [InvoiceController::class, 'show'])->name('show-invoice');
+    Route::get('view-invoice/{id}', [InvoiceController::class, 'view'])->name('view-invoice');
+    Route::post('delete-invoice', [InvoiceController::class, 'delete'])->name('delete-invoice');
+
+
+    //Transaction Controllers
+    Route::get('show-transaction', [TransactionController::class, 'show'])->name('show-transaction');
+    Route::get('view-transaction/{id}', [TransactionController::class, 'view'])->name('view-transaction');
+    Route::post('delete-transaction', [TransactionController::class, 'delete'])->name('delete-transaction');
 
 
 });

@@ -38,6 +38,7 @@
                 <tr>
                     <th>ID</th>
                     <th>Merchant Name</th>
+                    <th>Agent Code</th>
                     <th>Phone No</th>
                     <th>Address</th>
                     <th>Approval Status</th>
@@ -48,10 +49,11 @@
                 <tbody>
                 @foreach($merchants as $merchant)
                     <tr>
-                        <td>{{$merchant->merchant_id}}</td>
-                        <td>{{$merchant->name}}</td>
-                         <td>{{$merchant->phone_number}}</td>
-                        <td>{{$merchant->city}} , {{$merchant->country}} ,  {{$merchant->address}} </td>
+                        <td>{{$merchant->id}}</td>
+                        <td>{{$merchant->first_name . ' ' . $merchant->last_name}}</td>
+                        <td>{{$merchant->business_name}}</td>
+                        <td>{{$merchant->phone_number}}</td>
+                        <td>{{$merchant->location}} </td>
                         <td>{{showApproval($merchant->is_approved)}}</td>
                         <td>{{showVerification($merchant->confirmation_status)}}</td>
                         <td>`
