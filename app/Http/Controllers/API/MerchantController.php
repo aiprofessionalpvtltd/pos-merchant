@@ -62,7 +62,9 @@ class MerchantController extends BaseController
 
         try {
 
-            $phoneNumber =  str_replace('+252', '', $request->input('phone_number'));
+//            $phoneNumber =  str_replace('+252', '', $request->input('phone_number'));
+            $phoneNumber =  $request->input('phone_number');
+
             // Check if a merchant with the provided phone number already exists
             $merchantCount = Merchant::where('phone_number', $phoneNumber)->count();
 
@@ -72,7 +74,7 @@ class MerchantController extends BaseController
 
             // Find the merchant by phone number or create a new one
             $merchant = Merchant::updateOrCreate(
-                ['phone_number' => str_replace(' ', '', $request->input('phone_number')) ],
+                ['phone_number' => str_replace(' ', '',$phoneNumber) ],
                 $request->all()
             );
 

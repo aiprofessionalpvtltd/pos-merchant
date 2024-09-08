@@ -51,7 +51,7 @@
                         <td>{{$invoice->mobile_number}}</td>
                         <td>{{$invoice->transaction_id}}</td>
                         <td>{{$invoice->amount}} </td>
-                        <td>{{$invoice->currecy}} </td>
+                        <td>{{$invoice->currency}} </td>
                         <td>{{$invoice->status}} </td>
 
 
