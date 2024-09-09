@@ -55,7 +55,7 @@
                         <td>{{$invoice->amount}} </td>
                         <td>{{$invoice->currency}} </td>
                         <td>{{$invoice->status}} </td>
-                        
+
                     </tr>
                 @endforeach
                 </tbody>

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Resources\MerchantResource;
 use App\Http\Resources\UserResource;
 use App\Models\Merchant;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Http\Controllers\API\BaseController;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -96,4 +97,29 @@ class PassportAuthController extends BaseController
 
         return $this->sendResponse($user, 'User information retrieved successfully.');
     }
+
+
+    public function logout(Request $request)
+    {
+//        return $this->sendResponse([], 'i m here');
+        // Validate that the user is authenticated
+        if (!Auth::check()) {
+            return $this->sendError('User not authenticated.', [], 401);
+        }
+
+        // Retrieve the authenticated user
+        $user = Auth::user();
+
+        // Revoke all tokens for the authenticated user
+        $user->tokens->each(function ($token) {
+            $token->revoke();
+        });
+
+        // Optionally, if you are using a refresh token or personal access tokens
+        // and want to ensure they are also revoked, you can clear them here.
+
+        // Return a successful response
+        return $this->sendResponse([], 'User logout successful.');
+    }
+
 }

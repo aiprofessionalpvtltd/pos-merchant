@@ -15,9 +15,9 @@ class CategoryController extends BaseController
     public function index()
     {
         try {
-            $categories = Category::with('merchant')->get();
+            $categories = Category::with('merchant')->latest()->get();
             if ($categories->isEmpty()) {
-                return $this->sendError('No categories found.');
+                return $this->sendResponse([],'No categories found.');
             }
             return $this->sendResponse(CategoryResource::collection($categories), 'Categories retrieved successfully.');
         } catch (Exception $e) {
@@ -39,9 +39,9 @@ class CategoryController extends BaseController
             // Get the merchant's ID
             $merchantID = $authUser->merchant->id;
 
-            $categories = Category::with('merchant')->where('merchant_id', $merchantID)->get();
+            $categories = Category::with('merchant')->where('merchant_id', $merchantID)->latest()->get();
             if ($categories->isEmpty()) {
-                return $this->sendError('No categories found.');
+                return $this->sendResponse([],'No categories found.');
             }
             return $this->sendResponse(CategoryResource::collection($categories), 'Categories retrieved successfully.');
         } catch (Exception $e) {
@@ -178,4 +178,31 @@ class CategoryController extends BaseController
             return $this->sendError('Error deleting category.', $e->getMessage());
         }
     }
+
+    public function search(Request $request)
+    {
+         try {
+            // Get search input from the request
+            $search = $request->input('search');
+
+             // Query the Category model, searching by name if a search term is provided
+            $categoriesQuery = Category::with('merchant')
+                ->when($search, function ($query, $search) {
+                    return $query->where('name', 'LIKE', "%$search%");
+                })
+                ->select('id', 'name') // Select only id and name
+                ->latest()
+                ->get();
+
+            // Check if categories were found
+            if ($categoriesQuery->isEmpty()) {
+                return $this->sendResponse([], 'No categories found.');
+            }
+
+            return $this->sendResponse($categoriesQuery, 'Categories retrieved successfully.');
+        } catch (Exception $e) {
+            return $this->sendError('Error fetching categories.', $e->getMessage());
+        }
+    }
+
 }
