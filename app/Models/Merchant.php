@@ -64,4 +64,16 @@ class Merchant extends Model
         return $this->hasMany(Sale::class);
     }
 
+    // Relationship with Cart
+    public function carts()
+    {
+        return $this->hasMany(Cart::class);
+    }
+
+    // Relationship with Orders
+    public function orders()
+    {
+        return $this->hasMany(Order::class);
+    }
+
 }

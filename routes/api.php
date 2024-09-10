@@ -1,11 +1,13 @@
 <?php
 
+use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\CategoryController;
 use App\Http\Controllers\API\MerchantConfirmationController;
 use App\Http\Controllers\API\MerchantController;
 use App\Http\Controllers\API\MerchantSubscriptionController;
 use App\Http\Controllers\API\MerchantTransactionController;
 use App\Http\Controllers\API\MerchantVerificationController;
+use App\Http\Controllers\API\OrderController;
 use App\Http\Controllers\API\PassportAuthController;
 use App\Http\Controllers\API\PaymentController;
 use App\Http\Controllers\API\ProductController;
@@ -83,6 +85,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/products/{id}', [ProductController::class, 'update']);    // Update a product
     Route::delete('/products/{product}', [ProductController::class, 'destroy']); // Delete a product
     Route::get('/getProductStatistics', [ProductController::class, 'getOverallProductStatistics']); // Get product statistics
+    Route::get('products/category/{category_id}', [ProductController::class, 'getProductsByCategory']);
 
 
     // Product Inventory Routes
@@ -101,6 +104,15 @@ Route::middleware('auth:api')->group(function () {
     Route::post('inventory/transfer/transportation-to-stock', [ProductInventoryController::class, 'transferTransportationToStock']);
     Route::post('inventory/transfer/shop-to-transportation', [ProductInventoryController::class, 'transferShopToTransportation']);
     Route::post('inventory/transfer/stock-to-transportation', [ProductInventoryController::class, 'transferStockToTransportation']);
+
+
+    // Cart and Order routes
+    Route::post('/cart/add', [OrderController::class, 'addToCart']);
+    Route::get('/cart/cart-items', [OrderController::class, 'getCartItems']);
+
+    Route::get('/cart/checkout', [OrderController::class, 'checkout']); // Show checkout details
+    Route::get('/order/all', [OrderController::class, 'getOrdersByType']); // Show checkout details
+    Route::post('/cart/placeOrder', [OrderController::class, 'placeOrder']); // Place an order
 
 
 

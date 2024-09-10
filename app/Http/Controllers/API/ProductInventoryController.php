@@ -88,9 +88,9 @@ class ProductInventoryController extends BaseController
 
     public function getProductsByType($type)
     {
-         try {
+        try {
             // Validate the type input (must be either 'stock' or 'shop')
-            if (!in_array($type, ['stock', 'shop' ,'transportation'])) {
+            if (!in_array($type, ['stock', 'shop', 'transportation'])) {
                 return $this->sendError('Invalid type provided. It must be either "stock" or "shop".');
             }
 

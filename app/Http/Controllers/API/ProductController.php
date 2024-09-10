@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\API\BaseController;
 use App\Http\Resources\CategoryResource;
 use App\Http\Resources\ProductResource;
+use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductInventory;
 use Illuminate\Http\Request;
@@ -307,6 +308,33 @@ class ProductController extends BaseController
         }
     }
 
+    public function getProductsByCategory($category_id)
+    {
+        dd(convertUSDToShilling(100));
+        try {
+            // Validate if the category exists
+            $category = Category::find($category_id);
+
+            if (!$category) {
+                return $this->sendError('Category not found.');
+            }
+
+            // Get products based on category
+            $products = Product::where('category_id', $category_id)
+                ->with(['category', 'inventories'])
+                ->get();
+
+             if ($products->isEmpty()) {
+                return $this->sendResponse([], 'No products found in this category.');
+            }
+
+
+            // Return response with product data
+            return $this->sendResponse(ProductResource::collection($products), 'Products retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error fetching products.', [$e->getMessage()]);
+        }
+    }
 
 
 

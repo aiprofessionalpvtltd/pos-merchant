@@ -25,6 +25,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Define token expiration
+        Passport::tokensExpireIn(now()->addDays(365)); // Access token expiration
+        Passport::refreshTokensExpireIn(now()->addDays(365)); // Refresh token expiration
+
         Passport::useTokenModel(Token::class);
         Passport::useRefreshTokenModel(RefreshToken::class);
         Passport::useAuthCodeModel(AuthCode::class);

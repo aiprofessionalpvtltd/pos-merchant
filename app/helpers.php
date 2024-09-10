@@ -12,7 +12,6 @@ function getSettingValue($val)
 }
 
 
-
 function showStatus($status)
 {
 
@@ -93,10 +92,10 @@ function showBooleanStatus($status)
 }
 
 
-
-function showCurrency($currency,$amount){
-    if($amount){
-        return $amount.' ' . $currency;
+function showCurrency($currency, $amount)
+{
+    if ($amount) {
+        return $amount . ' ' . $currency;
     }
     return '-';
 }
@@ -251,10 +250,37 @@ function calculatePercentage($score, $total)
     return $formatted_percentage;
 }
 
-function generateTransactionCode(){
+function generateTransactionCode()
+{
     $number = mt_rand(100000000000000, 999999999999999);
     return $number;
 }
+
+
+function convertShillingToUSD($shillings)
+{
+    // Define the conversion rate (80000 Shilling = 100 USD)
+    $conversionRate = 80000 / 100;
+
+    // Convert shillings to USD
+    $usd = $shillings / $conversionRate;
+
+    // Return the converted value, formatted to 2 decimal places
+    return round($usd);
+}
+
+function convertUSDToShilling($usd)
+{
+    // Define the conversion rate (1 USD = 800 Shillings)
+    $conversionRate = 800;
+
+    // Convert USD to Shillings
+    $shillings = $usd * $conversionRate;
+
+    // Return the converted value
+    return round($shillings, 2);
+}
+
 
 
 
