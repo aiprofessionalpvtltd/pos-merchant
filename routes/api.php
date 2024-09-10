@@ -82,17 +82,26 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/products/{id}', [ProductController::class, 'show']);       // Get a single product by ID
     Route::post('/products/{id}', [ProductController::class, 'update']);    // Update a product
     Route::delete('/products/{product}', [ProductController::class, 'destroy']); // Delete a product
-    Route::get('/getProductStatistics', [ProductController::class, 'getProductStatistics']); // Get product statistics
+    Route::get('/getProductStatistics', [ProductController::class, 'getOverallProductStatistics']); // Get product statistics
 
 
     // Product Inventory Routes
-    Route::prefix('product-inventories')->group(function () {
-        Route::get('/', [ProductInventoryController::class, 'index']);           // Get all product inventories
-        Route::post('/', [ProductInventoryController::class, 'store']);          // Create a new product inventory
-        Route::get('/{id}', [ProductInventoryController::class, 'show']);        // Get a single product inventory by ID
-        Route::put('/{inventory}', [ProductInventoryController::class, 'update']); // Update a product inventory
-        Route::delete('/{inventory}', [ProductInventoryController::class, 'destroy']); // Delete a product inventory
-    });
+    Route::get('/product-inventories', [ProductInventoryController::class, 'index']);           // Get all product inventories
+    Route::post('/product-inventories', [ProductInventoryController::class, 'store']);          // Create a new product inventory
+    Route::get('/product-inventories/{id}', [ProductInventoryController::class, 'show']);       // Get a single product inventory by ID
+    Route::put('/product-inventories/{inventory}', [ProductInventoryController::class, 'update']); // Update a product inventory
+    Route::delete('/product-inventories/{inventory}', [ProductInventoryController::class, 'destroy']); // Delete a product inventory
+
+// Product Inventory Transfer Routes
+    Route::post('inventory/transfer/shop-to-stock', [ProductInventoryController::class, 'transferShopToStock']);
+    Route::post('inventory/transfer/stock-to-shop', [ProductInventoryController::class, 'transferStockToShop']);
+    Route::get('inventory/products/{type}', [ProductInventoryController::class, 'getProductsByType']);
+
+    Route::post('inventory/transfer/transportation-to-shop', [ProductInventoryController::class, 'transferTransportationToShop']);
+    Route::post('inventory/transfer/transportation-to-stock', [ProductInventoryController::class, 'transferTransportationToStock']);
+    Route::post('inventory/transfer/shop-to-transportation', [ProductInventoryController::class, 'transferShopToTransportation']);
+    Route::post('inventory/transfer/stock-to-transportation', [ProductInventoryController::class, 'transferStockToTransportation']);
+
 
 
     // Category Routes

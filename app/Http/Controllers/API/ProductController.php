@@ -254,73 +254,56 @@ class ProductController extends BaseController
         }
     }
 
-    public function getProductStatistics()
+    public function getOverallProductStatistics()
     {
-         try {
+        try {
             // Get authenticated user
             $authUser = auth()->user();
 
-            // Ensure the authenticated user has a merchant relation
+            // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
-            // Get the merchant's ID
+            // Get merchant ID from authenticated user's merchant relation
             $merchantID = $authUser->merchant->id;
 
-            // Get current date and date of 7 days ago
-            $sevenDaysAgo = now()->subDays(7);
+            // Total products in shop (associated with this merchant)
+            $totalProductsInShop = ProductInventory::whereHas('product', function($query) use ($merchantID) {
+                $query->where('merchant_id', $merchantID);
+            })->where('type', 'shop')->sum('quantity');
 
-            // Total products in shop
-            $totalProductsInShop = ProductInventory::where('merchant_id', $merchantID)
-                ->where('type', 'shop')
-                ->sum('quantity');
+            // Total products in stock (associated with this merchant)
+            $totalProductsInStock = ProductInventory::whereHas('product', function($query) use ($merchantID) {
+                $query->where('merchant_id', $merchantID);
+            })->where('type', 'stock')->sum('quantity');
 
-            // Total products in stock
-            $totalProductsInStock = ProductInventory::where('merchant_id', $merchantID)
-                ->where('type', 'stock')
-                ->sum('quantity');
-
-            // New products in shop (created in the last 7 days)
-            $newProductsInShop = ProductInventory::where('merchant_id', $merchantID)
-                ->where('type', 'shop')
-                ->whereHas('product', function ($query) use ($sevenDaysAgo) {
-                    $query->where('created_at', '>=', $sevenDaysAgo);
-                })
-                ->sum('quantity');
-
-            // New products in stock (created in the last 7 days)
-            $newProductsInStock = ProductInventory::where('merchant_id', $merchantID)
-                ->where('type', 'stock')
-                ->whereHas('product', function ($query) use ($sevenDaysAgo) {
-                    $query->where('created_at', '>=', $sevenDaysAgo);
-                })
-                ->sum('quantity');
+            // Overall total quantity (sum of both stock and shop)
+            $overallTotal = $totalProductsInShop + $totalProductsInStock;
 
             // Calculate percentages
-            $newProductsInShopPercentage = $totalProductsInShop > 0
-                ? ($newProductsInShop / $totalProductsInShop) * 100
+            $shopPercentage = $overallTotal > 0
+                ? ($totalProductsInShop / $overallTotal) * 100
                 : 0;
 
-            $newProductsInStockPercentage = $totalProductsInStock > 0
-                ? ($newProductsInStock / $totalProductsInStock) * 100
+            $stockPercentage = $overallTotal > 0
+                ? ($totalProductsInStock / $overallTotal) * 100
                 : 0;
 
             // Prepare response data
             $data = [
                 'total_products_in_shop' => $totalProductsInShop,
                 'total_products_in_stock' => $totalProductsInStock,
-                'new_products_in_shop' => $newProductsInShop,
-                'new_products_in_shop_percentage' => round($newProductsInShopPercentage, 2) . '%',
-                'new_products_in_stock' => $newProductsInStock,
-                'new_products_in_stock_percentage' => round($newProductsInStockPercentage, 2) . '%',
+                'overall_total' => $overallTotal,
+                'shop_percentage' => round($shopPercentage, 2) . '%',
+                'stock_percentage' => round($stockPercentage, 2) . '%',
             ];
 
             // Return success response with the statistics
-            return $this->sendResponse($data, 'Product statistics retrieved successfully.');
+            return $this->sendResponse($data, 'Overall product statistics retrieved successfully.');
 
         } catch (\Exception $e) {
-            return $this->sendError('Error fetching product statistics.', [$e->getMessage()]);
+            return $this->sendError('Error fetching overall product statistics.', [$e->getMessage()]);
         }
     }
 
