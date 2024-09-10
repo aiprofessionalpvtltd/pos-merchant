@@ -549,6 +549,7 @@ class PaymentController extends BaseController
                             'referenceId' => $invoiceData['params']['referenceId'],
                             'transactionId' => $invoiceData['params']['transactionId'],
                             'amount' => $invoiceData['params']['txAmount'],
+                            'currency' => $currency,
                             'status' => $invoiceData['params']['state'],
                             'invoice_id' => $invoice->invoice_id,
                             'mobile_number' => str_replace('252', '', $accountNo),
@@ -601,6 +602,8 @@ class PaymentController extends BaseController
         $referenceId = $request->input('reference_id');
         $transactionId = $request->input('transactionId');
         $invoiceId = $request->input('invoice_id');
+        $amount = $request->input('amount');
+        $currency = $request->input('currency');
 
         // Build the payload for the API request
         $payload = [
@@ -688,13 +691,126 @@ class PaymentController extends BaseController
                 }
             }
 
-            // If the maximum number of attempts is reached without success
-            return $this->sendError([], 'Transaction was not approved within the allowed time frame');
+//            // If the maximum number of attempts is reached without success
+//            return $this->sendError([], 'Transaction was not approved within the allowed time frame');
+
+            // If maximum attempts are reached without success, cancel the transaction
+            if ($attempts >= $maxAttempts) {
+                // Call the cancelTransaction function when the attempts reach the max limit
+                return $this->cancelWaafiTransaction($request);
+            }
+
+
+
         } catch (\Exception $e) {
             // In case of any exception, log the error and return a failure response
             \Log::error('API Commit exception', ['message' => $e->getMessage()]);
             return response()->json([
                 'error' => 'An error occurred while committing the transaction',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    protected function cancelWaafiTransaction(Request $request)
+    {
+        // Generate random requestId, sessionId and timestamp
+        $requestId = rand(100000, 999999);
+        $sessionId = rand(100000, 999999);
+        $timestamp = now()->toIso8601String(); // Current timestamp in ISO format
+
+        // Fetch required values from environment or request input
+        $merchantUid = env('WAAFI_MERCHANT_UID', 'M0913698');
+        $apiUserId = env('WAAFI_API_USER_ID', '1007586');
+        $apiKey = env('WAAFI_API_KEY', 'API-282358994AHX'); // API Key if needed for security
+        $referenceId = $request->input('reference_id');
+        $invoiceId = $request->input('invoice_id');
+        $amount = $request->input('amount');
+        $currency = $request->input('currency');
+
+        // Build the payload for the API request
+        $payload = [
+            "schemaVersion" => "1.0",
+            "requestId" => $requestId,
+            "timestamp" => $timestamp,
+            "channelName" => "WEB",
+            "serviceName" => "API_CANCEL",
+            "sessionId" => $sessionId,
+            "serviceParams" => [
+                "merchantUid" => $merchantUid,
+                "apiUserId" => $apiUserId,
+                "apiKey" => $apiKey,
+                "transactionInfo" => [
+                    "referenceId" => $referenceId,
+                    "invoiceId" => $invoiceId,
+                    "amount" => $amount,
+                    "currency" => $currency,
+                    "description" => "Cancel transaction"
+                ]
+            ]
+        ];
+
+        try {
+            // Start a database transaction
+            DB::beginTransaction();
+
+            // Make the API request to Waafi API
+            $response = Http::timeout(env('API_TIMEOUT'))
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                ])
+                ->post('https://api.waafipay.net/asm', $payload);
+
+            // Check if the response is successful
+            if ($response->successful()) {
+                $responseData = $response->json();
+
+                // Assuming a responseCode of 0 means success, otherwise handle errors
+                if ($responseData['errorCode'] == 0) {
+                    // Find the invoice in the database
+                    $invoice = Invoice::where('invoice_id', $invoiceId)->first();
+
+                    if ($invoice) {
+                        // Update the invoice status to "Cancelled"
+                        $invoice->update([
+                            'status' => 'Cancelled'
+                        ]);
+
+                        // Commit the database transaction
+                        DB::commit();
+
+                        // Return success response
+                        return $this->sendResponse([
+                            'status' => 'Cancelled',
+                            'invoice_id' => $invoiceId,
+                            'amount' => $amount,
+                            'currency' => $currency
+                        ], 'Transaction cancelled successfully');
+                    } else {
+                        return $this->sendError([], 'No invoice found');
+                    }
+                } else {
+                    // Handle error response from API
+                    return $this->sendError([], 'Failed to cancel transaction', 500, [
+                        'errorCode' => $responseData['errorCode'],
+                        'errorMessage' => $responseData['responseMsg']
+                    ]);
+                }
+            } else {
+                // Handle non-200 HTTP response
+                return $this->sendError([], 'Failed to communicate with the API', 500, [
+                    'status' => $response->status(),
+                    'error' => $response->body()
+                ]);
+            }
+        } catch (\Exception $e) {
+            // Rollback any database changes on failure
+            DB::rollBack();
+
+            // Log the exception and return a failure response
+            \Log::error('API Cancel exception', ['message' => $e->getMessage()]);
+            return response()->json([
+                'error' => 'An error occurred while cancelling the transaction',
                 'details' => $e->getMessage()
             ], 500);
         }

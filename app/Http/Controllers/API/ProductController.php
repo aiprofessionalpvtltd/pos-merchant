@@ -45,7 +45,7 @@ class ProductController extends BaseController
             // Get authenticated user
             $authUser = auth()->user();
 
-             // Ensure the authenticated user has a merchant relation
+            // Ensure the authenticated user has a merchant relation
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
@@ -60,13 +60,12 @@ class ProductController extends BaseController
             }
 
 
-
             // Check if the product already exists by product_name and category_id
             $product = Product::where('bar_code', $request->input('bar_code'))
                 ->where('category_id', $request->input('category_id'))
                 ->first();
 
-             if ($product) {
+            if ($product) {
                 // If the product exists, update it
                 $product->update($input);
             } else {
@@ -90,7 +89,7 @@ class ProductController extends BaseController
                     'product_id' => $product->id,
                     'quantity' => $request->input('quantity'),
                     'type' => $request->input('type'),
-                 ];
+                ];
 
                 ProductInventory::create($inventoryData);
             }
@@ -112,7 +111,7 @@ class ProductController extends BaseController
         $product = Product::with('category', 'inventories')->find($id);
 
         if (is_null($product)) {
-            return $this->sendError('Product not found.');
+            return $this->sendError('Single Product not found.');
         }
 
         return $this->sendResponse(new ProductResource($product), 'Product retrieved successfully.');
@@ -120,54 +119,80 @@ class ProductController extends BaseController
 
     public function searchBarcode($barcode)
     {
-        $product = Product::with('category', 'inventories')->where('bar_code',$barcode)->first();
+        $product = Product::with('category', 'inventories')->where('bar_code', $barcode)->first();
 
-         if (is_null($product)) {
-            return $this->sendError('Product not found.');
+        if (is_null($product)) {
+            return $this->sendError('Product not found on bar code.');
         }
 
         return $this->sendResponse(new ProductResource($product), 'Product retrieved successfully.');
     }
 
-    public function update(Request $request, Product $product)
+    public function update(Request $request, $id)
     {
+        // Validate the incoming request data
         $validator = Validator::make($request->all(), [
-            'product_name' => 'required|string|max:255',
-            'category_id' => 'required|exists:categories,id',
-            'price' => 'required|numeric',
-            'stock_limit' => 'required|integer',
-            'alarm_limit' => 'required|integer',
-            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048', // Image validation
-            'bar_code' => 'nullable|string|max:255',
+            'product_name' => 'nullable|string|max:255',
+            'price' => 'nullable|numeric',
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif', // Optional image validation
         ]);
 
+        // Return validation errors if the validation fails
         if ($validator->fails()) {
             return $this->sendError('Validation Error.', $validator->errors());
         }
 
+        // Begin a database transaction
         DB::beginTransaction();
 
         try {
-            $input = $request->all();
+            // Find the product by ID
+            $product = Product::find($id);
 
-            // Handle the image upload if exists
+            if (!$product) {
+                return $this->sendError('Product not found.', ['Product not found with ID ' . $id]);
+            }
+
+            // Prepare an array to store the updated fields
+            $input = [];
+
+            // Check if 'product_name' is provided, then update
+            if ($request->filled('product_name')) {
+                $input['product_name'] = $request->product_name;
+            }
+
+            // Check if 'price' is provided, then update
+            if ($request->filled('price')) {
+                $input['price'] = $request->price;
+            }
+
+            // Check if a new image has been uploaded
             if ($request->hasFile('image')) {
-                // Delete old image if exists
+                // Remove the existing image if it exists
                 if ($product->image && file_exists(public_path($product->image))) {
                     unlink(public_path($product->image));
                 }
 
+                // Store the new image
                 $image = $request->file('image');
-                $imageName = time() . '.' . $image->getClientOriginalExtension();
-                $image->move(public_path('images/products'), $imageName);
-                $input['image'] = 'images/products/' . $imageName; // Store the image path
+                $input['image'] = $image->store('products', 'public');
             }
 
-            $product->update($input);
+            // Update the product only with the fields that are provided
+            if (!empty($input)) {
+                $product->update($input);
+            }
+
+            // Retrieve the updated product data
+            $productData = Product::find($product->id);
+
+            // Commit the transaction
             DB::commit();
 
-            return $this->sendResponse(new ProductResource($product), 'Product updated successfully.');
+            // Return a success response with the updated product
+            return $this->sendResponse(new ProductResource($productData), 'Product updated successfully.');
         } catch (\Exception $e) {
+            // Rollback the transaction on error
             DB::rollBack();
             return $this->sendError('Product update failed.', [$e->getMessage()]);
         }
@@ -201,9 +226,9 @@ class ProductController extends BaseController
             // Get the merchant's ID
             $merchantID = $authUser->merchant->id;
 
-            $products = Product::with(['category' , 'inventories', 'merchant'])->where('merchant_id', $merchantID)->get();
+            $products = Product::with(['category', 'inventories', 'merchant'])->where('merchant_id', $merchantID)->get();
             if ($products->isEmpty()) {
-                return $this->sendResponse([],'No products found.');
+                return $this->sendResponse([], 'No products found.');
             }
 
             // Prepare the products with the additional data
@@ -228,5 +253,78 @@ class ProductController extends BaseController
             return $this->sendError('Error fetching products.', $e->getMessage());
         }
     }
+
+    public function getProductStatistics()
+    {
+         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
+            // Get current date and date of 7 days ago
+            $sevenDaysAgo = now()->subDays(7);
+
+            // Total products in shop
+            $totalProductsInShop = ProductInventory::where('merchant_id', $merchantID)
+                ->where('type', 'shop')
+                ->sum('quantity');
+
+            // Total products in stock
+            $totalProductsInStock = ProductInventory::where('merchant_id', $merchantID)
+                ->where('type', 'stock')
+                ->sum('quantity');
+
+            // New products in shop (created in the last 7 days)
+            $newProductsInShop = ProductInventory::where('merchant_id', $merchantID)
+                ->where('type', 'shop')
+                ->whereHas('product', function ($query) use ($sevenDaysAgo) {
+                    $query->where('created_at', '>=', $sevenDaysAgo);
+                })
+                ->sum('quantity');
+
+            // New products in stock (created in the last 7 days)
+            $newProductsInStock = ProductInventory::where('merchant_id', $merchantID)
+                ->where('type', 'stock')
+                ->whereHas('product', function ($query) use ($sevenDaysAgo) {
+                    $query->where('created_at', '>=', $sevenDaysAgo);
+                })
+                ->sum('quantity');
+
+            // Calculate percentages
+            $newProductsInShopPercentage = $totalProductsInShop > 0
+                ? ($newProductsInShop / $totalProductsInShop) * 100
+                : 0;
+
+            $newProductsInStockPercentage = $totalProductsInStock > 0
+                ? ($newProductsInStock / $totalProductsInStock) * 100
+                : 0;
+
+            // Prepare response data
+            $data = [
+                'total_products_in_shop' => $totalProductsInShop,
+                'total_products_in_stock' => $totalProductsInStock,
+                'new_products_in_shop' => $newProductsInShop,
+                'new_products_in_shop_percentage' => round($newProductsInShopPercentage, 2) . '%',
+                'new_products_in_stock' => $newProductsInStock,
+                'new_products_in_stock_percentage' => round($newProductsInStockPercentage, 2) . '%',
+            ];
+
+            // Return success response with the statistics
+            return $this->sendResponse($data, 'Product statistics retrieved successfully.');
+
+        } catch (\Exception $e) {
+            return $this->sendError('Error fetching product statistics.', [$e->getMessage()]);
+        }
+    }
+
+
+
 
 }

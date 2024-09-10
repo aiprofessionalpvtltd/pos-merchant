@@ -74,17 +74,16 @@ Route::middleware('auth:api')->group(function () {
     // Merchant Transaction Routes
     Route::post('/merchant/verify-transaction', [MerchantTransactionController::class, 'verifyTransaction']);  // Verify a transaction
 
-    // Product Routes
-    Route::prefix('products')->group(function () {
-        Route::get('/', [ProductController::class, 'index']);           // Get all products
-        Route::get('/barcode/{id}', [ProductController::class, 'searchBarcode']);
-        Route::post('/', [ProductController::class, 'store']);
-        Route::get('/merchant', [ProductController::class, 'getByMerchant']); // Get categories by merchant
-// Create a new product
-        Route::get('/{id}', [ProductController::class, 'show']);        // Get a single product by ID
-        Route::post('/{product}', [ProductController::class, 'update']); // Update a product
-        Route::delete('/{product}', [ProductController::class, 'destroy']); // Delete a product
-    });
+// Product Routes
+    Route::get('/products', [ProductController::class, 'index']);           // Get all products
+    Route::get('/products/barcode/{id}', [ProductController::class, 'searchBarcode']); // Search by barcode
+    Route::post('/products', [ProductController::class, 'store']);          // Create a new product
+    Route::get('/products/merchant', [ProductController::class, 'getByMerchant']); // Get products by merchant
+    Route::get('/products/{id}', [ProductController::class, 'show']);       // Get a single product by ID
+    Route::post('/products/{id}', [ProductController::class, 'update']);    // Update a product
+    Route::delete('/products/{product}', [ProductController::class, 'destroy']); // Delete a product
+    Route::get('/getProductStatistics', [ProductController::class, 'getProductStatistics']); // Get product statistics
+
 
     // Product Inventory Routes
     Route::prefix('product-inventories')->group(function () {
