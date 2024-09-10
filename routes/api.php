@@ -82,7 +82,7 @@ Route::middleware('auth:api')->group(function () {
         Route::get('/merchant', [ProductController::class, 'getByMerchant']); // Get categories by merchant
 // Create a new product
         Route::get('/{id}', [ProductController::class, 'show']);        // Get a single product by ID
-        Route::put('/{product}', [ProductController::class, 'update']); // Update a product
+        Route::post('/{product}', [ProductController::class, 'update']); // Update a product
         Route::delete('/{product}', [ProductController::class, 'destroy']); // Delete a product
     });
 

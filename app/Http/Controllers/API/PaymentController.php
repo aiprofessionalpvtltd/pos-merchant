@@ -324,7 +324,7 @@ class PaymentController extends BaseController
                     $invoice = Invoice::where('invoice_id', $invoiceId)->first();
 
                     if ($invoice) {
-                        if($invoice->status == 'Paid'){
+                        if ($invoice->status == 'Paid') {
                             return $this->sendResponse(
                                 [
                                     'invoice_status' => $invoice->status,
@@ -500,39 +500,37 @@ class PaymentController extends BaseController
             ]
         ];
 
-//        dd($payload);
-
         try {
             // Send the API request using Guzzle (Http facade)
-//            $response = Http::timeout(env('API_TIMEOUT'))
-//                ->withHeaders([
-//                    'Content-Type' => 'application/json',
-//                ])
-//                ->post('https://api.waafipay.net/asm', $payload);
+            $response = Http::timeout(env('API_TIMEOUT'))
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                ])
+                ->post('https://api.waafipay.net/asm', $payload);
 
-            $invoiceData = [
-                "schemaVersion" => "1.0",
-                "timestamp" => "2024-09-06 11:46:41.426",
-                "responseId" => "7897342012",
-                "responseCode" => "2001",
-                "errorCode" => "0",
-                "responseMsg" => "RCS_SUCCESS",
-                "params" => [
-                    "state" => "APPROVED",
-                    "referenceId" => "582591",
-                    "transactionId" => "42630206",
-                    "txAmount" => "500.0"
-                ]
-            ];
+//            $invoiceData = [
+//                "schemaVersion" => "1.0",
+//                "timestamp" => "2024-09-06 11:46:41.426",
+//                "responseId" => "7897342012",
+//                "responseCode" => "2001",
+//                "errorCode" => "0",
+//                "responseMsg" => "RCS_SUCCESS",
+//                "params" => [
+//                    "state" => "APPROVED",
+//                    "referenceId" => "582591",
+//                    "transactionId" => "42630206",
+//                    "txAmount" => "500.0"
+//                ]
+//            ];
 
             // Return the response body as JSON
-//            if ($response->successful()) {
-            if (true) {
-//                $invoiceData = $response->json();
+            if ($response->successful()) {
+//            if (true) {
+                $invoiceData = $response->json();
 
                 if ($invoiceData['errorCode'] == 0) {
                     // Simulating database insertion of the transaction details
-                    Invoice::create([
+                    $invoice = Invoice::create([
                         'invoice_id' => $invoiceData['params']['referenceId'],
                         'mobile_number' => str_replace('252', '', $accountNo),
                         'transaction_id' => $invoiceData['params']['transactionId'],
@@ -552,6 +550,7 @@ class PaymentController extends BaseController
                             'transactionId' => $invoiceData['params']['transactionId'],
                             'amount' => $invoiceData['params']['txAmount'],
                             'status' => $invoiceData['params']['state'],
+                            'invoice_id' => $invoice->invoice_id,
                             'mobile_number' => str_replace('252', '', $accountNo),
                         ]
                     ];
@@ -590,19 +589,20 @@ class PaymentController extends BaseController
 
     protected function connectToWaafiCommitAPI(Request $request)
     {
-        // Generate a random requestId and current timestamp
-        $requestId = rand(100000, 999999); // Generate random request ID
-        $sessionId = rand(100000, 999999); // Generate random request ID
+        // Generate random requestId, sessionId and timestamp
+        $requestId = rand(100000, 999999);
+        $sessionId = rand(100000, 999999);
         $timestamp = now()->toIso8601String(); // Current timestamp in ISO format
 
-        // Get the necessary data from the request or environment
-        $merchantUid = env('WAAFI_MERCHANT_UID', 'M0912269'); // Replace with actual merchantUid
-        $apiUserId = env('WAAFI_API_USER_ID', '1000297'); // Replace with actual apiUserId
+        // Fetch the required values from environment or input
+        $merchantUid = env('WAAFI_MERCHANT_UID', 'M0913698');
+        $apiUserId = env('WAAFI_API_USER_ID', '1007586');
+        $apiKey = env('WAAFI_API_KEY', 'API-282358994AHX');
         $referenceId = $request->input('reference_id');
         $transactionId = $request->input('transactionId');
         $invoiceId = $request->input('invoice_id');
 
-        // Build the payload
+        // Build the payload for the API request
         $payload = [
             "schemaVersion" => "1.0",
             "requestId" => $requestId,
@@ -613,95 +613,85 @@ class PaymentController extends BaseController
             "serviceParams" => [
                 "merchantUid" => $merchantUid,
                 "apiUserId" => $apiUserId,
+                "apiKey" => $apiKey,
                 "transactionId" => $transactionId,
                 "referenceId" => $referenceId,
                 "description" => "Commit transaction",
             ]
         ];
 
+        // Set maximum attempts and delay between retries
+        $maxAttempts = 5;
+        $attempts = 0;
+
         try {
-            // Make the HTTP request to Waafi API
-//            $response = Http::timeout(env('API_TIMEOUT'))
-//                ->withHeaders([
-//                    'Content-Type' => 'application/json'
-//                ])
-//                ->post('https://api.waafipay.net/asm', $payload);
+            // Begin database transaction
+            DB::beginTransaction();
 
-            // Check if the response is successful
-//            if ($response->successful()) {
-            // Return the response data
-//            $responseData = $response->json();
+            // Keep checking the transaction status until it's approved or max attempts are reached
+            while ($attempts < $maxAttempts) {
+                // Make the API request
+                $response = Http::timeout(env('API_TIMEOUT'))
+                    ->withHeaders(['Content-Type' => 'application/json'])
+                    ->post('https://api.waafipay.net/asm', $payload);
 
-            $response = [
-                "schemaVersion" => "1.0",
-                "timestamp" => "2024-09-06 11:47:51.26",
-                "responseId" => "7897342012",
-                "responseCode" => "2001",
-                "errorCode" => "0",
-                "responseMsg" => "RCS_SUCCESS",
-                "params" => [
-                    "description" => "success",
-                    "state" => "approved",
-                    "transactionId" => "42630206",
-                    "referenceId" => "367632"
-                ]
-            ];
-            $responseData = $response; // Mocking the API response
+                // If the API call was successful
+                if ($response->successful()) {
+                    $responseData = $response->json();
+                    $invoiceResponse = $responseData['params'];
 
-             $invoiceResponse = $responseData['params'];  // Assuming the API returns 'InvoiceStatus'
+                    // Check for success and if transaction is approved
+                    if ($responseData['errorCode'] == 0 && $invoiceResponse && $invoiceResponse['state'] == 'approved') {
+                        // Find the invoice in the database
+                        $invoice = Invoice::where('invoice_id', $invoiceId)->first();
 
-            if ($invoiceResponse['state'] == 'approved') {
+                        // If invoice exists, check its current status
+                        if ($invoice) {
+                            $amount = $invoice->amount;
+                            $currency = $invoice->currency;
 
-                // Update the invoice status in the database
-                $invoice = Invoice::where('invoice_id', $invoiceId)->first();
+                            // If the invoice is already marked as "Paid", return an error
+                            if ($invoice->status == 'Paid') {
+                                return $this->sendError([], 'Invoice already paid on amount of ' . $amount . ' ' . $currency);
+                            }
 
-                if ($invoice) {
-                    $amount = $invoice->amount;
-                    $currency = $invoice->currency;
+                            // Update the invoice status to "Paid"
+                            $invoice->update([
+                                'status' => 'Paid',
+                                'e_transaction_id' => $invoiceResponse['transactionId']
+                            ]);
 
-                    if($invoice->status == 'Paid'){
-                        return $this->sendError(
-                            [],
-                            'Invoice already paid on amount of ' .$amount . ' ' . $currency
-                        );
+                            // Commit the database changes
+                            DB::commit();
+
+                            // Return a successful response
+                            return $this->sendResponse([
+                                'status' => $invoiceResponse['state'],
+                                'e_transaction_id' => $invoiceResponse['transactionId'],
+                                'amount' => $amount,
+                                'currency' => $currency,
+                            ], 'Invoice committed successfully');
+                        } else {
+                            return $this->sendError([], 'No invoice found');
+                        }
                     }
 
-                    $invoice->update([
-                        'status' => 'Paid', // Assuming 'status' column exists in the table
-                        'e_transaction_id' => $invoiceResponse['transactionId']
+                    // If the transaction is not yet approved, wait for 5 seconds and retry
+                    sleep(5);
+                    $attempts++;
+                } else {
+                    // If the API request fails, return an error with the response details
+                    return $this->sendError([], 'Failed to commit invoice', 500, [
+                        'status' => $response->status(),
+                        'error' => $response->body()
                     ]);
-                    DB::commit();
-
-                    return $this->sendResponse(
-                        [
-                            'status' => $invoiceResponse['state'], // Assuming 'status' column exists in the table
-                            'e_transaction_id' => $invoiceResponse['transactionId'],
-                            'amount' => $amount,
-                            'currency' => $currency,
-                        ],
-                        'Invoice commited  successfully'
-                    );
-
-                }else{
-                    return $this->sendError(
-                       [],
-                        'No invoice Found'
-                    );
                 }
-
-
             }
 
-//            } else {
-//                // Log and return the error response
-//                \Log::error('API Commit failed', ['response' => $response->body()]);
-//                return response()->json([
-//                    'error' => 'Failed to commit the transaction',
-//                    'details' => $response->body()
-//                ], 500);
-//            }
+            // If the maximum number of attempts is reached without success
+            return $this->sendError([], 'Transaction was not approved within the allowed time frame');
         } catch (\Exception $e) {
-            // Log the error and return a failure response
+            // In case of any exception, log the error and return a failure response
             \Log::error('API Commit exception', ['message' => $e->getMessage()]);
             return response()->json([
                 'error' => 'An error occurred while committing the transaction',
@@ -709,4 +699,5 @@ class PaymentController extends BaseController
             ], 500);
         }
     }
+
 }

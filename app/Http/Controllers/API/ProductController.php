@@ -26,7 +26,6 @@ class ProductController extends BaseController
         $validator = Validator::make($request->all(), [
             'product_name' => 'required|string|max:255',
             'category_id' => 'nullable|exists:categories,id',
-            'category_name' => 'nullable|string',
             'price' => 'required|numeric',
             'stock_limit' => 'required|integer',
             'alarm_limit' => 'required|integer',
@@ -46,8 +45,7 @@ class ProductController extends BaseController
             // Get authenticated user
             $authUser = auth()->user();
 
-            dd($request->all());
-            // Ensure the authenticated user has a merchant relation
+             // Ensure the authenticated user has a merchant relation
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
