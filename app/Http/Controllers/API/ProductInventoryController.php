@@ -133,6 +133,56 @@ class ProductInventoryController extends BaseController
         }
     }
 
+    public function getProductsByTypeWithCategory($categoryID , $type)
+    {
+
+         try {
+            // Validate the type input (must be either 'stock' or 'shop')
+            if (!in_array($type, ['stock', 'shop', 'transportation'])) {
+                return $this->sendError('Invalid type provided. It must be either "stock" or "shop".');
+            }
+
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
+            // Retrieve products based on the type (stock or shop)
+            $productInventories = ProductInventory::whereHas('product', function ($query) use ($merchantID,$categoryID) {
+                $query->where('merchant_id', $merchantID)->where('category_id', $categoryID);
+            })->where('type', $type)->with('product.category')->get();
+
+            // If no product inventories found
+            if ($productInventories->isEmpty()) {
+                return $this->sendResponse([], 'No products found for the specified type.');
+            }
+
+            // Map through the product inventories to structure the response
+            $productsData = $productInventories->map(function ($inventory) {
+                return [
+                    'product_id' => $inventory->product->id,
+                    'category_id' => $inventory->product->category->id,
+                    'category_name' => $inventory->product->category->name,
+                    'product_name' => $inventory->product->product_name,
+                    'quantity' => $inventory->quantity,
+                    'inventory_type' => $inventory->type,
+                ];
+            });
+
+            // Return the product data
+            return $this->sendResponse($productsData, 'Products retrieved successfully.');
+
+        } catch (\Exception $e) {
+            return $this->sendError('Error fetching products.', [$e->getMessage()]);
+        }
+    }
+    
     public function transferShopToStock(Request $request)
     {
         try {

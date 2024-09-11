@@ -99,6 +99,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('inventory/transfer/shop-to-stock', [ProductInventoryController::class, 'transferShopToStock']);
     Route::post('inventory/transfer/stock-to-shop', [ProductInventoryController::class, 'transferStockToShop']);
     Route::get('inventory/products/{type}', [ProductInventoryController::class, 'getProductsByType']);
+    Route::get('inventory/products/{id}/{type}', [ProductInventoryController::class, 'getProductsByTypeWithCategory']);
 
     Route::post('inventory/transfer/transportation-to-shop', [ProductInventoryController::class, 'transferTransportationToShop']);
     Route::post('inventory/transfer/transportation-to-stock', [ProductInventoryController::class, 'transferTransportationToStock']);
