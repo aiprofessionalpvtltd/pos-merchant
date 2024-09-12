@@ -27,6 +27,8 @@ class ProductResource extends JsonResource
             'alarm_limit' => $this->alarm_limit,
             'image' => Storage::url($this->image),
             'bar_code' => $this->bar_code,
+            'in_stock_quantity' => $this->in_stock_quantity,
+            'in_shop_quantity' => $this->in_shop_quantity,
             'inventories' => ProductInventoryResource::collection($this->whenLoaded('inventories')), // Assuming inventories are loaded
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,

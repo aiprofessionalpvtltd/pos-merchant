@@ -150,17 +150,10 @@ class ProductController extends BaseController
         }
 
         // Calculate instock and in shop quantities
-        $inStockQuantity = $product->inventories->where('type', 'stock')->sum('quantity');
-        $inShopQuantity = $product->inventories->where('type', 'shop')->sum('quantity');
+        $product->in_stock_quantity = $product->inventories->where('type', 'stock')->sum('quantity');
+        $product->in_shop_quantity = $product->inventories->where('type', 'shop')->sum('quantity');
 
-        return $this->sendResponse(
-            [
-                'amount' => $product->price,
-                'in_stock_quantity' => $inStockQuantity,
-                'in_shop_quantity' => $inShopQuantity,
-                'product' => new ProductResource($product)
-            ]
-            , 'Product retrieved successfully.');
+        return $this->sendResponse(new ProductResource($product), 'Product retrieved successfully.');
     }
 
     public function update(Request $request, $id)
@@ -276,7 +269,7 @@ class ProductController extends BaseController
                 return [
                     'id' => $product->id,
                     'product_name' => $product->product_name,
-                    'amount' => $product->price,
+                    'price' => $product->price,
                     'in_stock_quantity' => $inStockQuantity,
                     'in_shop_quantity' => $inShopQuantity,
                     'category' => new CategoryResource($product->category), // Assuming you have CategoryResource
