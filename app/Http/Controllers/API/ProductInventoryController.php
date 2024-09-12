@@ -182,7 +182,7 @@ class ProductInventoryController extends BaseController
             return $this->sendError('Error fetching products.', [$e->getMessage()]);
         }
     }
-    
+
     public function transferShopToStock(Request $request)
     {
         try {

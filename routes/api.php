@@ -82,6 +82,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/products', [ProductController::class, 'store']);          // Create a new product
     Route::get('/products/merchant', [ProductController::class, 'getByMerchant']); // Get products by merchant
     Route::get('/products/{id}', [ProductController::class, 'show']);       // Get a single product by ID
+    Route::get('/products/{id}/{type}', [ProductController::class, 'showByType']);       // Get a single product by ID
     Route::post('/products/{id}', [ProductController::class, 'update']);    // Update a product
     Route::delete('/products/{product}', [ProductController::class, 'destroy']); // Delete a product
     Route::get('/getProductStatistics', [ProductController::class, 'getOverallProductStatistics']); // Get product statistics

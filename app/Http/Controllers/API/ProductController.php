@@ -118,6 +118,29 @@ class ProductController extends BaseController
         return $this->sendResponse(new ProductResource($product), 'Product retrieved successfully.');
     }
 
+    public function showByType($id, $type)
+    {
+        // Validate the type input (must be either 'stock', 'shop', or 'transportation')
+        if (!in_array($type, ['stock', 'shop', 'transportation'])) {
+            return $this->sendError('Invalid type provided. It must be either "stock", "shop", or "transportation".');
+        }
+
+        // Find the product with the category and inventories relationship
+        $product = Product::with(['category', 'inventories' => function ($query) use ($type) {
+            // Filter the inventories based on the provided type
+            $query->where('type', $type);
+        }])->find($id);
+
+        // Check if the product exists and has inventories of the specified type
+        if (is_null($product) || $product->inventories->isEmpty()) {
+            return $this->sendError('Product not found or no inventories for the specified type.');
+        }
+
+        // Return the product with the filtered inventories
+        return $this->sendResponse(new ProductResource($product), 'Product retrieved successfully.');
+    }
+
+
     public function searchBarcode($barcode)
     {
         $product = Product::with('category', 'inventories')->where('bar_code', $barcode)->first();
@@ -310,8 +333,7 @@ class ProductController extends BaseController
 
     public function getProductsByCategory($category_id)
     {
-        dd(convertUSDToShilling(100));
-        try {
+         try {
             // Validate if the category exists
             $category = Category::find($category_id);
 
