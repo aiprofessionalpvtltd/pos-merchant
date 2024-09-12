@@ -149,7 +149,18 @@ class ProductController extends BaseController
             return $this->sendError('Product not found on bar code.');
         }
 
-        return $this->sendResponse(new ProductResource($product), 'Product retrieved successfully.');
+        // Calculate instock and in shop quantities
+        $inStockQuantity = $product->inventories->where('type', 'stock')->sum('quantity');
+        $inShopQuantity = $product->inventories->where('type', 'shop')->sum('quantity');
+
+        return $this->sendResponse(
+            [
+                'amount' => $product->price,
+                'in_stock_quantity' => $inStockQuantity,
+                'in_shop_quantity' => $inShopQuantity,
+                'product' => new ProductResource($product)
+            ]
+            , 'Product retrieved successfully.');
     }
 
     public function update(Request $request, $id)
@@ -265,6 +276,7 @@ class ProductController extends BaseController
                 return [
                     'id' => $product->id,
                     'product_name' => $product->product_name,
+                    'amount' => $product->price,
                     'in_stock_quantity' => $inStockQuantity,
                     'in_shop_quantity' => $inShopQuantity,
                     'category' => new CategoryResource($product->category), // Assuming you have CategoryResource
@@ -293,12 +305,12 @@ class ProductController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Total products in shop (associated with this merchant)
-            $totalProductsInShop = ProductInventory::whereHas('product', function($query) use ($merchantID) {
+            $totalProductsInShop = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
                 $query->where('merchant_id', $merchantID);
             })->where('type', 'shop')->sum('quantity');
 
             // Total products in stock (associated with this merchant)
-            $totalProductsInStock = ProductInventory::whereHas('product', function($query) use ($merchantID) {
+            $totalProductsInStock = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
                 $query->where('merchant_id', $merchantID);
             })->where('type', 'stock')->sum('quantity');
 
@@ -333,7 +345,7 @@ class ProductController extends BaseController
 
     public function getProductsByCategory($category_id)
     {
-         try {
+        try {
             // Validate if the category exists
             $category = Category::find($category_id);
 
@@ -346,7 +358,7 @@ class ProductController extends BaseController
                 ->with(['category', 'inventories'])
                 ->get();
 
-             if ($products->isEmpty()) {
+            if ($products->isEmpty()) {
                 return $this->sendResponse([], 'No products found in this category.');
             }
 
@@ -357,7 +369,6 @@ class ProductController extends BaseController
             return $this->sendError('Error fetching products.', [$e->getMessage()]);
         }
     }
-
 
 
 }

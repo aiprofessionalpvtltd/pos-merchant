@@ -170,7 +170,7 @@ class ProductInventoryController extends BaseController
                 return [
                      'product_id' => $inventory->product->id,
                     'price' => $inventory->product->price,
-                    'image' => Storage::url($inventory->product->image), 
+                    'image' => Storage::url($inventory->product->image),
                     'category_id' => $inventory->product->category->id,
                     'category_name' => $inventory->product->category->name,
                     'product_name' => $inventory->product->product_name,
