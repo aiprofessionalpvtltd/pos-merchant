@@ -179,11 +179,11 @@ class PaymentController extends BaseController
         $amountKeptByExelo = $customerFee + $exeloFee;
 
         return response()->json([
-            'customer_fee' => $customerFee,
-            'exelo_fee' => $exeloFee,
-            'amount_kept_by_exelo' => $amountKeptByExelo,
-            'amount_sent_to_merchant' => $amountSentToMerchant,
-            'total_customer_charge' => $totalCustomerCharge,
+            'customer_fee' => round($customerFee),
+            'exelo_fee' => round($exeloFee),
+            'amount_kept_by_exelo' => round($amountKeptByExelo),
+            'amount_sent_to_merchant' => round($amountSentToMerchant),
+            'total_customer_charge' => round($totalCustomerCharge),
         ]);
     }
 
