@@ -17,9 +17,20 @@ class ProductController extends BaseController
 {
     public function index()
     {
+        // Retrieve products with their category and inventories relationships
         $products = Product::with('category', 'inventories')->get();
+
+        // Loop through each product to calculate the quantities for stock, shop, and transportation
+        foreach ($products as $product) {
+            $product->in_stock_quantity = $product->inventories->where('type', 'stock')->sum('quantity');
+            $product->in_shop_quantity = $product->inventories->where('type', 'shop')->sum('quantity');
+            $product->in_transportation_quantity = $product->inventories->where('type', 'transportation')->sum('quantity');
+        }
+
+        // Return the response with the ProductResource collection, including the extra data
         return $this->sendResponse(ProductResource::collection($products), 'Products retrieved successfully.');
     }
+
 
     public function store(Request $request)
     {
@@ -264,6 +275,7 @@ class ProductController extends BaseController
                 // Calculate instock and in shop quantities
                 $inStockQuantity = $product->inventories->where('type', 'stock')->sum('quantity');
                 $inShopQuantity = $product->inventories->where('type', 'shop')->sum('quantity');
+                $inTransportationQuantity = $product->inventories->where('type', 'transportation')->sum('quantity');
 
                 // Return the product data with additional fields
                 return [
@@ -272,6 +284,7 @@ class ProductController extends BaseController
                     'price' => $product->price,
                     'in_stock_quantity' => $inStockQuantity,
                     'in_shop_quantity' => $inShopQuantity,
+                    'in_transportation_quantity' => $inTransportationQuantity,
                     'category' => new CategoryResource($product->category), // Assuming you have CategoryResource
                 ];
             });
