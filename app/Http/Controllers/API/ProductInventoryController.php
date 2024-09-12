@@ -4,8 +4,10 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\API\BaseController;
 use App\Http\Resources\ProductInventoryResource;
+use App\Http\Resources\ProductResource;
 use App\Models\ProductInventory;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 
@@ -166,7 +168,9 @@ class ProductInventoryController extends BaseController
             // Map through the product inventories to structure the response
             $productsData = $productInventories->map(function ($inventory) {
                 return [
-                    'product_id' => $inventory->product->id,
+                     'product_id' => $inventory->product->id,
+                    'price' => $inventory->product->price,
+                    'image' => Storage::url($inventory->product->image), 
                     'category_id' => $inventory->product->category->id,
                     'category_name' => $inventory->product->category->name,
                     'product_name' => $inventory->product->product_name,
