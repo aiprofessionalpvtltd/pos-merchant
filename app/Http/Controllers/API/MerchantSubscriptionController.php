@@ -8,37 +8,134 @@ use App\Models\MerchantSubscription;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
 use Exception;
+use function League\Uri\UriTemplate\first;
 
 class MerchantSubscriptionController extends BaseController
 {
     public function index()
     {
         try {
-            $subscriptions = MerchantSubscription::all();
+            $subscriptions = MerchantSubscription::with('subscriptionPlan')->get();
             return $this->sendResponse(MerchantSubscriptionResource::collection($subscriptions), 'Subscriptions retrieved successfully.');
         } catch (Exception $e) {
             return $this->sendError('An error occurred while fetching subscriptions.', ['error' => $e->getMessage()]);
         }
     }
 
+    public function current()
+    {
+        try {
+            // Assuming the authenticated user is a merchant
+            $authUser = auth()->user();
+
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Load the merchant's current subscription using the relationship defined in the Merchant model
+            $merchant = $authUser->merchant->load('currentSubscription');
+
+            // Get the current subscription
+            $currentSubscription = $merchant->currentSubscription;
+
+            if (!$currentSubscription) {
+                return $this->sendError('No active subscription found.');
+            }
+
+            $currentSubscription->load('subscriptionPlan');
+
+             return $this->sendResponse(new MerchantSubscriptionResource($currentSubscription), 'Current subscription retrieved successfully.');
+        } catch (Exception $e) {
+            return $this->sendError('An error occurred while fetching the current subscription.', ['error' => $e->getMessage()]);
+        }
+    }
+
+
+    public function canceled()
+    {
+        try {
+            // Get the authenticated user and ensure they have a merchant
+            $authUser = auth()->user();
+
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Load the canceled subscriptions for the merchant
+            $merchant = $authUser->merchant->load('canceledSubscriptions');
+
+            // Get the canceled subscriptions
+            $canceledSubscriptions = $merchant->canceledSubscriptions;
+
+            if ($canceledSubscriptions->isEmpty()) {
+                return $this->sendError('No canceled subscriptions found.');
+            }
+
+            $canceledSubscriptions->load('subscriptionPlan');
+
+            return $this->sendResponse(MerchantSubscriptionResource::collection($canceledSubscriptions), 'Canceled subscriptions retrieved successfully.');
+        } catch (Exception $e) {
+            return $this->sendError('An error occurred while fetching the canceled subscriptions.', ['error' => $e->getMessage()]);
+        }
+    }
+
+
     public function store(Request $request)
     {
+        // Validate the input
         $validator = Validator::make($request->all(), [
-            'merchant_id' => 'required|exists:merchants,id',
             'subscription_plan_id' => 'required|exists:subscription_plans,id',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after:start_date',
-            'transaction_status' => 'required|string',
         ]);
 
+        // If validation fails, return an error response
         if ($validator->fails()) {
             return $this->sendError('Validation Error.', $validator->errors());
         }
 
         try {
-            $subscription = MerchantSubscription::create($request->all());
-            return $this->sendResponse(new MerchantSubscriptionResource($subscription), 'Subscription created successfully.');
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Check if the authenticated user has an associated merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant ID
+            $merchantID = $authUser->merchant->id;
+
+            // Find the current subscription for the merchant
+            $subscription = MerchantSubscription::where('merchant_id', $merchantID)->first();
+
+            // Check if the current subscription is already canceled
+            if ($subscription && $subscription->is_canceled) {
+                return $this->sendError('Subscription already canceled.');
+            }
+
+            // Cancel the current subscription if it exists
+            if ($subscription) {
+                $subscription->update([
+                    'is_canceled' => true,
+                    'canceled_at' => now(),
+                ]);
+            }
+
+            // Create a new subscription for the merchant
+            $newSubscription = MerchantSubscription::create([
+                'merchant_id' => $merchantID,
+                'subscription_plan_id' => $request->subscription_plan_id, // Use the validated plan ID from the request
+                'start_date' => now(),
+                'end_date' => now()->addMonth(),
+                'transaction_status' => 'Paid',
+            ]);
+
+            // load the relationship
+            $newSubscription->load(['subscriptionPlan']);
+
+            // Return a success response with the new subscription details
+            return $this->sendResponse(new MerchantSubscriptionResource($newSubscription), 'Subscription created successfully.');
         } catch (Exception $e) {
+            // Return an error response if something goes wrong
             return $this->sendError('An error occurred while creating the subscription.', ['error' => $e->getMessage()]);
         }
     }
@@ -53,39 +150,6 @@ class MerchantSubscriptionController extends BaseController
         }
     }
 
-    public function update(Request $request, $id)
-    {
-        $validator = Validator::make($request->all(), [
-            'merchant_id' => 'required|exists:merchants,id',
-            'subscription_plan_id' => 'required|exists:subscription_plans,id',
-            'start_date' => 'required|date',
-            'end_date' => 'required|date|after:start_date',
-            'transaction_status' => 'required|string',
-        ]);
-
-        if ($validator->fails()) {
-            return $this->sendError('Validation Error.', $validator->errors());
-        }
-
-        try {
-            $subscription = MerchantSubscription::findOrFail($id);
-            $subscription->update($request->all());
-            return $this->sendResponse(new MerchantSubscriptionResource($subscription), 'Subscription updated successfully.');
-        } catch (Exception $e) {
-            return $this->sendError('An error occurred while updating the subscription.', ['error' => $e->getMessage()]);
-        }
-    }
-
-    public function destroy($id)
-    {
-        try {
-            $subscription = MerchantSubscription::findOrFail($id);
-            $subscription->delete();
-            return $this->sendResponse([], 'Subscription deleted successfully.');
-        } catch (Exception $e) {
-            return $this->sendError('An error occurred while deleting the subscription.', ['error' => $e->getMessage()]);
-        }
-    }
 
     public function cancel(Request $request, $id)
     {

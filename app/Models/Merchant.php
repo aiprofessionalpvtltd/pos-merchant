@@ -76,4 +76,23 @@ class Merchant extends Model
         return $this->hasMany(Order::class);
     }
 
+    public function subscription()
+    {
+        return $this->hasOne(MerchantSubscription::class);
+    }
+
+    public function currentSubscription()
+    {
+        return $this->hasOne(MerchantSubscription::class)
+            ->where('is_canceled', false) // Only active (not canceled) subscription
+            ->latest(); // Get the most recent active subscription
+    }
+
+    public function canceledSubscriptions()
+    {
+        return $this->hasMany(MerchantSubscription::class)
+            ->where('is_canceled', true); // Only canceled subscriptions
+    }
+
+
 }

@@ -45,29 +45,25 @@ Route::prefix('merchant/invoice')->group(function () {
 Route::middleware('auth:api')->group(function () {
 
 
-
     // Merchant Routes
-    Route::prefix('merchants')->group(function () {
-        Route::get('/', [MerchantController::class, 'index']);                          // List all merchants
-        Route::get('/{id}', [MerchantController::class, 'show']);                       // Show a specific merchant
+    Route::get('/merchants', [MerchantController::class, 'index']);                          // List all merchants
+    Route::get('/merchants/{id}', [MerchantController::class, 'show']);                       // Show a specific merchant
 
-        // Merchant Confirmation
-        Route::post('/confirm', [MerchantConfirmationController::class, 'sendConfirmation']); // Send merchant confirmation
+    // Merchant Confirmation
+    Route::post('/merchants/confirm', [MerchantConfirmationController::class, 'sendConfirmation']); // Send merchant confirmation
 
-        // Merchant Verification
-        Route::get('/verify/{merchant_id}', [MerchantVerificationController::class, 'verifyMerchant']);  // Verify a merchant
-        Route::post('/approve', [MerchantVerificationController::class, 'approveMerchant']);             // Approve a merchant
+    // Merchant Verification
+    Route::get('/merchants/verify/{merchant_id}', [MerchantVerificationController::class, 'verifyMerchant']);  // Verify a merchant
+    Route::post('/merchants/approve', [MerchantVerificationController::class, 'approveMerchant']);             // Approve a merchant
 
-        // Merchant Subscriptions
-        Route::prefix('subscriptions')->group(function () {
-            Route::get('/', [MerchantSubscriptionController::class, 'index'])->name('subscriptions.index');  // List all subscriptions
-            Route::post('/', [MerchantSubscriptionController::class, 'store'])->name('subscriptions.store');  // Create a subscription
-            Route::get('/{id}', [MerchantSubscriptionController::class, 'show'])->name('subscriptions.show');  // Show a specific subscription
-            Route::put('/{id}', [MerchantSubscriptionController::class, 'update'])->name('subscriptions.update');  // Update a subscription
-            Route::delete('/{id}', [MerchantSubscriptionController::class, 'destroy'])->name('subscriptions.destroy');  // Delete a subscription
-            Route::post('/{id}/cancel', [MerchantSubscriptionController::class, 'cancel'])->name('subscriptions.cancel');  // Cancel a subscription
-        });
-    });
+
+    // Merchant Subscriptions
+    Route::get('/merchants/subscriptions/all', [MerchantSubscriptionController::class, 'index']);  // List all subscriptions
+    Route::get('/merchants/subscriptions/current', [MerchantSubscriptionController::class, 'current']);  // List all subscriptions
+    Route::get('/merchants/subscriptions/canceled', [MerchantSubscriptionController::class, 'canceled']);  // List all subscriptions
+    Route::post('/merchants/subscriptions', [MerchantSubscriptionController::class, 'store']); // Create a subscription
+    Route::post('/merchants/subscriptions/{id}/cancel', [MerchantSubscriptionController::class, 'cancel']);  // Cancel a subscription
+
 
     // Sales Routes
     Route::prefix('merchants/sales')->group(function () {
@@ -118,7 +114,6 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/cart/checkout', [OrderController::class, 'checkout']); // Show checkout details
     Route::get('/order/all', [OrderController::class, 'getOrdersByType']); // Show checkout details
     Route::post('/cart/placeOrder', [OrderController::class, 'placeOrder']); // Place an order
-
 
 
     // Category Routes

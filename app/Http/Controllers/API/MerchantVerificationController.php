@@ -66,7 +66,7 @@ class MerchantVerificationController extends BaseController
 
             if ($merchant->is_approved) {
                 $user = User::find($merchant->user_id);
-                return $this->sendResponse(['merchant'=>new MerchantResource($merchant), 'user'=>new UserResource($user)], 'Merchant is already approved.');
+                return $this->sendResponse(['merchant' => new MerchantResource($merchant), 'user' => new UserResource($user)], 'Merchant is already approved.');
             }
 
             if ($request->is_approved) {
@@ -93,7 +93,7 @@ class MerchantVerificationController extends BaseController
                 $merchant->user_id = $user->id;
                 $merchant->save();
 
-                return $this->sendResponse(['merchant'=>new MerchantResource($merchant), 'user'=>new UserResource($user)], 'Merchant approved and user account created.');
+                return $this->sendResponse(['merchant' => new MerchantResource($merchant), 'user' => new UserResource($user)], 'Merchant approved and user account created.');
             } else {
                 return $this->sendError('Merchant approval denied.');
             }
@@ -123,13 +123,16 @@ class MerchantVerificationController extends BaseController
         DB::beginTransaction();
 
         try {
-             // Check if a merchant with the provided phone number already exists
-            $phoneNumber = str_replace(' ','',$request->phone_number);
-            $merchant = Merchant::where('phone_number', $phoneNumber)->first();
+            // Check if a merchant with the provided phone number already exists
+            $phoneNumber = str_replace(' ', '', $request->phone_number);
 
-            if ($merchant->count() == 0) {
+            $merchantExists = Merchant::where('phone_number', $phoneNumber)->exists();
+
+             if (!$merchantExists) {
                 return $this->sendError('Merchant mobile number is not registered', '');
             }
+
+            $merchant = Merchant::where('phone_number', $phoneNumber)->first();
 
             $user = User::find($merchant->user_id);
 

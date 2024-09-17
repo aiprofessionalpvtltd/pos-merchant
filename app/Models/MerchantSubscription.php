@@ -33,4 +33,6 @@ class MerchantSubscription extends Model
     {
         return $this->belongsTo(SubscriptionPlan::class);
     }
+
+
 }

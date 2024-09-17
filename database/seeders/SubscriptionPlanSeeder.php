@@ -13,10 +13,17 @@ class SubscriptionPlanSeeder extends Seeder
      */
     public function run(): void
     {
-        SubscriptionPlan::create([
-            'name' => 'Monthly Plan',
-            'price' => 10.00,
-            'duration' => 'monthly',
+        SubscriptionPlan::insert([
+            [
+                'name' => 'Gold Package',
+                'price' => 10.00,
+                'duration' => 'monthly',
+            ],
+            [
+                'name' => 'Silver Package',
+                'price' => 5.00,
+                'duration' => 'monthly',
+            ],
         ]);
     }
 }

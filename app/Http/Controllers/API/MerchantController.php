@@ -6,6 +6,8 @@ use App\Http\Controllers\API\BaseController;
 use App\Http\Resources\MerchantResource;
 use App\Http\Resources\UserResource;
 use App\Models\Merchant;
+use App\Models\MerchantSubscription;
+use App\Models\SubscriptionPlan;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -81,6 +83,20 @@ class MerchantController extends BaseController
             // Create the merchant with the modified request data
             $merchant = Merchant::create($request->all());
 
+                       // Get Merchant Subscription
+            $silverPackageID = 2;
+            MerchantSubscription::create([
+                'merchant_id' => $merchant->id,
+                'subscription_plan_id' => $silverPackageID,
+                'start_date' => now(),
+                'end_date' => now()->addMonth(),
+                'transaction_status' => 'Paid',
+            ]);
+
+            $merchant->load(['subscription.currentSubscription']); // Load both subscription and subscriptionPlan relationships
+
+
+
             if($request->input('email')){
                 $email = $request->input('email');
             }else{
@@ -107,6 +123,7 @@ class MerchantController extends BaseController
             $merchant->is_approved = true;
             $merchant->user_id = $user->id;
             $merchant->save();
+
 
             DB::commit();
 

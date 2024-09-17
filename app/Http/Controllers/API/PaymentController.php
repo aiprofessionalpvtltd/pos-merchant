@@ -156,7 +156,8 @@ class PaymentController extends BaseController
     // Process the transaction and calculate fees
     public function processTransaction(Request $request)
     {
-        //        // Validate incoming request
+
+        // Validate incoming request
         $validator = $this->validateRequest($request, [
             'transaction_amount' => 'required|numeric',
         ]);
@@ -202,7 +203,12 @@ class PaymentController extends BaseController
         $agentCode = env('EXELO_AGENT_CODE');
         $secret = env('SECRET_KEY');
 
+        $firstName = '';
+        $lastName = '';
+
         // Inputs from the request
+        $firstName = $request->input('first_name');
+        $lastName = $request->input('last_name');
         $phoneNumber = $request->input('edahab_number');
         $totalCustomerCharge = $request->input('total_customer_charge');
         $currency = $request->input('currency');
@@ -249,7 +255,9 @@ class PaymentController extends BaseController
                 // Simulating database insertion of the transaction details
                 Invoice::create([
                     'invoice_id' => $invoiceData['InvoiceId'],
-                    'mobile_number' => $edahabNumber,
+                    'first_name' => $firstName,
+                    'last_name' => $lastName,
+                    'mobile_number' => $phoneNumber,
                     'transaction_id' => $transactionId,
                     'hash' => $hashValue,
                     'amount' => $totalCustomerCharge,
@@ -699,7 +707,6 @@ class PaymentController extends BaseController
                 // Call the cancelTransaction function when the attempts reach the max limit
                 return $this->cancelWaafiTransaction($request);
             }
-
 
 
         } catch (\Exception $e) {

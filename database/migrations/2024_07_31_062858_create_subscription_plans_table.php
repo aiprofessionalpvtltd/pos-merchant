@@ -13,7 +13,6 @@ return new class extends Migration
     {
         Schema::create('subscription_plans', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('merchant_id')->nullable()->constrained()->onDelete('cascade');
             $table->string('name');
             $table->decimal('price', 8, 2);
             $table->string('duration'); // e.g., 'monthly'
