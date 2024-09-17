@@ -151,6 +151,25 @@ class ProductController extends BaseController
         return $this->sendResponse(new ProductResource($product), 'Product retrieved successfully.');
     }
 
+    public function searchBarcodeWithType($barcode, $type)
+    {
+//        $product = Product::with('category', 'inventories')->where('bar_code', $barcode)->first();
+
+        $product = Product::with(['category', 'inventories' => function ($query) use ($type) {
+            // Filter the inventories based on the provided type
+            $query->where('type', $type);
+        }])->where('bar_code', $barcode)->first();
+
+        if (is_null($product)) {
+            return $this->sendError('Product not found on bar code.');
+        }
+
+        // Calculate instock and in shop quantities
+        $product->in_stock_quantity = $product->inventories->where('type', 'stock')->sum('quantity');
+        $product->in_shop_quantity = $product->inventories->where('type', 'shop')->sum('quantity');
+
+        return $this->sendResponse(new ProductResource($product), 'Product retrieved successfully.');
+    }
 
     public function searchBarcode($barcode)
     {

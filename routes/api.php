@@ -81,6 +81,7 @@ Route::middleware('auth:api')->group(function () {
 // Product Routes
     Route::get('/products', [ProductController::class, 'index']);           // Get all products
     Route::get('/products/barcode/{id}', [ProductController::class, 'searchBarcode']); // Search by barcode
+    Route::get('/products/barcode/{id}/{type}', [ProductController::class, 'searchBarcodeWithType']); // Search by barcode
     Route::post('/products', [ProductController::class, 'store']);          // Create a new product
     Route::get('/products/merchant', [ProductController::class, 'getByMerchant']); // Get products by merchant
     Route::get('/products/{id}', [ProductController::class, 'show']);       // Get a single product by ID
