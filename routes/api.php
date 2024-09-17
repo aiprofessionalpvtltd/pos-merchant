@@ -110,6 +110,8 @@ Route::middleware('auth:api')->group(function () {
     // Cart and Order routes
     Route::post('/cart/add', [OrderController::class, 'addToCart']);
     Route::get('/cart/cart-items', [OrderController::class, 'getCartItems']);
+    Route::post('/cart/update-cart-items', [OrderController::class, 'updateCartItem']);
+    Route::delete('/cart/delete-cart-items', [OrderController::class, 'deleteCartItem']);
 
     Route::get('/cart/checkout', [OrderController::class, 'checkout']); // Show checkout details
     Route::get('/order/all', [OrderController::class, 'getOrdersByType']); // Show checkout details

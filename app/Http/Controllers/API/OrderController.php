@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\API\BaseController;
+use App\Http\Resources\CartItemResource;
+use App\Http\Resources\CartResource;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Order;
@@ -39,10 +41,12 @@ class OrderController extends BaseController
                 ['quantity' => DB::raw("quantity + {$validated['quantity']}")]
             );
 
+            $cartItems = CartItem::with('cart.merchant', 'product')->where('cart_id', $cart->id)->get();
+//            dd($cartItems);
             // Commit the transaction
             DB::commit();
 
-            return $this->sendResponse($cartItem, 'Item added to cart successfully.');
+            return $this->sendResponse(CartItemResource::collection($cartItems), 'Item added to cart successfully.');
         } catch (\Exception $e) {
             // Rollback the transaction on error
             DB::rollBack();
@@ -91,6 +95,98 @@ class OrderController extends BaseController
         }
     }
 
+    public function updateCartItem(Request $request)
+    {
+        // Validate cart type and product_id
+        $validated = $request->validate([
+            'cart_type' => 'required|in:shop,stock',
+            'product_id' => 'required|exists:products,id',
+            'quantity' => 'required|integer|min:1', // Ensure quantity is provided and is a positive integer
+        ]);
+
+        $user = auth()->user();
+
+        try {
+            // Fetch the user's cart for the given type
+            $cart = Cart::where('merchant_id', $user->merchant->id)
+                ->where('cart_type', $validated['cart_type'])
+                ->with('items.product') // Load products in the cart items
+                ->first();
+
+            if (!$cart) {
+                return $this->sendError('Cart not found.');
+            }
+
+            // Find the specific cart item by product_id
+            $cartItem = $cart->items->where('product_id', $validated['product_id'])->first();
+
+            if (!$cartItem) {
+                return $this->sendError('Product not found in the cart.');
+            }
+
+            // Update the quantity for the cart item
+            $cartItem->quantity = $validated['quantity'];
+            $cartItem->save();
+
+            // Prepare the updated cart items data
+            $cartItems = $cart->items->map(function ($item) {
+                return [
+                    'product_id' => $item->product_id,
+                    'product_name' => $item->product->product_name,
+                    'quantity' => $item->quantity,
+                    'price' => $item->product->price,
+                    'total' => $item->quantity * $item->product->price,
+                ];
+            });
+
+            return $this->sendResponse([
+                'cart_type' => $validated['cart_type'],
+                'items' => $cartItems,
+                'total' => $cartItems->sum('total'),
+            ], 'Cart item updated successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error updating cart item.', $e->getMessage());
+        }
+    }
+
+    public function deleteCartItem(Request $request)
+    {
+        // Validate cart type and product_id
+        $validated = $request->validate([
+            'cart_type' => 'required|in:shop,stock',
+            'product_id' => 'required|exists:products,id',
+        ]);
+
+        $user = auth()->user();
+
+        try {
+            // Fetch the user's cart for the given type
+            $cart = Cart::where('merchant_id', $user->merchant->id)
+                ->where('cart_type', $validated['cart_type'])
+                ->with('items') // Load cart items
+                ->first();
+
+            if (!$cart) {
+                return $this->sendError('Cart not found.');
+            }
+
+            // Find the specific cart item by product_id
+            $cartItem = $cart->items->where('product_id', $validated['product_id'])->first();
+
+            if (!$cartItem) {
+                return $this->sendError('Product not found in the cart.');
+            }
+
+            // Delete the cart item
+            $cartItem->delete();
+
+            return $this->sendResponse([], 'Cart item deleted successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error deleting cart item.', $e->getMessage());
+        }
+    }
+
+
     public function checkout(Request $request)
     {
         $user = auth()->user();
@@ -124,18 +220,18 @@ class OrderController extends BaseController
             // Calculate VAT (10%)
             $vat = $subtotal * 0.10;
 
-            // Calculate Exelo amount (3% after VAT is applied)
-            $exeloAmount = ($subtotal + $vat) * 0.03;
+            // Calculate Exelo amount (on sub total)
+            $exeloAmount = ($subtotal) * 0.03;
 
             // Calculate total price including VAT and Exelo amount
             $totalPriceWithVATAndExelo = $subtotal + $vat + $exeloAmount;
 
             // Prepare the response data
             $data = [
-                'subtotal' => $subtotal,
-                'vat' => $vat,
-                'exelo_amount' => $exeloAmount,
-                'total' => $totalPriceWithVATAndExelo,
+                'subtotal' => round($subtotal),
+                'vat' => round($vat),
+                'exelo_amount' => round($exeloAmount),
+                'total' => round($totalPriceWithVATAndExelo),
                 'cart_items' => $cart->items->map(function ($item) {
                     return [
                         'product_id' => $item->product->id,
@@ -202,7 +298,7 @@ class OrderController extends BaseController
             $vat = $totalPrice * 0.10;
 
             // Calculate Exelo amount (3% after VAT is applied)
-            $exeloAmount = ($totalPrice + $vat) * 0.03;
+            $exeloAmount = ($totalPrice) * 0.03;
 
             // Calculate total price including VAT and Exelo amount
             $totalPriceWithVATAndExelo = $totalPrice + $vat + $exeloAmount;
@@ -210,10 +306,10 @@ class OrderController extends BaseController
             // Create an order
             $order = Order::create([
                 'merchant_id' => $user->merchant->id,
-                'sub_total' => $totalPrice,
-                'vat' => $vat,
-                'exelo_amount' => $exeloAmount,
-                'total_price' => $totalPriceWithVATAndExelo,
+                'sub_total' => round($totalPrice),
+                'vat' => round($vat),
+                'exelo_amount' => round($exeloAmount),
+                'total_price' => round($totalPriceWithVATAndExelo),
                 'order_type' => $validated['cart_type'],
                 'order_status' => 'pending',
             ]);
@@ -295,6 +391,5 @@ class OrderController extends BaseController
             return $this->sendError('Error retrieving orders.', $e->getMessage());
         }
     }
-
 
 }
