@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\CategoryController;
+use App\Http\Controllers\API\DashboardController;
 use App\Http\Controllers\API\MerchantConfirmationController;
 use App\Http\Controllers\API\MerchantController;
 use App\Http\Controllers\API\MerchantSubscriptionController;
@@ -84,9 +85,10 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/products/{id}/{type}', [ProductController::class, 'showByType']);       // Get a single product by ID
     Route::post('/products/{id}', [ProductController::class, 'update']);    // Update a product
     Route::delete('/products/{product}', [ProductController::class, 'destroy']); // Delete a product
-    Route::get('/getProductStatistics', [ProductController::class, 'getOverallProductStatistics']); // Get product statistics
     Route::get('products/category/{category_id}', [ProductController::class, 'getProductsByCategory']);
 
+    // Dashboard Routes
+    Route::get('/getProductStatistics', [DashboardController::class, 'getOverallProductStatistics']); // Get product statistics
 
     // Product Inventory Routes
     Route::get('/product-inventories', [ProductInventoryController::class, 'index']);           // Get all product inventories
