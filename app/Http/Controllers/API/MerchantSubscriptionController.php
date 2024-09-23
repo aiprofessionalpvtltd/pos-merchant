@@ -79,7 +79,6 @@ class MerchantSubscriptionController extends BaseController
         }
     }
 
-
     public function store(Request $request)
     {
         // Validate the input
@@ -104,17 +103,22 @@ class MerchantSubscriptionController extends BaseController
             // Get the merchant ID
             $merchantID = $authUser->merchant->id;
 
-            // Find the current subscription for the merchant
-            $subscription = MerchantSubscription::where('merchant_id', $merchantID)->first();
+            // Load the merchant's current subscription using the relationship defined in the Merchant model
+            $merchant = $authUser->merchant->load('currentSubscription');
 
-            // Check if the current subscription is already canceled
-            if ($subscription && $subscription->is_canceled) {
-                return $this->sendError('Subscription already canceled.');
+            // Get the current subscription
+            $currentSubscription = $merchant->currentSubscription;
+
+//            dd($currentSubscription);
+            // Check if the merchant is already subscribed to the requested plan and the subscription is not canceled
+            if ($currentSubscription && $currentSubscription->subscription_plan_id == $request->subscription_plan_id && $currentSubscription->is_canceled == 0) {
+                return $this->sendError('You are already subscribed to this package.');
             }
 
-            // Cancel the current subscription if it exists
-            if ($subscription) {
-                $subscription->update([
+
+            // If the current subscription exists and is not the requested one, cancel the current subscription
+            if ($currentSubscription) {
+                MerchantSubscription::where('merchant_id', $merchantID)->update([
                     'is_canceled' => true,
                     'canceled_at' => now(),
                 ]);
@@ -129,7 +133,7 @@ class MerchantSubscriptionController extends BaseController
                 'transaction_status' => 'Paid',
             ]);
 
-            // load the relationship
+            // Load the subscription plan relationship
             $newSubscription->load(['subscriptionPlan']);
 
             // Return a success response with the new subscription details
