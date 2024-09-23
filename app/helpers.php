@@ -256,7 +256,6 @@ function generateTransactionCode()
     return $number;
 }
 
-
 function convertShillingToUSD($shillings)
 {
     // Define the conversion rate (80000 Shilling = 100 USD)
