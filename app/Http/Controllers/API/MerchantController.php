@@ -65,7 +65,7 @@ class MerchantController extends BaseController
         try {
 
 //            $phoneNumber =  str_replace('+252', '', $request->input('phone_number'));
-            $phoneNumber =  $request->input('phone_number');
+            $phoneNumber = $request->input('phone_number');
 
             // Check if a merchant with the provided phone number already exists
             $merchantCount = Merchant::where('phone_number', $phoneNumber)->count();
@@ -83,7 +83,7 @@ class MerchantController extends BaseController
             // Create the merchant with the modified request data
             $merchant = Merchant::create($request->all());
 
-                       // Get Merchant Subscription
+            // Get Merchant Subscription
             $silverPackageID = 2;
             MerchantSubscription::create([
                 'merchant_id' => $merchant->id,
@@ -93,20 +93,18 @@ class MerchantController extends BaseController
                 'transaction_status' => 'Paid',
             ]);
 
-            $merchant->load(['subscription.currentSubscription']); // Load both subscription and subscriptionPlan relationships
+            $merchant->load(['currentSubscription.subscriptionPlan']); // Load both subscription and subscriptionPlan relationships
 
-
-
-            if($request->input('email')){
+            if ($request->input('email')) {
                 $email = $request->input('email');
-            }else{
+            } else {
                 $email = $request->input('phone_number') . '@email.com';
             }
 
             $user = User::find($merchant->user_id);
 
-             if ($user && $user->id) {
-                return $this->sendResponse(['merchant'=>new MerchantResource($merchant), 'user'=>new UserResource($user)], 'Merchant is already Registered.');
+            if ($user && $user->id) {
+                return $this->sendResponse(['merchant' => new MerchantResource($merchant), 'user' => new UserResource($user)], 'Merchant is already Registered.');
             }
 
             // Create a new user account linked to the merchant
@@ -124,19 +122,17 @@ class MerchantController extends BaseController
             $merchant->user_id = $user->id;
             $merchant->save();
 
-
             DB::commit();
 
             return $this->sendResponse(
-                ['merchant' => new MerchantResource($merchant), 'user' => new UserResource($user) ,'short_name' => $this->getInitials($user->name)],
+                ['merchant' => new MerchantResource($merchant), 'user' => new UserResource($user), 'short_name' => $this->getInitials($user->name)],
                 'Merchant registered/updated successfully.');
 
         } catch (\Exception $e) {
             DB::rollBack();
-            return $this->sendError('An error occurred while processing your request.', $e->getMessage(),400);
+            return $this->sendError('An error occurred while processing your request.', $e->getMessage(), 400);
         }
     }
-
 
 
     public function show($id)
@@ -248,7 +244,7 @@ class MerchantController extends BaseController
         $merchant->otp_expires_at = null;
         $merchant->save();
 
-        return $this->sendResponse(['merchant'=>new MerchantResource($merchant), 'user'=>new UserResource($user)], 'PIN code updated successfully.');
+        return $this->sendResponse(['merchant' => new MerchantResource($merchant), 'user' => new UserResource($user)], 'PIN code updated successfully.');
     }
 
 

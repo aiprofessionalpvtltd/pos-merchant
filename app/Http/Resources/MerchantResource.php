@@ -31,7 +31,8 @@ class MerchantResource extends JsonResource
             'otp_expires_at' => $this->otp_expires_at,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
-            'currentSubscription'  => new MerchantSubscriptionResource($this->whenLoaded('currentSubscription')),
+            // Ensure that currentSubscription is only loaded if it exists
+            'currentSubscription' => new MerchantSubscriptionResource($this->whenLoaded('currentSubscription')),
         ];
     }
 
