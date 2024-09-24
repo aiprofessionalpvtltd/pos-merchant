@@ -296,7 +296,7 @@ class PaymentController extends BaseController
                 $invoiceData = $response->json();
 
                 // Simulating database insertion of the transaction details
-                Invoice::create([
+               $invoice =  Invoice::create([
                     'invoice_id' => $invoiceData['InvoiceId'],
                     'first_name' => $firstName,
                     'last_name' => $lastName,
@@ -316,6 +316,7 @@ class PaymentController extends BaseController
 
                 return $this->sendResponse(
                     [
+                        'id' => $invoice->id,
                         'invoice_id' => $invoiceData['InvoiceId'],
                         'transaction_id' => $transactionId,
                         'hash' => $hashValue
@@ -597,6 +598,7 @@ class PaymentController extends BaseController
                         'message' => 'Zaad Invoice Issue Successful.',
                         'status' => $invoiceData['errorCode'],
                         'data' => [
+                            'id' => $invoice->id,
                             'referenceId' => $invoiceData['params']['referenceId'],
                             'transactionId' => $invoiceData['params']['transactionId'],
                             'amount' => $invoiceData['params']['txAmount'],
