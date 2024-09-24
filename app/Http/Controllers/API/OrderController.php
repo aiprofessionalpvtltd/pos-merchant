@@ -7,6 +7,7 @@ use App\Http\Resources\CartItemResource;
 use App\Http\Resources\CartResource;
 use App\Models\Cart;
 use App\Models\CartItem;
+use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ProductInventory;
@@ -340,6 +341,12 @@ class OrderController extends BaseController
             $cart->items()->delete();
             $cart->delete();
 
+            $invoice = Invoice::find($request->invoice_id);
+
+            $invoice->order_id =$invoice->id;
+            $invoice->merchant_id =$order->merchant_id;
+            $invoice->save();
+            
             DB::commit();
 
             return $this->sendResponse($order, 'Order placed successfully.');
