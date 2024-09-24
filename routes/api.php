@@ -29,6 +29,7 @@ Route::post('merchants/verify-otp', [MerchantController::class, 'verifyOtp']);
 Route::post('merchants/store-pin', [MerchantVerificationController::class, 'storePin']);
 
 Route::post('merchant/transaction/process', [PaymentController::class, 'processTransaction']);
+Route::post('merchant/invoice/check', [PaymentController::class, 'checkInvoice']);
 Route::post('merchant/invoice/issue', [PaymentController::class, 'issueInvoice']);
 Route::post('merchant/invoice/status', [PaymentController::class, 'checkInvoiceStatus']);
 

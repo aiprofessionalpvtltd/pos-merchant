@@ -194,6 +194,49 @@ class PaymentController extends BaseController
         return hash('sha256', $body . $secret);
     }
 
+    // check invoice already issue
+
+    public function checkInvoice(Request $request)
+    {
+        // Validate incoming request
+        $validator = $this->validateRequest($request, [
+            'phone_number' => 'required|numeric',
+            'type' => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
+
+        $phoneNumber = $request->input('phone_number');
+
+        // Check if a merchant with the provided phone number already exists
+        $merchantCount = Merchant::where('phone_number', $phoneNumber)->count();
+
+        if ($merchantCount > 0) {
+            return $this->sendError('Merchant mobile number is already registered', '');
+        }
+
+        // Remove spaces from phone number
+        $phoneNumber = str_replace(' ', '', $phoneNumber);
+
+        // Check if an invoice with the status 'Paid' exists for this phone number
+        $paidInvoice = Invoice::where('mobile_number', $phoneNumber)
+            ->where('status', 'Paid')
+            ->where('type', $request->type)
+            ->first();
+
+        if ($paidInvoice) {
+            // If a 'Paid' invoice exists, return the status
+            return $this->sendResponse('Invoice status is Paid.', 'Paid');
+        } else {
+            // If no 'Paid' invoice exists, delete all other invoices for the phone number
+            Invoice::where('mobile_number', $phoneNumber)->where('status', '!=', 'Paid')->delete();
+
+            return $this->sendResponse('All non-paid invoices deleted for the phone number.', 'Invoices deleted');
+        }
+    }
+
     // Issue an invoice
     public function issueInvoice(Request $request)
     {
