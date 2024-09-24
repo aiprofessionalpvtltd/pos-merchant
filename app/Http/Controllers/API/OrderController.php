@@ -346,7 +346,7 @@ class OrderController extends BaseController
             $invoice->order_id =$invoice->id;
             $invoice->merchant_id =$order->merchant_id;
             $invoice->save();
-            
+
             DB::commit();
 
             return $this->sendResponse($order, 'Order placed successfully.');
