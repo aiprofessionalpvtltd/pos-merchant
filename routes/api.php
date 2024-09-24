@@ -30,10 +30,13 @@ Route::post('merchants/store-pin', [MerchantVerificationController::class, 'stor
 
 Route::post('merchant/transaction/process', [PaymentController::class, 'processTransaction']);
 Route::post('merchant/invoice/check', [PaymentController::class, 'checkInvoice']);
+
 Route::post('merchant/invoice/issue', [PaymentController::class, 'issueInvoice']);
 Route::post('merchant/invoice/status', [PaymentController::class, 'checkInvoiceStatus']);
 
-
+// Zaad Pre Authorize
+Route::post('/zaad/issue', [PaymentController::class, 'callWaafiAPIForPreAuthorize']);
+Route::post('/zaad/commit', [PaymentController::class, 'connectToWaafiCommitAPI']);
 
 Route::middleware('auth:api')->group(function () {
 
@@ -41,10 +44,6 @@ Route::middleware('auth:api')->group(function () {
     Route::prefix('merchant/invoice')->group(function () {
         Route::post('/route', [PaymentController::class, 'routePaymentAPI']);           // Route payment API
         Route::post('/payment', [PaymentController::class, 'makeMerchantPayment']);     // Make merchant payment
-
-        // Zaad Pre Authorize
-        Route::post('/zaad/issue', [PaymentController::class, 'callWaafiAPIForPreAuthorize']);
-        Route::post('/zaad/commit', [PaymentController::class, 'connectToWaafiCommitAPI']);
     });
 
 
