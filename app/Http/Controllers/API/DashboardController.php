@@ -268,7 +268,7 @@ class DashboardController extends BaseController
     {
         try {
             // Get all products with their categories, images, and order items
-            $products = Product::with(['category', 'orderItems'])->get();
+            $products = Product::with(['category', 'orderItems', 'inventories'])->get();
 
             // Use the resource collection to transform the products
             return $this->sendResponse(ProductCatalogResource::collection($products), 'All products with categories retrieved successfully.');
@@ -277,6 +277,7 @@ class DashboardController extends BaseController
             return $this->sendError('Error fetching products with categories.', [$e->getMessage()]);
         }
     }
+
 
 
     // Function to get products based on alarm limit
