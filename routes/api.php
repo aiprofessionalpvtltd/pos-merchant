@@ -90,6 +90,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('products/category/{category_id}', [ProductController::class, 'getProductsByCategory']);
 
     // Dashboard Routes
+    Route::get('/main-dashboard', [DashboardController::class, 'mainDashboard']);
     Route::get('/top-selling-products', [DashboardController::class, 'getTopSellingProducts']);
     Route::get('/getProductStatistics', [DashboardController::class, 'getOverallProductStatistics']); // Get product statistics
     Route::get('/getAllProductsWithCategories', [DashboardController::class, 'getAllProductsWithCategories']); // Get product statistics
@@ -124,7 +125,11 @@ Route::middleware('auth:api')->group(function () {
 
     Route::get('/cart/checkout', [OrderController::class, 'checkout']); // Show checkout details
     Route::get('/order/all', [OrderController::class, 'getOrdersByType']); // Show checkout details
+    Route::get('/order/allByStatus', [OrderController::class, 'getOrdersByStatus']); // Show checkout details
     Route::post('/cart/placeOrder', [OrderController::class, 'placeOrder']); // Place an order
+    Route::post('/cart/placePendingOrder', [OrderController::class, 'placePendingOrder']); // Place an order
+    Route::post('/cart/updateOrderStatusToPaid', [OrderController::class, 'updateOrderStatusToPaid']); // Place an order
+    Route::post('/cart/getOrderDetails', [OrderController::class, 'getOrderDetails']); // Place an order
 
 
     // Category Routes

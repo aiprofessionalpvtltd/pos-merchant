@@ -4,12 +4,14 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\API\BaseController;
 use App\Http\Resources\CartItemResource;
+use App\Http\Resources\OrderResource;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ProductInventory;
+use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 
@@ -259,6 +261,7 @@ class OrderController extends BaseController
         // Validate cart type (shop/stock)
         $validated = $request->validate([
             'cart_type' => 'required|in:shop,stock',
+            'invoice_id' => 'required|exists:invoices,id',
         ]);
 
         DB::beginTransaction();
@@ -342,8 +345,8 @@ class OrderController extends BaseController
 
             $invoice = Invoice::find($request->invoice_id);
 
-            $invoice->order_id =$invoice->id;
-            $invoice->merchant_id =$order->merchant_id;
+            $invoice->order_id = $invoice->id;
+            $invoice->merchant_id = $order->merchant_id;
             $invoice->save();
 
             DB::commit();
@@ -354,6 +357,163 @@ class OrderController extends BaseController
             return $this->sendError('Error placing order.', $e->getMessage());
         }
     }
+
+    public function placePendingOrder(Request $request)
+    {
+        $user = auth()->user();
+
+        // Validate the input fields
+        $validated = $request->validate([
+            'cart_type' => 'required|in:shop,stock',
+            'name' => 'nullable|string|max:255',
+            'mobile_number' => 'nullable|string|max:20',
+            'signature' => 'required|string',  // Expecting base64 string for signature
+
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+
+             // Fetch the user's cart for the given type
+            $cart = Cart::where('merchant_id', $user->merchant->id)
+                ->where('cart_type', $validated['cart_type'])
+                ->with('items.product') // Load products in the cart items
+                ->first();
+
+            // Check if cart exists and is not empty
+            if (!$cart || $cart->items->isEmpty()) {
+                DB::rollBack();
+                return $this->sendError('Cart is empty.');
+            }
+
+            // Calculate the total price before VAT
+            $totalPrice = 0;
+            foreach ($cart->items as $item) {
+                $product = $item->product;
+
+                // Fetch the product's inventory based on the cart type (shop/stock)
+                $inventory = ProductInventory::where('product_id', $product->id)
+                    ->where('type', $validated['cart_type'])
+                    ->first();
+
+                if (!$inventory || $inventory->quantity < $item->quantity) {
+                    DB::rollBack();
+                    return $this->sendError("Insufficient stock for product: {$product->product_name}.");
+                }
+
+                // Update the total price
+                $totalPrice += $product->price * $item->quantity;
+            }
+
+
+            // Calculate VAT (10%)
+            $vat = $totalPrice * 0.10;
+
+            // Calculate Exelo amount (3% after VAT is applied)
+            $exeloAmount = ($totalPrice) * 0.03;
+
+            // Calculate total price including VAT and Exelo amount
+            $totalPriceWithVATAndExelo = $totalPrice + $vat + $exeloAmount;
+
+            // Handle signature as base64 image upload
+            $signaturePath = $this->saveBase64Image($request->signature, 'signatures');
+
+
+            // Create the order
+            $order = Order::create([
+                'merchant_id' => $user->merchant->id,
+                'name' => $request->input('name') ?? null,
+                'mobile_number' => $request->input('mobile_number') ?? null,
+                'signature' => $signaturePath,
+                'sub_total' => round($totalPrice),
+                'vat' => round($vat),
+                'exelo_amount' => round($exeloAmount),
+                'total_price' => round($totalPriceWithVATAndExelo),
+                'order_type' => $validated['cart_type'],
+                'order_status' => 'Pending',
+            ]);
+
+            // Add order items and decrement inventory
+            foreach ($cart->items as $item) {
+                $product = $item->product;
+
+                // Create the order item
+                OrderItem::create([
+                    'order_id' => $order->id,
+                    'product_id' => $product->id,
+                    'quantity' => $item->quantity,
+                    'price' => $product->price,
+                ]);
+
+                // Decrement inventory for the specific cart type
+                $inventory = ProductInventory::where('product_id', $product->id)
+                    ->where('type', $validated['cart_type'])
+                    ->first();
+
+                if ($inventory) {
+                    $inventory->decrement('quantity', $item->quantity);
+                }
+            }
+
+            // Clear the cart after placing the order
+            $cart->items()->delete();
+            $cart->delete();
+
+            DB::commit();
+
+            return $this->sendResponse(new OrderResource($order), 'Pending Order placed successfully.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->sendError('Error placing order.', $e->getMessage());
+        }
+    }
+
+    public function updateOrderStatusToPaid(Request $request)
+    {
+        // Validate the request data
+        $validated = $request->validate([
+            'cart_type' => 'required|in:shop,stock',
+            'invoice_id' => 'required|exists:invoices,id',
+            'order_id' => 'required|exists:orders,id',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+            // Retrieve the invoice by the provided invoice_id
+            $invoice = Invoice::find($validated['invoice_id']);
+
+            // Check if the invoice is already paid
+            if ($invoice->status === 'Paid') {
+                return $this->sendError('Invoice is already marked as paid.');
+            }
+
+            // Retrieve the order by the provided order_id
+            $order = Order::find($validated['order_id']);
+
+
+            if (!$order) {
+                return $this->sendError('Order not found.');
+            }
+
+            $order->order_status = 'Paid'; // Update invoice status to 'paid'
+            $order->save();
+
+            // Associate the order with the invoice
+            $invoice->order_id = $order->id;
+            $invoice->merchant_id = $order->merchant_id;
+            $invoice->save();
+
+            DB::commit();
+
+            return $this->sendResponse(new OrderResource($order), 'Order status updated to paid.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->sendError('Error updating invoice status.', $e->getMessage());
+        }
+    }
+
 
     public function getOrdersByType(Request $request)
     {
@@ -395,6 +555,106 @@ class OrderController extends BaseController
             return $this->sendResponse($data, 'Orders retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving orders.', $e->getMessage());
+        }
+    }
+
+    public function getOrdersByStatus(Request $request)
+    {
+        $validated = $request->validate([
+            'order_status' => 'required|in:Pending,Paid',
+        ]);
+
+        try {
+            // Fetch orders by the given type
+            $orders = Order::where('order_status', $validated['order_status'])
+                ->with('items.product') // Load related order items and products
+                ->get();
+
+            if ($orders->isEmpty()) {
+                return $this->sendError('No orders found for the specified type.');
+            }
+
+            // Prepare the response data
+            $data = $orders->map(function ($order) {
+                return [
+                    'order_id' => $order->id,
+                    'sub_total' => $order->sub_total,
+                    'vat' => $order->vat,
+                    'exelo_amount' => $order->exelo_amount,
+                    'total_price' => $order->total_price,
+                    'order_status' => $order->order_status,
+                    'order_items' => $order->items->map(function ($item) {
+                        return [
+                            'product_id' => $item->product_id,
+                            'product_name' => $item->product->product_name,
+                            'quantity' => $item->quantity,
+                            'price' => $item->price,
+                            'total_price' => $item->quantity * $item->price,
+                        ];
+                    }),
+                ];
+            });
+
+            return $this->sendResponse($data, 'Orders retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error retrieving orders.', $e->getMessage());
+        }
+    }
+
+    public function getOrderDetails(Request $request)
+    {
+        // Validate the order_id input
+        $validated = $request->validate([
+            'order_id' => 'required|exists:orders,id',
+        ]);
+
+        try {
+            // Retrieve the order by order_id
+            $order = Order::with('items.product')->find($validated['order_id']);
+
+            if (!$order || $order->items->isEmpty()) {
+                return $this->sendError('Order not found or has no items.');
+            }
+
+            // Initialize subtotal
+            $subtotal = 0;
+            foreach ($order->items as $item) {
+                $product = $item->product;
+                $subtotal += $item->price * $item->quantity;
+            }
+
+            // Calculate VAT (10%)
+            $vat = $subtotal * 0.10;
+
+            // Calculate Exelo amount (on subtotal)
+            $exeloAmount = $subtotal * 0.03;
+
+            // Calculate total price including VAT and Exelo amount
+            $totalPriceWithVATAndExelo = $subtotal + $vat + $exeloAmount;
+
+            // Prepare the response data
+            $data = [
+                'order_id' => $order->id,
+                'merchant_id' => $order->merchant_id,
+                'sub_total' => round($subtotal),
+                'vat' => round($vat),
+                'exelo_amount' => round($exeloAmount),
+                'total' => round($totalPriceWithVATAndExelo),
+                'order_status' => $order->order_status,
+                'order_items' => $order->items->map(function ($item) {
+                    return [
+                        'product_id' => $item->product->id,
+                        'product_name' => $item->product->product_name,
+                        'quantity' => $item->quantity,
+                        'price' => $item->price,
+                        'total_price' => $item->quantity * $item->price,
+                    ];
+                }),
+            ];
+
+            return $this->sendResponse($data, 'Order details retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error retrieving order details.', $e->getMessage());
         }
     }
 

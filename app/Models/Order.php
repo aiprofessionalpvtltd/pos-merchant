@@ -13,6 +13,9 @@ class Order extends Model
         'merchant_id',
         'order_status', // 'pending', 'completed', etc.
         'total_price',
+        'name',
+        'mobile_number',
+        'signature',
         'total_price',
         'vat',
         'exelo_amount',

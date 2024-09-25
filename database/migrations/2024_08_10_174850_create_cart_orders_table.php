@@ -16,7 +16,10 @@ return new class extends Migration
             $table->unsignedBigInteger('merchant_id');
             $table->foreign('merchant_id')->references('id')->on('merchants')->onDelete('cascade');
             $table->string('order_status')->default('pending'); // Pending, completed, failed, etc.
-            $table->decimal('total_price', 10, 2);
+            $table->string('name')->nullable();
+            $table->string('mobile_number')->nullable();
+            $table->string('signature')->nullable();
+             $table->decimal('total_price', 10, 2);
             $table->decimal('vat', 10, 2); // 10% VAT
             $table->decimal('exelo_amount', 10, 2);
             $table->decimal('sub_total', 10, 2);

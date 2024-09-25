@@ -23,6 +23,40 @@ use Illuminate\Support\Facades\DB;
 class DashboardController extends BaseController
 {
 
+    public function mainDashboard()
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
+            $pendingCount = Order::where('merchant_id', $merchantID)->where('order_status','Pending')->count();
+            $completeCount = Order::where('merchant_id', $merchantID)->where('order_status','Paid')->count();
+
+            // Prepare response data
+            $data = [
+                    'pending_order_count' => $pendingCount,
+                    'complete_order_count' => $completeCount
+
+
+            ];
+
+            // Return success response with the statistics
+            return $this->sendResponse($data, 'Overall product statistics retrieved successfully.');
+
+        } catch (\Exception $e) {
+            return $this->sendError('Error fetching overall product statistics.', [$e->getMessage()]);
+        }
+    }
+
+
     public function getOverallProductStatistics()
     {
         try {
@@ -93,7 +127,7 @@ class DashboardController extends BaseController
                 : 0;
 
             // get Pending Order count
-            $pendingOrder = Order::where('order_status','pending')->count();
+            $pendingOrder = Order::where('order_status','Pending')->count();
 
             // get Complete Order count
             $completedOrder = Order::where('order_status','completed')->count();
