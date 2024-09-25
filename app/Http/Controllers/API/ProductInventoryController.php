@@ -554,7 +554,12 @@ class ProductInventoryController extends BaseController
                 ]);
             }
 
-            return $this->sendResponse([], 'Inventory updated or created successfully.');
+
+            // Calculate instock and in shop quantities
+            $product->in_stock_quantity = $product->inventories->where('type', 'stock')->sum('quantity');
+            $product->in_shop_quantity = $product->inventories->where('type', 'shop')->sum('quantity');
+
+            return $this->sendResponse(new ProductResource($product), 'Inventory updated or created successfully.');
 
         } catch (\Exception $e) {
             return $this->sendError('Error updating or creating inventory.', [$e->getMessage()]);

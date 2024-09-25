@@ -521,7 +521,9 @@ class PaymentController extends BaseController
         $referenceId = rand(100000, 999999); // 6-digit random number
         $invoiceId = rand(100000, 999999);   // 6-digit random number
 
-        $accountNo = '252' . $request->input('edahab_number'); // Phone number
+        $accountNo = $request->input('edahab_number'); // Phone number
+        $accountNo = str_replace('+', '', $accountNo);
+
         $amount = $request->input('total_customer_charge');  // Amount to be paid
         $currency = $request->input('currency', 'SLSH');  // Currency
         $type = $request->input('type', 'POS');  // Type of invoice
@@ -552,6 +554,8 @@ class PaymentController extends BaseController
             ]
         ];
 
+
+//        dd($payload);
         try {
             // Send the API request using Guzzle (Http facade)
             $response = Http::timeout(env('API_TIMEOUT'))

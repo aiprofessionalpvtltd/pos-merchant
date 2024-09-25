@@ -244,12 +244,12 @@ class DashboardController extends BaseController
         try {
             // Count products where any inventory's quantity is less than or equal to the alarm_limit
             $alarmLimitCount = Product::whereHas('inventories', function ($query) {
-                $query->whereColumn('quantity', '<=', 'alarm_limit');
+                $query->whereColumn('quantity', '<=', 'alarm_limit')->where('type', 'shop');
             })->count();
 
             // Count products where any inventory's quantity is less than or equal to the stock_limit
             $stockLimitCount = Product::whereHas('inventories', function ($query) {
-                $query->whereColumn('quantity', '<=', 'stock_limit');
+                $query->whereColumn('quantity', '<=', 'stock_limit')->where('type', 'shop');
             })->count();
 
             // Return the response with both counts
@@ -286,7 +286,7 @@ class DashboardController extends BaseController
         try {
             // Get products with their inventories where quantity is less than or equal to alarm limit
             $products = Product::whereHas('inventories', function ($query) {
-                $query->whereColumn('quantity', '<=', 'alarm_limit');
+                $query->whereColumn('quantity', '<=', 'alarm_limit')->where('type', 'shop');
             })
                 ->with(['inventories' => function($query) {
                     $query->select('id', 'product_id', 'type', 'quantity'); // Select relevant fields
@@ -329,7 +329,7 @@ class DashboardController extends BaseController
         try {
             // Get products with their inventories where quantity is less than or equal to stock limit
             $products = Product::whereHas('inventories', function ($query) {
-                $query->whereColumn('quantity', '<=', 'stock_limit');
+                $query->whereColumn('quantity', '<=', 'stock_limit')->where('type', 'shop');
             })
                 ->with(['inventories' => function($query) {
                     $query->select('id', 'product_id', 'type', 'quantity'); // Select relevant fields
