@@ -4,7 +4,6 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\API\BaseController;
 use App\Http\Resources\CartItemResource;
-use App\Http\Resources\CartResource;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Invoice;
@@ -312,7 +311,7 @@ class OrderController extends BaseController
                 'exelo_amount' => round($exeloAmount),
                 'total_price' => round($totalPriceWithVATAndExelo),
                 'order_type' => $validated['cart_type'],
-                'order_status' => 'pending',
+                'order_status' => 'Paid',
             ]);
 
             // Add order items and decrement the inventory

@@ -4,7 +4,9 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\API\BaseController;
 use App\Http\Resources\CategoryResource;
+use App\Http\Resources\ProductCatalogResource;
 use App\Http\Resources\ProductResource;
+use App\Http\Resources\TopSellingProductResource;
 use App\Models\CartItem;
 use App\Models\Category;
 use App\Models\Order;
@@ -14,6 +16,7 @@ use App\Models\ProductInventory;
 use App\Models\Transaction;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 
@@ -97,7 +100,9 @@ class DashboardController extends BaseController
 
             // Prepare response data
             $data = [
+                'top_selling' => $this->getTopSellingProducts(),
                 'weekly_summary' => $this->getWeeklySalesAndStatistics(),
+                'limit' => $this->getProductLimitCounts(),
                 'pending_orders' => $pendingOrder,
                 'completed_orders' => $completedOrder,
                 'total_products_in_shop' => $totalProductsInShop,
@@ -198,6 +203,82 @@ class DashboardController extends BaseController
             return $this->sendError('Error fetching weekly sales and statistics.', [$e->getMessage()]);
         }
     }
+
+    public function getTopSellingProducts()
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
+             // Retrieve top-selling products based on the orders placed by the merchant
+            $topSellingProducts = Product::whereHas('orderItems.order', function ($query) use ($merchantID) {
+                $query->where('merchant_id', $merchantID);
+            })
+                ->withCount(['orderItems as total_quantity_sold' => function ($query) {
+                    $query->select(\DB::raw('SUM(quantity)'));
+                }])
+                ->orderBy('total_quantity_sold', 'desc')
+                ->take(10) // Limit to top 10 selling products
+                ->get();
+
+            // Return success response with top-selling products
+//            return $this->sendResponse(TopSellingProductResource::collection($topSellingProducts), 'Top-selling products retrieved successfully.');
+            return  TopSellingProductResource::collection($topSellingProducts);
+
+
+        } catch (\Exception $e) {
+            return $this->sendError('Error fetching top-selling products.', [$e->getMessage()]);
+        }
+    }
+
+    public function getProductLimitCounts()
+    {
+        try {
+            // Count products where any inventory's quantity is less than or equal to the alarm_limit
+            $alarmLimitCount = Product::whereHas('inventories', function ($query) {
+                $query->whereColumn('quantity', '<=', 'alarm_limit');
+            })->count();
+
+            // Count products where any inventory's quantity is less than or equal to the stock_limit
+            $stockLimitCount = Product::whereHas('inventories', function ($query) {
+                $query->whereColumn('quantity', '<=', 'stock_limit');
+            })->count();
+
+            // Return the response with both counts
+            return [
+                'alarm_limit_count' => $alarmLimitCount,
+                'stock_limit_count' => $stockLimitCount
+            ];
+
+        } catch (\Exception $e) {
+            return $this->sendError('Error fetching product limit counts.', [$e->getMessage()]);
+        }
+    }
+
+
+    public function getAllProductsWithCategories()
+    {
+        try {
+            // Get all products with their categories, images, and order items
+            $products = Product::with(['category', 'orderItems'])->get();
+
+            // Use the resource collection to transform the products
+            return $this->sendResponse(ProductCatalogResource::collection($products), 'All products with categories retrieved successfully.');
+
+        } catch (\Exception $e) {
+            return $this->sendError('Error fetching products with categories.', [$e->getMessage()]);
+        }
+    }
+
+
 
 
 }

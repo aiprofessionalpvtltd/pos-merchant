@@ -90,7 +90,9 @@ Route::middleware('auth:api')->group(function () {
     Route::get('products/category/{category_id}', [ProductController::class, 'getProductsByCategory']);
 
     // Dashboard Routes
+    Route::get('/top-selling-products', [DashboardController::class, 'getTopSellingProducts']);
     Route::get('/getProductStatistics', [DashboardController::class, 'getOverallProductStatistics']); // Get product statistics
+    Route::get('/getAllProductsWithCategories', [DashboardController::class, 'getAllProductsWithCategories']); // Get product statistics
 
     // Product Inventory Routes
     Route::get('/product-inventories', [ProductInventoryController::class, 'index']);           // Get all product inventories

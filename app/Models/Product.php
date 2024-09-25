@@ -36,4 +36,10 @@ class Product extends Model
         return $this->hasMany(ProductInventory::class);
     }
 
+    public function orderItems()
+    {
+        return $this->hasMany(OrderItem::class);
+    }
+
+
 }

@@ -106,14 +106,15 @@ class MerchantVerificationController extends BaseController
      * Store a 4-digit PIN code for the user.
      *
      * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\Response
      */
     public function storePin(Request $request)
     {
+        // Validate the request data
         $validator = Validator::make($request->all(), [
             'phone_number' => 'required|string|max:15',
             'pin' => 'required|string|size:4',
-            'repeat_pin' => 'required|string|same:pin'
+            'repeat_pin' => 'required|string|same:pin',
         ]);
 
         if ($validator->fails()) {
@@ -123,27 +124,41 @@ class MerchantVerificationController extends BaseController
         DB::beginTransaction();
 
         try {
-            // Check if a merchant with the provided phone number already exists
+            // Normalize the phone number
             $phoneNumber = str_replace(' ', '', $request->phone_number);
 
-            $merchantExists = Merchant::where('phone_number', $phoneNumber)->exists();
+            // Check if the merchant exists
+            $merchant = Merchant::where('phone_number', $phoneNumber)->first();
 
-             if (!$merchantExists) {
+            if (!$merchant) {
                 return $this->sendError('Merchant mobile number is not registered', '');
             }
 
-            $merchant = Merchant::where('phone_number', $phoneNumber)->first();
-
-            $user = User::find($merchant->user_id);
+            // Fetch the user associated with the merchant
+            $user = $merchant->user;
 
             // Update the user's PIN and password
             $user->pin = $request->pin;
             $user->password = Hash::make($request->pin);
             $user->save();
 
+            // Generate the access token
+            $token = $user->createToken('PassportAuth')->accessToken;
+
+            // Load the merchant's current subscription with the subscription plan
+            $merchant->load(['currentSubscription.subscriptionPlan']);
+
             DB::commit();
 
-            return $this->sendResponse(['merchant' => new MerchantResource($merchant), 'user' => new UserResource($user)], 'PIN code stored and password updated.');
+            // Prepare the response data
+            return $this->sendResponse([
+                'user' => new UserResource($user),
+                'merchant' => new MerchantResource($merchant),
+                'token' => $token,
+                'user_type' => $user->user_type,
+                'short_name' => $this->getInitials($user->name),
+            ], 'Merchant Login successful.');
+
         } catch (\Exception $e) {
             DB::rollBack();
             return $this->sendError('An error occurred while storing the PIN code.', ['error' => $e->getMessage()]);
