@@ -93,6 +93,8 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/top-selling-products', [DashboardController::class, 'getTopSellingProducts']);
     Route::get('/getProductStatistics', [DashboardController::class, 'getOverallProductStatistics']); // Get product statistics
     Route::get('/getAllProductsWithCategories', [DashboardController::class, 'getAllProductsWithCategories']); // Get product statistics
+    Route::get('/getProductsByAlarmLimit', [DashboardController::class, 'getProductsByAlarmLimit']); // Get product statistics
+    Route::get('/getProductsByStockLimit', [DashboardController::class, 'getProductsByStockLimit']); // Get product statistics
 
     // Product Inventory Routes
     Route::get('/product-inventories', [ProductInventoryController::class, 'index']);           // Get all product inventories
@@ -111,6 +113,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('inventory/transfer/transportation-to-stock', [ProductInventoryController::class, 'transferTransportationToStock']);
     Route::post('inventory/transfer/shop-to-transportation', [ProductInventoryController::class, 'transferShopToTransportation']);
     Route::post('inventory/transfer/stock-to-transportation', [ProductInventoryController::class, 'transferStockToTransportation']);
+    Route::post('inventory/updateInventory', [ProductInventoryController::class, 'updateInventory']);
 
 
     // Cart and Order routes

@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\API\BaseController;
 use App\Http\Resources\ProductInventoryResource;
 use App\Http\Resources\ProductResource;
+use App\Models\Product;
 use App\Models\ProductInventory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
@@ -510,5 +511,56 @@ class ProductInventoryController extends BaseController
             return $this->sendError('Error transferring product.', [$e->getMessage()]);
         }
     }
+
+    public function updateInventory(Request $request)
+    {
+        $request->validate([
+            'product_id' => 'required|exists:products,id',
+            'shop_quantity' => 'required|integer|min:0',
+            'stock_quantity' => 'required|integer|min:0',
+        ]);
+
+        try {
+            // Find the product
+            $product = Product::findOrFail($request->product_id);
+
+            // Check for existing inventories
+            $shopInventory = $product->inventories()->firstWhere('type', 'shop');
+            $stockInventory = $product->inventories()->firstWhere('type', 'stock');
+
+            // Update or create shop inventory
+            if ($shopInventory) {
+                // Update existing shop inventory
+                $shopInventory->quantity = $request->shop_quantity;
+                $shopInventory->save();
+            } else {
+                // Create new shop inventory
+                $product->inventories()->create([
+                    'type' => 'shop',
+                    'quantity' => $request->shop_quantity,
+                ]);
+            }
+
+            // Update or create stock inventory
+            if ($stockInventory) {
+                // Update existing stock inventory
+                $stockInventory->quantity = $request->stock_quantity;
+                $stockInventory->save();
+            } else {
+                // Create new stock inventory
+                $product->inventories()->create([
+                    'type' => 'stock',
+                    'quantity' => $request->stock_quantity,
+                ]);
+            }
+
+            return $this->sendResponse([], 'Inventory updated or created successfully.');
+
+        } catch (\Exception $e) {
+            return $this->sendError('Error updating or creating inventory.', [$e->getMessage()]);
+        }
+    }
+
+
 
 }

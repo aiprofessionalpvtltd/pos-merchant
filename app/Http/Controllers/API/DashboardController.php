@@ -279,6 +279,93 @@ class DashboardController extends BaseController
     }
 
 
+    // Function to get products based on alarm limit
+    public function getProductsByAlarmLimit()
+    {
+        try {
+            // Get products with their inventories where quantity is less than or equal to alarm limit
+            $products = Product::whereHas('inventories', function ($query) {
+                $query->whereColumn('quantity', '<=', 'alarm_limit');
+            })
+                ->with(['inventories' => function($query) {
+                    $query->select('id', 'product_id', 'type', 'quantity'); // Select relevant fields
+                }])
+                ->get(['id', 'product_name']); // Select only the necessary fields from Product
+
+            // Transform the products to include shop and stock quantities
+            $result = $products->map(function($product) {
+                $shopQuantity = 0;
+                $stockQuantity = 0;
+
+                // Loop through inventories to aggregate quantities based on type
+                foreach ($product->inventories as $inventory) {
+                    if ($inventory->type === 'shop') {
+                        $shopQuantity += $inventory->quantity;
+                    } elseif ($inventory->type === 'stock') {
+                        $stockQuantity += $inventory->quantity;
+                    }
+                }
+
+                return [
+                    'product_id' => $product->id,
+                    'product_name' => $product->product_name,
+                    'shop' => $shopQuantity,
+                    'stock' => $stockQuantity,
+                ];
+            });
+
+            return $this->sendResponse($result, 'Products retrieved successfully for alarm limit.');
+
+        } catch (\Exception $e) {
+            return $this->sendError('Error fetching products for alarm limit.', [$e->getMessage()]);
+        }
+    }
+
+
+// Function to get products based on stock limit
+    public function getProductsByStockLimit()
+    {
+        try {
+            // Get products with their inventories where quantity is less than or equal to stock limit
+            $products = Product::whereHas('inventories', function ($query) {
+                $query->whereColumn('quantity', '<=', 'stock_limit');
+            })
+                ->with(['inventories' => function($query) {
+                    $query->select('id', 'product_id', 'type', 'quantity'); // Select relevant fields
+                }])
+                ->get(['id', 'product_name']); // Select only the necessary fields from Product
+
+            // Transform the products to include shop and stock quantities
+            $result = $products->map(function($product) {
+                $shopQuantity = 0;
+                $stockQuantity = 0;
+
+                // Loop through inventories to aggregate quantities based on type
+                foreach ($product->inventories as $inventory) {
+                    if ($inventory->type === 'shop') {
+                        $shopQuantity += $inventory->quantity;
+                    } elseif ($inventory->type === 'stock') {
+                        $stockQuantity += $inventory->quantity;
+                    }
+                }
+
+                return [
+                    'product_id' => $product->id,
+                    'product_name' => $product->product_name,
+                    'shop' => $shopQuantity,
+                    'stock' => $stockQuantity,
+                ];
+            });
+
+            return $this->sendResponse($result, 'Products retrieved successfully for stock limit.');
+
+        } catch (\Exception $e) {
+            return $this->sendError('Error fetching products for stock limit.', [$e->getMessage()]);
+        }
+    }
+
+
+
 
 
 }
