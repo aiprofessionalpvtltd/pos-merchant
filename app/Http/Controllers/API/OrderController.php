@@ -587,6 +587,7 @@ class OrderController extends BaseController
                     'exelo_amount' => $order->exelo_amount,
                     'total_price' => $order->total_price,
                     'order_status' => $order->order_status,
+                    'created_at' => $this->created_at,
                     'order_items' => $order->items->map(function ($item) {
                         return [
                             'product_id' => $item->product_id,
