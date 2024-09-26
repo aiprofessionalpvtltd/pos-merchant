@@ -645,6 +645,7 @@ class OrderController extends BaseController
                 'exelo_amount' => round($exeloAmount),
                 'total' => round($totalPriceWithVATAndExelo),
                 'order_status' => $order->order_status,
+                'created_at' => $this->created_at,
                 'order_items' => $order->items->map(function ($item) {
                     return [
                         'product_id' => $item->product->id,
