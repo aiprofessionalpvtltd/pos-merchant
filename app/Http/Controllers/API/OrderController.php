@@ -580,6 +580,7 @@ class OrderController extends BaseController
                 return [
                     'order_id' => $order->id,
                     'name' => $order->name,
+                    'initial_name' => $this->getInitials($order->name),
                     'mobile_number' => $order->mobile_number,
                     'signature' => Storage::url($order->signature),
                     'sub_total' => $order->sub_total,
@@ -608,14 +609,10 @@ class OrderController extends BaseController
 
     public function getOrderDetails(Request $request)
     {
-        // Validate the order_id input
-        $validated = $request->validate([
-            'order_id' => 'required|exists:orders,id',
-        ]);
 
         try {
             // Retrieve the order by order_id
-            $order = Order::with('items.product')->find($validated['order_id']);
+            $order = Order::with('items.product')->find($request->order_id);
 
             if (!$order || $order->items->isEmpty()) {
                 return $this->sendError('Order not found or has no items.');
@@ -640,13 +637,17 @@ class OrderController extends BaseController
             // Prepare the response data
             $data = [
                 'order_id' => $order->id,
+                'name' => $order->name,
+                'initial_name' => $this->getInitials($order->name),
+                'mobile_number' => $order->mobile_number,
+                'signature' => Storage::url($order->signature),
                 'merchant_id' => $order->merchant_id,
                 'sub_total' => round($subtotal),
                 'vat' => round($vat),
                 'exelo_amount' => round($exeloAmount),
                 'total' => round($totalPriceWithVATAndExelo),
                 'order_status' => $order->order_status,
-                'created_at' => $this->created_at,
+                'created_at' => showDatePicker($order->created_at),
                 'order_items' => $order->items->map(function ($item) {
                     return [
                         'product_id' => $item->product->id,
