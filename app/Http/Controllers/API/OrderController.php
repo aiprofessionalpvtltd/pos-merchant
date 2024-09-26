@@ -470,25 +470,18 @@ class OrderController extends BaseController
         }
     }
 
-    public function updateOrderStatusToPaid(Request $request)
+    public function updateOrderStatusToComplete(Request $request)
     {
         // Validate the request data
         $validated = $request->validate([
             'cart_type' => 'required|in:shop,stock',
-//            'invoice_id' => 'required|exists:invoices,id',
-            'order_id' => 'required|exists:orders,id',
+             'order_id' => 'required|exists:orders,id',
         ]);
 
         DB::beginTransaction();
 
         try {
-//            // Retrieve the invoice by the provided invoice_id
-//            $invoice = Invoice::find($validated['invoice_id']);
-//
-//            // Check if the invoice is already paid
-//            if ($invoice->status === 'Paid') {
-//                return $this->sendError('Invoice is already marked as paid.');
-//            }
+
 
             // Retrieve the order by the provided order_id
             $order = Order::find($validated['order_id']);
@@ -498,17 +491,12 @@ class OrderController extends BaseController
                 return $this->sendError('Order not found.');
             }
 
-            $order->order_status = 'Paid'; // Update invoice status to 'paid'
+            $order->order_status = 'Complete'; // Update invoice status to 'Complete'
             $order->save();
-
-            // Associate the order with the invoice
-//            $invoice->order_id = $order->id;
-//            $invoice->merchant_id = $order->merchant_id;
-//            $invoice->save();
-
+            
             DB::commit();
 
-            return $this->sendResponse(new OrderResource($order), 'Order status updated to paid.');
+            return $this->sendResponse(new OrderResource($order), 'Order status updated to Complete.');
         } catch (\Exception $e) {
             DB::rollBack();
             return $this->sendError('Error updating invoice status.', $e->getMessage());
