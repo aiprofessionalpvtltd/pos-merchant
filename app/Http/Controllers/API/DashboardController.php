@@ -38,7 +38,7 @@ class DashboardController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             $pendingCount = Order::where('merchant_id', $merchantID)->where('order_status','Pending')->count();
-            $completeCount = Order::where('merchant_id', $merchantID)->where('order_status','Paid')->count();
+            $completeCount = Order::where('merchant_id', $merchantID)->where('order_status','Complete')->count();
 
             // Prepare response data
             $data = [
