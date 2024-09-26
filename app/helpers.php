@@ -165,7 +165,7 @@ function yearInsert($obj)
 function showDatePicker($obj)
 {
 //    return date('d/m/Y', strtotime($obj));
-    return date('m/d/Y', strtotime($obj));
+    return date('d/m/Y', strtotime($obj));
 }
 
 function showDate($obj)
