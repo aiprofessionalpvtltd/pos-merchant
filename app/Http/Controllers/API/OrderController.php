@@ -15,6 +15,7 @@ use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Validator;
 
 class OrderController extends BaseController
 {
@@ -26,10 +27,7 @@ class OrderController extends BaseController
             'quantity' => 'required|integer|min:1',
             'cart_type' => 'required|in:shop,stock',
         ]);
-// If validation fails, return an error response
-        if ($validated->fails()) {
-            return $this->sendError('Validation Error.', $validated->errors());
-        }
+
         $user = auth()->user();
 
         // Begin a database transaction
@@ -66,10 +64,7 @@ class OrderController extends BaseController
         $validated = $request->validate([
             'cart_type' => 'required|in:shop,stock',
         ]);
-// If validation fails, return an error response
-        if ($validated->fails()) {
-            return $this->sendError('Validation Error.', $validated->errors());
-        }
+
         $user = auth()->user();
 
         try {
@@ -112,10 +107,7 @@ class OrderController extends BaseController
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|integer|min:1', // Ensure quantity is provided and is a positive integer
         ]);
-// If validation fails, return an error response
-        if ($validated->fails()) {
-            return $this->sendError('Validation Error.', $validated->errors());
-        }
+
         $user = auth()->user();
 
         try {
@@ -168,10 +160,7 @@ class OrderController extends BaseController
             'cart_type' => 'required|in:shop,stock',
             'product_id' => 'required|exists:products,id',
         ]);
-// If validation fails, return an error response
-        if ($validated->fails()) {
-            return $this->sendError('Validation Error.', $validated->errors());
-        }
+
         $user = auth()->user();
 
         try {
@@ -210,10 +199,7 @@ class OrderController extends BaseController
         $validated = $request->validate([
             'cart_type' => 'required|in:shop,stock',
         ]);
-// If validation fails, return an error response
-        if ($validated->fails()) {
-            return $this->sendError('Validation Error.', $validated->errors());
-        }
+
         DB::beginTransaction();
 
         try {
@@ -279,10 +265,7 @@ class OrderController extends BaseController
             'cart_type' => 'required|in:shop,stock',
             'invoice_id' => 'required|exists:invoices,id',
         ]);
-// If validation fails, return an error response
-        if ($validated->fails()) {
-            return $this->sendError('Validation Error.', $validated->errors());
-        }
+
         DB::beginTransaction();
 
         try {
@@ -384,10 +367,7 @@ class OrderController extends BaseController
             'order_id' => 'required|exists:orders,id',
             'invoice_id' => 'required|exists:invoices,id',
         ]);
-// If validation fails, return an error response
-        if ($validated->fails()) {
-            return $this->sendError('Validation Error.', $validated->errors());
-        }
+
         DB::beginTransaction();
 
         try {
@@ -426,15 +406,12 @@ class OrderController extends BaseController
             'signature' => 'required|string',  // Expecting base64 string for signature
 
         ]);
-// If validation fails, return an error response
-        if ($validated->fails()) {
-            return $this->sendError('Validation Error.', $validated->errors());
-        }
+
         DB::beginTransaction();
 
         try {
 
-            // Fetch the user's cart for the given type
+             // Fetch the user's cart for the given type
             $cart = Cart::where('merchant_id', $user->merchant->id)
                 ->where('cart_type', $validated['cart_type'])
                 ->with('items.product') // Load products in the cart items
@@ -533,12 +510,9 @@ class OrderController extends BaseController
         // Validate the request data
         $validated = $request->validate([
             'cart_type' => 'required|in:shop,stock',
-            'order_id' => 'required|exists:orders,id',
+             'order_id' => 'required|exists:orders,id',
         ]);
-// If validation fails, return an error response
-        if ($validated->fails()) {
-            return $this->sendError('Validation Error.', $validated->errors());
-        }
+
         DB::beginTransaction();
 
         try {
@@ -570,10 +544,7 @@ class OrderController extends BaseController
         $validated = $request->validate([
             'order_type' => 'required|in:shop,stock',
         ]);
-// If validation fails, return an error response
-        if ($validated->fails()) {
-            return $this->sendError('Validation Error.', $validated->errors());
-        }
+
         try {
             // Fetch orders by the given type
             $orders = Order::where('order_type', $validated['order_type'])
@@ -613,19 +584,21 @@ class OrderController extends BaseController
 
     public function getOrdersByStatus(Request $request)
     {
-        $validated = $request->validate([
+
+        $validator = Validator::make($request->all(), [
             'order_status' => 'required|in:Pending,Paid,Complete',
         ]);
 
+
         // If validation fails, return an error response
-        if ($validated->fails()) {
-            return $this->sendError('Validation Error.', $validated->errors());
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
         }
 
 
         try {
             // Fetch orders by the given type
-            $orders = Order::where('order_status', $validated['order_status'])
+            $orders = Order::where('order_status', $request->order_status)
                 ->with('items.product') // Load related order items and products
                 ->get();
 
