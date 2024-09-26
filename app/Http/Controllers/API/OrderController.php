@@ -359,6 +359,40 @@ class OrderController extends BaseController
         }
     }
 
+    public function paidOrder(Request $request)
+    {
+        // Validate the incoming request for order_id and invoice_id
+        $validated = $request->validate([
+            'order_id' => 'required|exists:orders,id',
+            'invoice_id' => 'required|exists:invoices,id',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+            // Fetch the order by order_id
+            $order = Order::findOrFail($validated['order_id']);
+            $order->order_status = "Paid";
+            $order->save();
+
+            // Fetch the invoice by invoice_id
+            $invoice = Invoice::findOrFail($validated['invoice_id']);
+
+            // Update the invoice with the order_id and merchant_id from the order
+            $invoice->order_id = $order->id;
+            $invoice->merchant_id = $order->merchant_id;
+            $invoice->save();
+
+            DB::commit();
+
+            return $this->sendResponse(new OrderResource($order), 'Invoice updated successfully with the order.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->sendError('Error updating the invoice.', $e->getMessage());
+        }
+    }
+
+
     public function placePendingOrder(Request $request)
     {
         $user = auth()->user();
@@ -493,7 +527,7 @@ class OrderController extends BaseController
 
             $order->order_status = 'Complete'; // Update invoice status to 'Complete'
             $order->save();
-            
+
             DB::commit();
 
             return $this->sendResponse(new OrderResource($order), 'Order status updated to Complete.');
