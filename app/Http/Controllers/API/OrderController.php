@@ -14,6 +14,7 @@ use App\Models\ProductInventory;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
 
 class OrderController extends BaseController
 {
@@ -578,6 +579,9 @@ class OrderController extends BaseController
             $data = $orders->map(function ($order) {
                 return [
                     'order_id' => $order->id,
+                    'name' => $order->name,
+                    'mobile_number' => $order->mobile_number,
+                    'signature' => Storage::url($order->signature),
                     'sub_total' => $order->sub_total,
                     'vat' => $order->vat,
                     'exelo_amount' => $order->exelo_amount,
