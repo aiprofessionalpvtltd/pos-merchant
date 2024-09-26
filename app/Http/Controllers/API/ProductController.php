@@ -184,6 +184,7 @@ class ProductController extends BaseController
         // Calculate instock and in shop quantities
         $product->in_stock_quantity = $product->inventories->where('type', 'stock')->sum('quantity');
         $product->in_shop_quantity = $product->inventories->where('type', 'shop')->sum('quantity');
+        $product->in_transportation_quantity = $product->inventories->where('type', 'transportation')->sum('quantity');
 
         return $this->sendResponse(new ProductResource($product), 'Product retrieved successfully.');
     }
