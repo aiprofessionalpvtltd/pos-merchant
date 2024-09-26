@@ -474,20 +474,20 @@ class OrderController extends BaseController
         // Validate the request data
         $validated = $request->validate([
             'cart_type' => 'required|in:shop,stock',
-            'invoice_id' => 'required|exists:invoices,id',
+//            'invoice_id' => 'required|exists:invoices,id',
             'order_id' => 'required|exists:orders,id',
         ]);
 
         DB::beginTransaction();
 
         try {
-            // Retrieve the invoice by the provided invoice_id
-            $invoice = Invoice::find($validated['invoice_id']);
-
-            // Check if the invoice is already paid
-            if ($invoice->status === 'Paid') {
-                return $this->sendError('Invoice is already marked as paid.');
-            }
+//            // Retrieve the invoice by the provided invoice_id
+//            $invoice = Invoice::find($validated['invoice_id']);
+//
+//            // Check if the invoice is already paid
+//            if ($invoice->status === 'Paid') {
+//                return $this->sendError('Invoice is already marked as paid.');
+//            }
 
             // Retrieve the order by the provided order_id
             $order = Order::find($validated['order_id']);
@@ -501,9 +501,9 @@ class OrderController extends BaseController
             $order->save();
 
             // Associate the order with the invoice
-            $invoice->order_id = $order->id;
-            $invoice->merchant_id = $order->merchant_id;
-            $invoice->save();
+//            $invoice->order_id = $order->id;
+//            $invoice->merchant_id = $order->merchant_id;
+//            $invoice->save();
 
             DB::commit();
 

@@ -21,6 +21,7 @@ return new class extends Migration
             $table->boolean('is_canceled')->default(false);
             $table->timestamp('canceled_at')->nullable();
             $table->timestamps();
+            $table->softDeletes();
         });
     }
 

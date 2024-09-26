@@ -118,10 +118,7 @@ class MerchantSubscriptionController extends BaseController
 
             // If the current subscription exists and is not the requested one, cancel the current subscription
             if ($currentSubscription) {
-                MerchantSubscription::where('merchant_id', $merchantID)->update([
-                    'is_canceled' => true,
-                    'canceled_at' => now(),
-                ]);
+                MerchantSubscription::where('merchant_id', $merchantID)->delete();
             }
 
             // Create a new subscription for the merchant
