@@ -53,8 +53,8 @@ class MerchantSubscriptionController extends BaseController
                 // Call the store method with the new request
                $newSubscription =  $this->store($newRequest);
 
-                 return $newSubscription;
-              }
+                return $this->current($request);
+               }
 
             // Load the subscription plan relation (to access the package name and id)
             $currentSubscription->load('subscriptionPlan');
