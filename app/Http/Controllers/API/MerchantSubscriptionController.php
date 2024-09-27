@@ -6,6 +6,7 @@ use App\Http\Controllers\API\BaseController;
 use App\Http\Resources\MerchantSubscriptionResource;
 use App\Models\MerchantSubscription;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Exception;
 use function League\Uri\UriTemplate\first;
@@ -42,13 +43,25 @@ class MerchantSubscriptionController extends BaseController
                 return $this->sendError('No active subscription found.');
             }
 
+            // Load the subscription plan relation
             $currentSubscription->load('subscriptionPlan');
 
-             return $this->sendResponse(new MerchantSubscriptionResource($currentSubscription), 'Current subscription retrieved successfully.');
+            // Check if the subscription is canceled but still valid until the end date
+            if ($currentSubscription->is_canceled && $currentSubscription->end_date && $currentSubscription->end_date >= now()) {
+                $message = "Subscription is canceled but valid until ". showDate($currentSubscription->end_date);
+            } elseif (!$currentSubscription->is_canceled) {
+                $message = "Subscription is active and valid until ". showDate($currentSubscription->end_date);
+            } else {
+                $message = 'Subscription is canceled and no longer valid.';
+            }
+
+            return $this->sendResponse(new MerchantSubscriptionResource($currentSubscription), $message);
+
         } catch (Exception $e) {
             return $this->sendError('An error occurred while fetching the current subscription.', ['error' => $e->getMessage()]);
         }
     }
+
 
 
     public function canceled()
@@ -154,21 +167,41 @@ class MerchantSubscriptionController extends BaseController
 
     public function cancel(Request $request, $id)
     {
+        DB::beginTransaction();
         try {
+            // Fetch the subscription by ID
             $subscription = MerchantSubscription::findOrFail($id);
 
+            // Check if the subscription is already canceled
             if ($subscription->is_canceled) {
-                return $this->sendError('Subscription already canceled.');
+                return $this->sendError('Subscription is already canceled.');
             }
 
+            // Mark the subscription as canceled and set the cancellation date
             $subscription->is_canceled = true;
             $subscription->canceled_at = now();
             $subscription->save();
 
-            return $this->sendResponse(new MerchantSubscriptionResource($subscription), 'Subscription canceled successfully.');
+            // Check if the subscription has an end date
+            if ($subscription->end_date) {
+                $endDateMessage = "You can continue using this subscription until ". showDate($subscription->end_date);
+            } else {
+                $endDateMessage = "You can continue using this subscription until the end of your current billing cycle.";
+            }
+
+            // Commit the transaction if everything is successful
+            DB::commit();
+            // Return the response with the subscription and usage information
+            return $this->sendResponse(new MerchantSubscriptionResource($subscription), 'Subscription canceled successfully. ' . $endDateMessage);
+
         } catch (Exception $e) {
+            // Rollback the transaction if any error occurs
+            DB::rollBack();
+
+            // Handle any exceptions and return an error message
             return $this->sendError('An error occurred while canceling the subscription.', ['error' => $e->getMessage()]);
         }
     }
+
 
 }

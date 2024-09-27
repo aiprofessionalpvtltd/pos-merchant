@@ -84,9 +84,17 @@ class Merchant extends Model
     public function currentSubscription()
     {
         return $this->hasOne(MerchantSubscription::class)
-            ->where('is_canceled', false) // Only active (not canceled) subscription
-            ->latest(); // Get the most recent active subscription
+            ->where(function ($query) {
+                // Subscription is either not canceled or canceled but still valid until the end date
+                $query->where('is_canceled', false)
+                    ->orWhere(function ($subQuery) {
+                        $subQuery->where('is_canceled', true)
+                            ->whereDate('end_date', '>=', now()); // Canceled but valid until end_date
+                    });
+            })
+            ->latest(); // Get the most recent valid subscription
     }
+
 
     public function canceledSubscriptions()
     {

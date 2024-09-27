@@ -65,7 +65,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/merchants/subscriptions/current', [MerchantSubscriptionController::class, 'current']);  // List all subscriptions
     Route::get('/merchants/subscriptions/canceled', [MerchantSubscriptionController::class, 'canceled']);  // List all subscriptions
     Route::post('/merchants/subscriptions', [MerchantSubscriptionController::class, 'store']); // Create a subscription
-    Route::post('/merchants/subscriptions/{id}/cancel', [MerchantSubscriptionController::class, 'cancel']);  // Cancel a subscription
+    Route::get('/merchants/subscriptions/{id}/cancel', [MerchantSubscriptionController::class, 'cancel']);  // Cancel a subscription
 
 
     // Sales Routes
