@@ -205,7 +205,6 @@ class MerchantSubscriptionController extends BaseController
             // Fetch the subscription by ID
             $subscription = MerchantSubscription::where('subscription_plan_id',$id)->where('merchant_id', $merchantID)->first();
 
-            dd($subscription->id);
             // Check if the subscription exists
             if (!$subscription) {
                  return $this->sendError('Subscription not found.');
