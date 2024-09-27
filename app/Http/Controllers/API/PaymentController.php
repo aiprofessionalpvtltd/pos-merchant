@@ -154,9 +154,43 @@ class PaymentController extends BaseController
 
 
     // Process the transaction and calculate fees
+//    public function processTransaction(Request $request)
+//    {
+//
+//        // Validate incoming request
+//        $validator = $this->validateRequest($request, [
+//            'transaction_amount' => 'required|numeric',
+//        ]);
+//
+//        if ($validator->fails()) {
+//            return $this->sendError('Validation Error.', $validator->errors());
+//        }
+//
+//        $transactionAmount = $request->transaction_amount;
+//
+//        // Add 2% to the amount entered by the customer (customer fee)
+//        $customerFee = $transactionAmount * 0.02;
+//        $totalCustomerCharge = $transactionAmount + $customerFee;
+//
+//        // Deduct 1% from the amount to be sent to the merchant (Exelo fee)
+//        $exeloFee = $transactionAmount * 0.01;
+//        $amountSentToMerchant = $transactionAmount - $exeloFee;
+//
+//        // Exelo keeps both the customer fee and the Exelo fee (1% deducted from merchant)
+//        $amountKeptByExelo = $customerFee + $exeloFee;
+//
+//        return response()->json([
+//            'customer_fee' => round($customerFee),
+//            'exelo_fee' => round($exeloFee),
+//            'amount_kept_by_exelo' => round($amountKeptByExelo),
+//            'amount_sent_to_merchant' => round($amountSentToMerchant),
+//            'total_customer_charge' => round($totalCustomerCharge),
+//        ]);
+//    }
+
+
     public function processTransaction(Request $request)
     {
-
         // Validate incoming request
         $validator = $this->validateRequest($request, [
             'transaction_amount' => 'required|numeric',
@@ -168,16 +202,36 @@ class PaymentController extends BaseController
 
         $transactionAmount = $request->transaction_amount;
 
-        // Add 2% to the amount entered by the customer (customer fee)
-        $customerFee = $transactionAmount * 0.02;
+        // Determine the authenticated user
+        $authUser = auth()->user();
+
+        // Check subscription plan and set fees accordingly
+        if ($authUser && $authUser->merchant && $authUser->merchant->currentSubscription) {
+            $subscriptionPlanId = $authUser->merchant->currentSubscription->subscription_plan_id;
+
+            if ($subscriptionPlanId == 1) { // Gold Plan
+                // Exelo fee for customers: 2.85%, merchants: 0%
+                $customerFee = $transactionAmount * 0.0285;
+                $exeloFee = 0; // Merchant fee
+            } elseif ($subscriptionPlanId == 2) { // Silver Plan
+                // Exelo fee for merchants: 2.85%, customers: 0%
+                $customerFee = 0; // Customer fee
+                $exeloFee = $transactionAmount * 0.0285;
+            }
+        } else {
+            // Default to Silver Plan
+            $customerFee = 0; // Customer fee
+            $exeloFee = $transactionAmount * 0.0285; // Exelo fee for merchants: 2.85%
+        }
+
+        // Calculate the total amounts
         $totalCustomerCharge = $transactionAmount + $customerFee;
-
-        // Deduct 1% from the amount to be sent to the merchant (Exelo fee)
-        $exeloFee = $transactionAmount * 0.01;
         $amountSentToMerchant = $transactionAmount - $exeloFee;
-
-        // Exelo keeps both the customer fee and the Exelo fee (1% deducted from merchant)
         $amountKeptByExelo = $customerFee + $exeloFee;
+
+        // Convert SLHS to dollars (1 DOLLAR = 9200 SLHS)
+        $conversionRate = 9200;
+        $amountInDollars = $transactionAmount / $conversionRate;
 
         return response()->json([
             'customer_fee' => round($customerFee),
@@ -185,6 +239,7 @@ class PaymentController extends BaseController
             'amount_kept_by_exelo' => round($amountKeptByExelo),
             'amount_sent_to_merchant' => round($amountSentToMerchant),
             'total_customer_charge' => round($totalCustomerCharge),
+            'amount_in_dollars' => round($amountInDollars, 2) // Add dollar conversion
         ]);
     }
 
@@ -296,7 +351,7 @@ class PaymentController extends BaseController
                 $invoiceData = $response->json();
 
                 // Simulating database insertion of the transaction details
-               $invoice =  Invoice::create([
+                $invoice = Invoice::create([
                     'invoice_id' => $invoiceData['InvoiceId'],
                     'first_name' => $firstName,
                     'last_name' => $lastName,
