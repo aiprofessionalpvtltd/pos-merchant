@@ -56,18 +56,23 @@ class MerchantSubscriptionController extends BaseController
             $subscriptionPlanId = $currentSubscription->subscription_plan_id;
 
             // Determine whether to show the end date
-            $showEndDate = $subscriptionPlanId != 1; // If plan is not Silver (ID != 1), show the end date
+            $showEndDate = $subscriptionPlanId != 2; // If plan is not Silver (ID != 1), show the end date
 
-
-//            dd($currentSubscription->end_date >= now());
             if ($currentSubscription->is_canceled && $currentSubscription->end_date && $currentSubscription->end_date >= now()) {
+
                 $message = "Subscription ({$packageName}) is canceled but " . ($showEndDate ? "valid until " . showDate($currentSubscription->end_date) : "still active.");
                 $reSubscriptionEligible = false; // Eligible for re-subscription if it's canceled but still valid
+
             } elseif (!$currentSubscription->is_canceled) {
+
                 $message = "Subscription ({$packageName}) is active" . ($showEndDate ? " and valid until " . showDate($currentSubscription->end_date) : ".");
+                $reSubscriptionEligible = true;
+
             } else {
+
                 $message = "Subscription ({$packageName}) is canceled and no longer valid.";
                 $reSubscriptionEligible = true; // Eligible for re-subscription if it's fully canceled
+
             }
 
             $currentSubscription->reSubscriptionEligible = $reSubscriptionEligible;
