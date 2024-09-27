@@ -43,9 +43,9 @@ class MerchantSubscriptionController extends BaseController
             $currentSubscription = $merchant->currentSubscription;
             $noSubscription = [];
             if (!$currentSubscription) {
-                $noSubscription['subscription_plan_id'] = 1;
+                $noSubscription['subscription_plan_id'] = 2;
                 $noSubscription['reSubscriptionEligible'] = true;
-                 return $this->sendResponse($noSubscription, 'No active subscription found.');
+                 return $this->sendResponse($noSubscription, 'No gold package subscription found.');
              }
 
             // Load the subscription plan relation (to access the package name and id)
