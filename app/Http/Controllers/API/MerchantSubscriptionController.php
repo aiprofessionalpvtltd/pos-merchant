@@ -190,13 +190,24 @@ class MerchantSubscriptionController extends BaseController
     {
         DB::beginTransaction();
         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Check if the authenticated user has an associated merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant ID
+            $merchantID = $authUser->merchant->id;
+
             // Fetch the subscription by ID
-            $subscription = MerchantSubscription::find($id);
+            $subscription = MerchantSubscription::where('subscription_plan_id',$id)->where('merchant_id', $merchantID)->first();
+
 
             // Check if the subscription exists
             if (!$subscription) {
-                DB::rollBack(); // Rollback since there's no valid subscription
-                return $this->sendError('Subscription not found.');
+                 return $this->sendError('Subscription not found.');
             }
 
             // Check if the subscription is already canceled
