@@ -230,8 +230,7 @@ class PaymentController extends BaseController
         $amountKeptByExelo = $customerFee + $exeloFee;
 
         // Convert SLHS to dollars (1 DOLLAR = 9200 SLHS)
-        $conversionRate = 9200;
-        $amountInDollars = $transactionAmount / $conversionRate;
+        $amountInDollars = convertShillingToUSD($transactionAmount);
 
         return response()->json([
             'customer_fee' => round($customerFee),
