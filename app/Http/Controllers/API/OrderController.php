@@ -222,7 +222,7 @@ class OrderController extends BaseController
             }
 
             // Calculate VAT (10%)
-           $vat = $subtotal * 0.5;
+           $vat = $subtotal * 0.05;
 
             // Calculate Exelo amount (on sub total)
             $exeloAmount = ($subtotal) * 0.0285;
@@ -657,7 +657,7 @@ class OrderController extends BaseController
             }
 
             // Calculate VAT (10%)
-           $vat = $subtotal * 0.5;
+           $vat = $subtotal * 0.05;
 
             // Calculate Exelo amount (on subtotal)
             $exeloAmount = $subtotal * 0.0285;
@@ -672,6 +672,82 @@ class OrderController extends BaseController
                 'initial_name' => $this->getInitials($order->name),
                 'mobile_number' => $order->mobile_number,
                 'signature' => Storage::url($order->signature),
+                'merchant_id' => $order->merchant_id,
+                'sub_total' => round($subtotal),
+                'vat' => round($vat),
+                'exelo_amount' => round($exeloAmount),
+                'total' => round($totalPriceWithVATAndExelo),
+                'order_status' => $order->order_status,
+                'created_at' => showDatePicker($order->created_at),
+                'order_items' => $order->items->map(function ($item) {
+                    return [
+                        'product_id' => $item->product->id,
+                        'product_name' => $item->product->product_name,
+                        'quantity' => $item->quantity,
+                        'price' => $item->price,
+                        'total_price' => $item->quantity * $item->price,
+                    ];
+                }),
+            ];
+
+            return $this->sendResponse($data, 'Order details retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error retrieving order details.', $e->getMessage());
+        }
+    }
+
+    public function getOrderDetailsForInvoice($orderID)
+    {
+        try {
+            // Retrieve the order with items and product relationship
+            $order = Order::with('items.product', 'merchant', 'invoice')->find($orderID);
+
+            if (!$order || $order->items->isEmpty()) {
+                return $this->sendError('Order not found or has no items.');
+            }
+
+            // Initialize subtotal
+            $subtotal = 0;
+            foreach ($order->items as $item) {
+                $subtotal += $item->price * $item->quantity;
+            }
+
+            // Calculate VAT (10%)
+            $vat = $subtotal * 0.10;
+
+            // Calculate Exelo amount (2.85% on subtotal)
+            $exeloAmount = $subtotal * 0.0285;
+
+            // Calculate total price including VAT and Exelo amount
+            $totalPriceWithVATAndExelo = $subtotal + $vat + $exeloAmount;
+
+            // Dahab and Zaad prefixes
+            $dahabPrefixes = ['65', '66', '62'];
+            $mobileNumberPrefix = substr($order->mobile_number, 0, 2);
+
+            // Determine if it's edahab_number or zaad_number
+            $mobileNumberType = in_array($mobileNumberPrefix, $dahabPrefixes) ? 'edahab_number' : 'zaad_number';
+
+            // Prepare the response data
+            $data = [
+                'order_id' => $order->id,
+                'name' => $order->name,
+                'initial_name' => $this->getInitials($order->name),
+                'mobile_number' => $order->mobile_number,
+                $mobileNumberType => $order->mobile_number, // Dynamically set based on the prefix
+                'merchant' => [
+                    'business_name' => $order->merchant->business_name,
+                    'merchant_code' => $order->merchant->merchant_code,
+                    'first_name' => $order->merchant->first_name,
+                    'last_name' => $order->merchant->last_name,
+                    'phone_number' => $order->merchant->phone_number,
+                ],
+                'invoice' => [
+                    'invoice_no' => $order->invoice->id,
+                    'invoice_date' => $order->invoice->created_at->format('Y-m-d'),
+                    'status' => $order->invoice->status,
+                    'mobile_number' => $order->invoice->mobile_number,
+                ],
                 'merchant_id' => $order->merchant_id,
                 'sub_total' => round($subtotal),
                 'vat' => round($vat),

@@ -118,6 +118,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('inventory/transfer/shop-to-transportation', [ProductInventoryController::class, 'transferShopToTransportation']);
     Route::post('inventory/transfer/stock-to-transportation', [ProductInventoryController::class, 'transferStockToTransportation']);
     Route::post('inventory/updateInventory', [ProductInventoryController::class, 'updateInventory']);
+    Route::get('inventory/getSoldItems', [ProductInventoryController::class, 'getSoldItems']);
 
 
     // Cart and Order routes
@@ -134,6 +135,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/cart/placePendingOrder', [OrderController::class, 'placePendingOrder']); // Place an order
     Route::post('/cart/updateOrderStatusToComplete', [OrderController::class, 'updateOrderStatusToComplete']); // Place an order
     Route::post('/cart/getOrderDetails', [OrderController::class, 'getOrderDetails']); // Place an order
+    Route::get('/order/getOrderDetailsForInvoice/{orderID}', [OrderController::class, 'getOrderDetailsForInvoice']); // Show checkout details
 
 
     // Category Routes

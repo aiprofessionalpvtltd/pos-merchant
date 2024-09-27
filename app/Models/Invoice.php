@@ -33,4 +33,9 @@ class Invoice extends Model
         'type',
     ];
 
+    public function order()
+    {
+        return $this->belongsTo(Order::class)->withDefault();
+    }
+
 }

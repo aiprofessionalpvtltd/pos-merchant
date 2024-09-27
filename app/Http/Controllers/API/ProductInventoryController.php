@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\API\BaseController;
 use App\Http\Resources\ProductInventoryResource;
 use App\Http\Resources\ProductResource;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductInventory;
 use Illuminate\Http\Request;
@@ -565,6 +566,46 @@ class ProductInventoryController extends BaseController
             return $this->sendError('Error updating or creating inventory.', [$e->getMessage()]);
         }
     }
+
+//    public function getSoldItems()
+//    {
+//
+//        try {
+//            // Fetch orders by the given type
+//            $orders = Order::where('order_type', $validated['order_type'])
+//                ->with('items.product') // Load related order items and products
+//                ->get();
+//
+//            if ($orders->isEmpty()) {
+//                return $this->sendError('No orders found for the specified type.');
+//            }
+//
+//            // Prepare the response data
+//            $data = $orders->map(function ($order) {
+//                return [
+//                    'order_id' => $order->id,
+//                    'sub_total' => $order->sub_total,
+//                    'vat' => $order->vat,
+//                    'exelo_amount' => $order->exelo_amount,
+//                    'total_price' => $order->total_price,
+//                    'order_status' => $order->order_status,
+//                    'order_items' => $order->items->map(function ($item) {
+//                        return [
+//                            'product_id' => $item->product_id,
+//                            'product_name' => $item->product->product_name,
+//                            'quantity' => $item->quantity,
+//                            'price' => $item->price,
+//                            'total_price' => $item->quantity * $item->price,
+//                        ];
+//                    }),
+//                ];
+//            });
+//
+//            return $this->sendResponse($data, 'Orders retrieved successfully.');
+//        } catch (\Exception $e) {
+//            return $this->sendError('Error retrieving orders.', $e->getMessage());
+//        }
+//    }
 
 
 

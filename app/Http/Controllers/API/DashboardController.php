@@ -9,6 +9,7 @@ use App\Http\Resources\ProductResource;
 use App\Http\Resources\TopSellingProductResource;
 use App\Models\CartItem;
 use App\Models\Category;
+use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -37,13 +38,14 @@ class DashboardController extends BaseController
             // Get merchant ID from authenticated user's merchant relation
             $merchantID = $authUser->merchant->id;
 
-            $pendingCount = Order::where('merchant_id', $merchantID)->where('order_status','Pending')->count();
-            $completeCount = Order::where('merchant_id', $merchantID)->where('order_status','Complete')->count();
+            $pendingCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Pending')->count();
+            $completeCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Complete')->count();
 
             // Prepare response data
             $data = [
-                    'pending_order_count' => $pendingCount,
-                    'complete_order_count' => $completeCount
+                'pending_order_count' => $pendingCount,
+                'complete_order_count' => $completeCount,
+                'weekly_summary' => $this->getWeeklySalesAndStatistics(),
 
 
             ];
@@ -126,19 +128,21 @@ class DashboardController extends BaseController
                 ? ($newProductsInStock / $overallTotal) * 100
                 : 0;
 
-            // get Pending Order count
-            $pendingOrder = Order::where('order_status','Pending')->count();
+            $pendingCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Pending')->count();
+            $completeCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Complete')->count();
 
-            // get Complete Order count
-            $completedOrder = Order::where('order_status','completed')->count();
+
+            $transactionHistories = $this->getInvoicesWithOrders()->getData(true);
+            $transactionHistories = $transactionHistories['data'];
 
             // Prepare response data
             $data = [
                 'top_selling' => $this->getTopSellingProducts(),
                 'weekly_summary' => $this->getWeeklySalesAndStatistics(),
                 'limit' => $this->getProductLimitCounts(),
-                'pending_orders' => $pendingOrder,
-                'completed_orders' => $completedOrder,
+                'transaction_history' => $transactionHistories,
+                'pending_order_count' => $pendingCount,
+                'complete_order_count' => $completeCount,
                 'total_products_in_shop' => $totalProductsInShop,
                 'total_products_in_shop_percentage' => round($shopPercentage, 2) . '%',
                 'total_products_in_stock' => $totalProductsInStock,
@@ -147,9 +151,9 @@ class DashboardController extends BaseController
                 'total_products_sold' => $totalProductsSold,
                 'total_products_sold_percentage' => round($soldPercentage, 2) . '%',
                 'new_products_in_shop' => $newProductsInShop,
-                'new_products_in_shop_percentage' => round($newProductShopPercentage,2). '%',
+                'new_products_in_shop_percentage' => round($newProductShopPercentage, 2) . '%',
                 'new_products_in_stock' => $newProductsInStock,
-                'new_products_in_stock_percentage' => round($newProductStockPercentage,2). '%',
+                'new_products_in_stock_percentage' => round($newProductStockPercentage, 2) . '%',
 
             ];
 
@@ -231,7 +235,7 @@ class DashboardController extends BaseController
             ];
 
             // Return success response
-           return $response;
+            return $response;
 
         } catch (\Exception $e) {
             return $this->sendError('Error fetching weekly sales and statistics.', [$e->getMessage()]);
@@ -252,7 +256,7 @@ class DashboardController extends BaseController
             // Get merchant ID from authenticated user's merchant relation
             $merchantID = $authUser->merchant->id;
 
-             // Retrieve top-selling products based on the orders placed by the merchant
+            // Retrieve top-selling products based on the orders placed by the merchant
             $topSellingProducts = Product::whereHas('orderItems.order', function ($query) use ($merchantID) {
                 $query->where('merchant_id', $merchantID);
             })
@@ -265,7 +269,7 @@ class DashboardController extends BaseController
 
             // Return success response with top-selling products
 //            return $this->sendResponse(TopSellingProductResource::collection($topSellingProducts), 'Top-selling products retrieved successfully.');
-            return  TopSellingProductResource::collection($topSellingProducts);
+            return TopSellingProductResource::collection($topSellingProducts);
 
 
         } catch (\Exception $e) {
@@ -313,7 +317,6 @@ class DashboardController extends BaseController
     }
 
 
-
     // Function to get products based on alarm limit
     public function getProductsByAlarmLimit()
     {
@@ -322,13 +325,13 @@ class DashboardController extends BaseController
             $products = Product::whereHas('inventories', function ($query) {
                 $query->whereColumn('quantity', '<=', 'alarm_limit')->where('type', 'shop');
             })
-                ->with(['inventories' => function($query) {
+                ->with(['inventories' => function ($query) {
                     $query->select('id', 'product_id', 'type', 'quantity'); // Select relevant fields
                 }])
                 ->get(['id', 'product_name']); // Select only the necessary fields from Product
 
             // Transform the products to include shop and stock quantities
-            $result = $products->map(function($product) {
+            $result = $products->map(function ($product) {
                 $shopQuantity = 0;
                 $stockQuantity = 0;
 
@@ -365,13 +368,13 @@ class DashboardController extends BaseController
             $products = Product::whereHas('inventories', function ($query) {
                 $query->whereColumn('quantity', '<=', 'stock_limit')->where('type', 'shop');
             })
-                ->with(['inventories' => function($query) {
+                ->with(['inventories' => function ($query) {
                     $query->select('id', 'product_id', 'type', 'quantity'); // Select relevant fields
                 }])
                 ->get(['id', 'product_name']); // Select only the necessary fields from Product
 
             // Transform the products to include shop and stock quantities
-            $result = $products->map(function($product) {
+            $result = $products->map(function ($product) {
                 $shopQuantity = 0;
                 $stockQuantity = 0;
 
@@ -400,7 +403,44 @@ class DashboardController extends BaseController
     }
 
 
+    public function getInvoicesWithOrders()
+    {
+        try {
+            // Get the authenticated merchant ID
+            $authUser = auth()->user();
 
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            $merchantID = $authUser->merchant->id;
+
+            // Fetch invoices with their associated orders
+            $invoices = Invoice::with('order')
+                ->where('merchant_id', $merchantID)
+                ->where('type', 'POS')
+                ->orderBy('created_at', 'desc') // Order by creation date descending
+                ->limit(5) // Limit to 5 latest invoices
+                ->get();
+
+            // Format the response
+            $invoiceData = $invoices->map(function ($invoice) {
+                $order = $invoice->order;
+                return [
+                    'invoice_id' => $invoice->id,
+                    'order_id' => $order->id,
+                    'name' => $order ? ($order->name ?? $order->mobile_number) : 'N/A',
+                    'order_date' => $order ? $order->created_at->format('Y-m-d') : 'N/A',
+                    'invoice_amount' => $invoice->amount,
+                    'name_initial' => $this->getInitials($order ? ($order->name ?? $order->mobile_number) : 'N/A')
+                ];
+            });
+
+            return $this->sendResponse($invoiceData, 'Invoices with orders fetched successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('An error occurred while fetching invoices.', ['error' => $e->getMessage()]);
+        }
+    }
 
 
 }
