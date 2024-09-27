@@ -55,37 +55,55 @@ class PassportAuthController extends BaseController
 
     public function verifyUser(Request $request)
     {
-        // Validate the request based on user type
+        try {
+            // Validate the request based on user type
+            $this->validateRequest($request, [
+                'phone_number' => 'required|string|max:15',
+                'pin' => 'required|string|size:4',
+            ]);
 
-        $this->validateRequest($request, [
-            'phone_number' => 'required|string|max:15',
-            'pin' => 'required|string|size:4',
-        ]);
+            $phoneNumber = str_replace(' ', '', $request->phone_number);
+            $merchant = Merchant::where('phone_number', $phoneNumber)->first();
 
-        $phoneNumber = str_replace(' ', '', $request->phone_number);
-        $merchant = Merchant::where('phone_number', $phoneNumber)->first();
+            if (!$merchant) {
+                return $this->sendError('Phone number not found.', '', 404);
+            }
 
-        if (!$merchant) {
-            return $this->sendError('Phone number not found.', '', 404);
+            if (!Hash::check($request->pin, $merchant->user->password)) {
+                return $this->sendError('Invalid PIN code.', '', 401);
+            }
+
+            $user = $merchant->user;
+            $token = $user->createToken('PassportAuth')->accessToken;
+            $merchant->load(['currentSubscription.subscriptionPlan']); // Load both subscription and subscriptionPlan relationships
+
+            $currentSubscription = $merchant->currentSubscription;
+            $noSubscription = new \stdClass();
+            // If currentSubscription is null, set default values
+            if (!$currentSubscription) {
+                // Create a new stdClass object
+                $noSubscription->subscription_plan_id = 1; // Default to Silver
+                $noSubscription->reSubscriptionEligible = true; // Eligible for re-subscription
+                // Add the current subscription back to the merchant for the resource
+                $merchant->currentSubscription = $noSubscription;
+            }
+
+
+
+             return $this->sendResponse([
+                'user' => new UserResource($user),
+                'merchant' => new MerchantResource($merchant),
+                'token' => $token,
+                'user_type' => $user->user_type,
+                'short_name' => $this->getInitials($user->name)
+            ], 'Merchant Login successful.');
+
+        } catch (\Exception $e) {
+            return $this->sendError('An error occurred during the verification process.', ['error' => $e->getMessage()]);
         }
-
-        if (!Hash::check($request->pin, $merchant->user->password)) {
-            return $this->sendError('Invalid PIN code.', '', 401);
-        }
-
-        $user = $merchant->user;
-        $token = $user->createToken('PassportAuth')->accessToken;
-        $merchant->load(['currentSubscription.subscriptionPlan']); // Load both subscription and subscriptionPlan relationships
-
-        return $this->sendResponse([
-            'user' => new UserResource($user),
-            'merchant' => new MerchantResource($merchant),
-            'token' => $token,
-            'user_type' => $user->user_type,
-            'short_name' => $this->getInitials($user->name)
-        ], 'Merchant Login successful.');
-
     }
+
+
 
     /**
      * Get the authenticated user information.

@@ -29,6 +29,9 @@ class MerchantSubscriptionController extends BaseController
             // Assuming the authenticated user is a merchant
             $authUser = auth()->user();
 
+            // Determine the message and check for re-subscription eligibility
+            $reSubscriptionEligible = false;
+
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
@@ -38,10 +41,12 @@ class MerchantSubscriptionController extends BaseController
 
             // Get the current subscription
             $currentSubscription = $merchant->currentSubscription;
-
+            $noSubscription = [];
             if (!$currentSubscription) {
-                return $this->sendError('No active subscription found.');
-            }
+                $noSubscription['subscription_plan_id'] = 1;
+                $noSubscription['reSubscriptionEligible'] = true;
+                 return $this->sendResponse($noSubscription, 'No active subscription found.');
+             }
 
             // Load the subscription plan relation (to access the package name and id)
             $currentSubscription->load('subscriptionPlan');
@@ -50,18 +55,24 @@ class MerchantSubscriptionController extends BaseController
             $packageName = $currentSubscription->subscriptionPlan->name;
             $subscriptionPlanId = $currentSubscription->subscription_plan_id;
 
-              // Determine whether to show the end date
-            $showEndDate = $subscriptionPlanId == 1; // If plan is not Silver (ID != 1), show the end date
+            // Determine whether to show the end date
+            $showEndDate = $subscriptionPlanId != 1; // If plan is not Silver (ID != 1), show the end date
 
-            // Check if the subscription is canceled but still valid until the end date
+
+//            dd($currentSubscription->end_date >= now());
             if ($currentSubscription->is_canceled && $currentSubscription->end_date && $currentSubscription->end_date >= now()) {
                 $message = "Subscription ({$packageName}) is canceled but " . ($showEndDate ? "valid until " . showDate($currentSubscription->end_date) : "still active.");
+                $reSubscriptionEligible = false; // Eligible for re-subscription if it's canceled but still valid
             } elseif (!$currentSubscription->is_canceled) {
                 $message = "Subscription ({$packageName}) is active" . ($showEndDate ? " and valid until " . showDate($currentSubscription->end_date) : ".");
             } else {
                 $message = "Subscription ({$packageName}) is canceled and no longer valid.";
+                $reSubscriptionEligible = true; // Eligible for re-subscription if it's fully canceled
             }
 
+            $currentSubscription->reSubscriptionEligible = $reSubscriptionEligible;
+
+            // Return the response with the merged data
             return $this->sendResponse(new MerchantSubscriptionResource($currentSubscription), $message);
 
         } catch (Exception $e) {
@@ -128,7 +139,7 @@ class MerchantSubscriptionController extends BaseController
             // Get the current subscription
             $currentSubscription = $merchant->currentSubscription;
 
-             // Check if the merchant is already subscribed to the requested plan and the subscription is not canceled
+            // Check if the merchant is already subscribed to the requested plan and the subscription is not canceled
             if ($currentSubscription && $currentSubscription->subscription_plan_id == $request->subscription_plan_id && $currentSubscription->is_canceled == 0) {
                 return $this->sendError('You are already subscribed to this package.');
             }
@@ -175,7 +186,13 @@ class MerchantSubscriptionController extends BaseController
         DB::beginTransaction();
         try {
             // Fetch the subscription by ID
-            $subscription = MerchantSubscription::findOrFail($id);
+            $subscription = MerchantSubscription::find($id);
+
+            // Check if the subscription exists
+            if (!$subscription) {
+                DB::rollBack(); // Rollback since there's no valid subscription
+                return $this->sendError('Subscription not found.');
+            }
 
             // Check if the subscription is already canceled
             if ($subscription->is_canceled) {
@@ -189,7 +206,7 @@ class MerchantSubscriptionController extends BaseController
 
             // Check if the subscription has an end date
             if ($subscription->end_date) {
-                $endDateMessage = "You can continue using this subscription until ". showDate($subscription->end_date);
+                $endDateMessage = "You can continue using this subscription until " . showDate($subscription->end_date);
             } else {
                 $endDateMessage = "You can continue using this subscription until the end of your current billing cycle.";
             }

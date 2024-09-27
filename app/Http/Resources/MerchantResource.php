@@ -14,7 +14,9 @@ class MerchantResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-        return [
+        $currentSubscription = $this->whenLoaded('currentSubscription');
+
+         return [
             'id' => $this->id,
             'first_name' => $this->first_name,
             'last_name' => $this->last_name,
@@ -31,8 +33,13 @@ class MerchantResource extends JsonResource
             'otp_expires_at' => $this->otp_expires_at,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
-            // Ensure that currentSubscription is only loaded if it exists
-            'currentSubscription' => new MerchantSubscriptionResource($this->whenLoaded('currentSubscription')),
+            // Conditionally include currentSubscription details
+            'currentSubscription' => $this->currentSubscription->reSubscriptionEligible
+                ? [
+                    'subscription_plan_id' => 1, // Default or fallback ID
+                    'reSubscriptionEligible' => true,
+                ]
+                : new MerchantSubscriptionResource($currentSubscription),
         ];
     }
 
