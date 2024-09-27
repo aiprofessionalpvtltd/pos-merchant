@@ -43,16 +43,19 @@ class MerchantSubscriptionController extends BaseController
                 return $this->sendError('No active subscription found.');
             }
 
-            // Load the subscription plan relation
+            // Load the subscription plan relation (to access the package name)
             $currentSubscription->load('subscriptionPlan');
+
+            // Get the package name
+            $packageName = $currentSubscription->subscriptionPlan->name;
 
             // Check if the subscription is canceled but still valid until the end date
             if ($currentSubscription->is_canceled && $currentSubscription->end_date && $currentSubscription->end_date >= now()) {
-                $message = "Subscription is canceled but valid until ". showDate($currentSubscription->end_date);
+                $message = "Subscription ({$packageName}) is canceled but valid until " . showDate($currentSubscription->end_date);
             } elseif (!$currentSubscription->is_canceled) {
-                $message = "Subscription is active and valid until ". showDate($currentSubscription->end_date);
+                $message = "Subscription ({$packageName}) is active and valid until " . showDate($currentSubscription->end_date);
             } else {
-                $message = 'Subscription is canceled and no longer valid.';
+                $message = "Subscription ({$packageName}) is canceled and no longer valid.";
             }
 
             return $this->sendResponse(new MerchantSubscriptionResource($currentSubscription), $message);
@@ -61,6 +64,7 @@ class MerchantSubscriptionController extends BaseController
             return $this->sendError('An error occurred while fetching the current subscription.', ['error' => $e->getMessage()]);
         }
     }
+
 
 
 
