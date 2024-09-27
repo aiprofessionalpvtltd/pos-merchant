@@ -23,7 +23,7 @@ class MerchantSubscriptionController extends BaseController
         }
     }
 
-    public function current()
+    public function current(Request $request) // Add Request parameter
     {
         try {
             // Assuming the authenticated user is a merchant
@@ -41,12 +41,20 @@ class MerchantSubscriptionController extends BaseController
 
             // Get the current subscription
             $currentSubscription = $merchant->currentSubscription;
-            $noSubscription = [];
+            $noSubscription = new \stdClass();
             if (!$currentSubscription) {
-                $noSubscription['subscription_plan_id'] = 2;
-                $noSubscription['reSubscriptionEligible'] = true;
-                 return $this->sendResponse($noSubscription, 'No gold package subscription found.');
-             }
+                $noSubscription->subscription_plan_id = 2; // Default to Silver
+                $noSubscription->reSubscriptionEligible = true; // Eligible for re-subscription
+
+                // Create a new Request instance and merge the subscription plan ID
+                $newRequest = new Request($request->all()); // Copy existing request data
+                $newRequest->merge(['subscription_plan_id' => $noSubscription->subscription_plan_id]); // Add the subscription plan ID
+
+                // Call the store method with the new request
+               $newSubscription =  $this->store($newRequest);
+
+                 return $newSubscription;
+              }
 
             // Load the subscription plan relation (to access the package name and id)
             $currentSubscription->load('subscriptionPlan');
@@ -116,7 +124,7 @@ class MerchantSubscriptionController extends BaseController
 
     public function store(Request $request)
     {
-        // Validate the input
+         // Validate the input
         $validator = Validator::make($request->all(), [
             'subscription_plan_id' => 'required|exists:subscription_plans,id',
         ]);
@@ -150,8 +158,8 @@ class MerchantSubscriptionController extends BaseController
             }
 
 
-            // If the current subscription exists and is not the requested one, cancel the current subscription
-            if ($currentSubscription) {
+             // If the current subscription exists and is not the requested one, delete the all subscriptions
+            if ($currentSubscription == null) {
                 MerchantSubscription::where('merchant_id', $merchantID)->delete();
             }
 
