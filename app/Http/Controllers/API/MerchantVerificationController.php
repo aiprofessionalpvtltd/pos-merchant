@@ -166,4 +166,59 @@ class MerchantVerificationController extends BaseController
     }
 
 
+    public function changePin(Request $request)
+    {
+        // Validate the request data
+        $validator = Validator::make($request->all(), [
+            'old_pin' => 'required|string|size:4',
+            'new_pin' => 'required|string|size:4',
+            'repeat_pin' => 'required|string|same:new_pin',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // Fetch the authenticated user
+            // Assuming the authenticated user is a merchant
+            $authUser = auth()->user();
+
+            // Determine the message and check for re-subscription eligibility
+            $reSubscriptionEligible = false;
+
+            if (!$authUser) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+
+            $authUser = auth()->user();
+
+
+            // Check if the old PIN matches the current PIN
+            if ($authUser->pin !== $request->old_pin) {
+                return $this->sendError('Old PIN does not match.', []);
+            }
+
+            // Update the user's PIN and password
+            $authUser->pin = $request->new_pin;
+            $authUser->password = Hash::make($request->new_pin);
+            $authUser->save();
+
+            DB::commit();
+
+            // Return success response
+            return $this->sendResponse([
+                'user' => new UserResource($authUser),
+                'message' => 'PIN changed successfully.',
+            ], 'PIN updated.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->sendError('An error occurred while changing the PIN.', ['error' => $e->getMessage()]);
+        }
+    }
+
 }

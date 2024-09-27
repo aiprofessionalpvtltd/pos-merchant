@@ -40,6 +40,9 @@ Route::post('/zaad/commit', [PaymentController::class, 'connectToWaafiCommitAPI'
 
 Route::middleware('auth:api')->group(function () {
 
+    Route::post('merchants/change-pin', [MerchantVerificationController::class, 'changePin']);
+
+
     // Payment Routes
     Route::prefix('merchant/invoice')->group(function () {
         Route::post('/route', [PaymentController::class, 'routePaymentAPI']);           // Route payment API

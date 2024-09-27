@@ -222,10 +222,10 @@ class OrderController extends BaseController
             }
 
             // Calculate VAT (10%)
-            $vat = $subtotal * 0.10;
+           $vat = $subtotal * 0.5;
 
             // Calculate Exelo amount (on sub total)
-            $exeloAmount = ($subtotal) * 0.03;
+            $exeloAmount = ($subtotal) * 0.0285;
 
             // Calculate total price including VAT and Exelo amount
             $totalPriceWithVATAndExelo = $subtotal + $vat + $exeloAmount;
@@ -300,10 +300,10 @@ class OrderController extends BaseController
             }
 
             // Calculate VAT (10%)
-            $vat = $totalPrice * 0.10;
+            $vat = $totalPrice * 0.5;
 
             // Calculate Exelo amount (3% after VAT is applied)
-            $exeloAmount = ($totalPrice) * 0.03;
+            $exeloAmount = ($totalPrice) * 0.0285;
 
             // Calculate total price including VAT and Exelo amount
             $totalPriceWithVATAndExelo = $totalPrice + $vat + $exeloAmount;
@@ -444,10 +444,10 @@ class OrderController extends BaseController
 
 
             // Calculate VAT (10%)
-            $vat = $totalPrice * 0.10;
+            $vat = $totalPrice * 0.5;
 
             // Calculate Exelo amount (3% after VAT is applied)
-            $exeloAmount = ($totalPrice) * 0.03;
+            $exeloAmount = ($totalPrice) * 0.0285;
 
             // Calculate total price including VAT and Exelo amount
             $totalPriceWithVATAndExelo = $totalPrice + $vat + $exeloAmount;
@@ -657,10 +657,10 @@ class OrderController extends BaseController
             }
 
             // Calculate VAT (10%)
-            $vat = $subtotal * 0.10;
+           $vat = $subtotal * 0.5;
 
             // Calculate Exelo amount (on subtotal)
-            $exeloAmount = $subtotal * 0.03;
+            $exeloAmount = $subtotal * 0.0285;
 
             // Calculate total price including VAT and Exelo amount
             $totalPriceWithVATAndExelo = $subtotal + $vat + $exeloAmount;
