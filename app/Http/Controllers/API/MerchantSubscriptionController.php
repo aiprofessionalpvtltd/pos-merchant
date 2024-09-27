@@ -43,17 +43,21 @@ class MerchantSubscriptionController extends BaseController
                 return $this->sendError('No active subscription found.');
             }
 
-            // Load the subscription plan relation (to access the package name)
+            // Load the subscription plan relation (to access the package name and id)
             $currentSubscription->load('subscriptionPlan');
 
-            // Get the package name
+            // Get the package name and ID
             $packageName = $currentSubscription->subscriptionPlan->name;
+            $subscriptionPlanId = $currentSubscription->subscription_plan_id;
+
+              // Determine whether to show the end date
+            $showEndDate = $subscriptionPlanId == 1; // If plan is not Silver (ID != 1), show the end date
 
             // Check if the subscription is canceled but still valid until the end date
             if ($currentSubscription->is_canceled && $currentSubscription->end_date && $currentSubscription->end_date >= now()) {
-                $message = "Subscription ({$packageName}) is canceled but valid until " . showDate($currentSubscription->end_date);
+                $message = "Subscription ({$packageName}) is canceled but " . ($showEndDate ? "valid until " . showDate($currentSubscription->end_date) : "still active.");
             } elseif (!$currentSubscription->is_canceled) {
-                $message = "Subscription ({$packageName}) is active and valid until " . showDate($currentSubscription->end_date);
+                $message = "Subscription ({$packageName}) is active" . ($showEndDate ? " and valid until " . showDate($currentSubscription->end_date) : ".");
             } else {
                 $message = "Subscription ({$packageName}) is canceled and no longer valid.";
             }
@@ -64,8 +68,6 @@ class MerchantSubscriptionController extends BaseController
             return $this->sendError('An error occurred while fetching the current subscription.', ['error' => $e->getMessage()]);
         }
     }
-
-
 
 
     public function canceled()
@@ -126,8 +128,7 @@ class MerchantSubscriptionController extends BaseController
             // Get the current subscription
             $currentSubscription = $merchant->currentSubscription;
 
-//            dd($currentSubscription);
-            // Check if the merchant is already subscribed to the requested plan and the subscription is not canceled
+             // Check if the merchant is already subscribed to the requested plan and the subscription is not canceled
             if ($currentSubscription && $currentSubscription->subscription_plan_id == $request->subscription_plan_id && $currentSubscription->is_canceled == 0) {
                 return $this->sendError('You are already subscribed to this package.');
             }
