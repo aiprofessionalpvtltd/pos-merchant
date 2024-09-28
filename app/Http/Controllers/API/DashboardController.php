@@ -490,7 +490,7 @@ class DashboardController extends BaseController
                     'invoice_id' => $invoice->id,
                     'order_id' => $order->id,
                     'name' => $order ? ($order->name ?? $order->mobile_number) : 'N/A',
-                    'order_date' => $order ? $order->created_at->format('Y-m-d') : 'N/A',
+                    'order_date' => $order ? dateInsert($order->created_at) : 'N/A',
                     'invoice_amount' => $invoice->amount,
                     'name_initial' => $this->getInitials($order ? ($order->name) : 'N/A')
                 ];
