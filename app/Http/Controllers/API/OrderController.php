@@ -553,8 +553,18 @@ class OrderController extends BaseController
         ]);
 
         try {
+            // Get the authenticated merchant ID
+            $authUser = auth()->user();
+
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            $merchantID = $authUser->merchant->id;
+
             // Fetch orders by the given type
             $orders = Order::where('order_type', $validated['order_type'])
+                ->where('merchant_id', $merchantID)
                 ->with('items.product') // Load related order items and products
                 ->get();
 
@@ -604,8 +614,19 @@ class OrderController extends BaseController
 
 
         try {
+
+            // Get the authenticated merchant ID
+            $authUser = auth()->user();
+
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            $merchantID = $authUser->merchant->id;
+
             // Fetch orders by the given type
             $orders = Order::where('order_status', $request->order_status)
+                ->where('merchant_id', $merchantID)
                 ->with('items.product') // Load related order items and products
                 ->get();
 
