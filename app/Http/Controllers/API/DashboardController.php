@@ -188,8 +188,8 @@ class DashboardController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Set start of the week (Monday) and end of the week (Sunday)
-            $startOfWeek = now()->startOfWeek();
-            $endOfWeek = now()->endOfWeek();
+            $startOfWeek = \Carbon\Carbon::now()->startOfWeek();
+            $endOfWeek = \Carbon\Carbon::now()->endOfWeek();
 
             // Get orders within the week with transaction amount
             $weeklySalesData = Order::where('merchant_id', $merchantID)
@@ -222,9 +222,11 @@ class DashboardController extends BaseController
             $daysOfWeek = \Carbon\CarbonPeriod::create($startOfWeek, $endOfWeek); // Monday to Sunday
 
             foreach ($daysOfWeek as $day) {
-                $date = $day->format('Y-m-d'); // Format date for comparison
-                $formattedDay = $day->format('D'); // Day like Mon, Tue
-                $formattedDate = $day->format('j.m'); // Date like 11.9
+                $carbonDay = \Carbon\Carbon::instance($day); // Ensure it's a Carbon instance
+
+                $date = $carbonDay->format('Y-m-d'); // Format date for comparison
+                $formattedDay = $carbonDay->format('D'); // Day like Mon, Tue
+                $formattedDate = $carbonDay->format('j.m'); // Date like 11.9
 
                 // Find the matching sales and product count for the date
                 $salesForDay = optional($weeklySalesData->firstWhere('date', $date))->total_sales ?? 0;
