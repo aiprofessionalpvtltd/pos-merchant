@@ -15,6 +15,7 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductInventory;
 use App\Models\Transaction;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Storage;
@@ -188,8 +189,8 @@ class DashboardController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Set start of the week (Monday) and end of the week (Sunday)
-            $startOfWeek = \Carbon\Carbon::now()->startOfWeek();
-            $endOfWeek = \Carbon\Carbon::now()->endOfWeek();
+            $startOfWeek = now()->startOfWeek();
+            $endOfWeek = now()->endOfWeek();
 
             // Get orders within the week with transaction amount
             $weeklySalesData = Order::where('merchant_id', $merchantID)
@@ -222,15 +223,15 @@ class DashboardController extends BaseController
             $daysOfWeek = \Carbon\CarbonPeriod::create($startOfWeek, $endOfWeek); // Monday to Sunday
 
             foreach ($daysOfWeek as $day) {
-                $carbonDay = \Carbon\Carbon::instance($day); // Ensure it's a Carbon instance
+                $dayString = $day->toDateString(); // Convert Carbon date to string (YYYY-MM-DD)
 
-                $date = $carbonDay->format('Y-m-d'); // Format date for comparison
-                $formattedDay = $carbonDay->format('D'); // Day like Mon, Tue
-                $formattedDate = $carbonDay->format('j.m'); // Date like 11.9
+                // Use strtotime to format the date
+                $formattedDay = date('D', strtotime($dayString)); // Day like Mon, Tue
+                $formattedDate = date('j.m', strtotime($dayString)); // Date like 11.9
 
                 // Find the matching sales and product count for the date
-                $salesForDay = optional($weeklySalesData->firstWhere('date', $date))->total_sales ?? 0;
-                $totalProductsForDay = optional($weeklyProductData->firstWhere('date', $date))->total_products ?? 0;
+                $salesForDay = optional($weeklySalesData->firstWhere('date', $dayString))->total_sales ?? 0;
+                $totalProductsForDay = optional($weeklyProductData->firstWhere('date', $dayString))->total_products ?? 0;
 
                 // Add the data to the response array
                 $data[] = [
@@ -256,7 +257,6 @@ class DashboardController extends BaseController
             return $this->sendError('Error fetching weekly sales and statistics.', [$e->getMessage()]);
         }
     }
-
 
     public function getTopSellingProducts()
     {
