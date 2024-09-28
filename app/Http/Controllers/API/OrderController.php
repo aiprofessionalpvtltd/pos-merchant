@@ -743,7 +743,6 @@ class OrderController extends BaseController
             // Retrieve the order with items and product relationship
             $order = Order::with('items.product', 'merchant', 'invoice')
                 ->where('merchant_id', $merchantID)
-                ->where('type', 'POS')
                 ->find($orderID);
 
             if (!$order || $order->items->isEmpty()) {
