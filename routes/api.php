@@ -104,6 +104,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/getProductStatistics', [DashboardController::class, 'getOverallProductStatistics']); // Get product statistics
     Route::get('/getProductsByAlarmLimit', [DashboardController::class, 'getProductsByAlarmLimit']); // Get product statistics
     Route::get('/getProductsByStockLimit', [DashboardController::class, 'getProductsByStockLimit']); // Get product statistics
+    Route::get('/getPendingOrders', [DashboardController::class, 'getPendingOrders']); // Get product statistics
 
     // Product Inventory Routes
     Route::get('/product-inventories', [ProductInventoryController::class, 'index']);           // Get all product inventories
