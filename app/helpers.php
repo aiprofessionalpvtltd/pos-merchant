@@ -265,7 +265,7 @@ function convertShillingToUSD($shillings)
     $usd = $shillings / $conversionRate;
 
     // Return the converted value, formatted to 2 decimal places
-    return round($usd, 2);
+    return (string)round($usd, 2);
 }
 
 function convertUSDToShilling($usd)
@@ -277,7 +277,7 @@ function convertUSDToShilling($usd)
     $shillings = $usd * $conversionRate;
 
     // Return the converted value
-    return round($shillings, 2);
+    return  (string)round($shillings, 2);
 }
 
 
