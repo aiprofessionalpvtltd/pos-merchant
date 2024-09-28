@@ -160,17 +160,16 @@ class DashboardController extends BaseController
                 'pending_order_count' => $pendingCount,
                 'complete_order_count' => $completeCount,
                 'total_products_in_shop' => $totalProductsInShop,
-                'total_products_in_shop_percentage' => round($shopPercentage, 2),
+                'total_products_in_shop_percentage' => number_format($shopPercentage, 2),  // Format to 2 decimal places
                 'total_products_in_stock' => $totalProductsInStock,
-                'total_products_in_stock_percentage' => round($stockPercentage, 2),
+                'total_products_in_stock_percentage' => number_format($stockPercentage, 2), // Format to 2 decimal places
                 'overall_total' => $overallTotal,
                 'total_products_sold' => $totalProductsSold,
-                'total_products_sold_percentage' => round($soldPercentage, 2),
+                'total_products_sold_percentage' => number_format($soldPercentage, 2),      // Format to 2 decimal places
                 'new_products_in_shop' => $newProductsInShop,
-                'new_products_in_shop_percentage' => round($newProductShopPercentage, 2),
+                'new_products_in_shop_percentage' => number_format($newProductShopPercentage, 2),  // Format to 2 decimal places
                 'new_products_in_stock' => $newProductsInStock,
-                'new_products_in_stock_percentage' => round($newProductStockPercentage, 2),
-
+                'new_products_in_stock_percentage' => number_format($newProductStockPercentage, 2), // Format to 2 decimal places
             ];
 
             // Return success response with the statistics
