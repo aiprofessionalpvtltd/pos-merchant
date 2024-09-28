@@ -91,12 +91,17 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/products/{id}', [ProductController::class, 'update']);    // Update a product
     Route::delete('/products/{product}', [ProductController::class, 'destroy']); // Delete a product
     Route::get('products/category/{category_id}', [ProductController::class, 'getProductsByCategory']);
+    Route::get('/getSoldProducts', [ProductController::class, 'getSoldProducts']);
+    Route::get('/getAllProductsWithCategories', [ProductController::class, 'getAllProductsWithCategories']); // Get product statistics
+    Route::get('/getTotalProductsInShop', [ProductController::class, 'getTotalProductsInShop']); // Get product statistics
+    Route::get('/getTotalProductsInStock', [ProductController::class, 'getTotalProductsInStock']); // Get product statistics
+    Route::get('/getNewShopProductsListing', [ProductController::class, 'getNewShopProductsListing']); // Get product statistics
+    Route::get('/getNewStockProductsListing', [ProductController::class, 'getNewStockProductsListing']); // Get product statistics
 
     // Dashboard Routes
     Route::get('/main-dashboard', [DashboardController::class, 'mainDashboard']);
     Route::get('/top-selling-products', [DashboardController::class, 'getTopSellingProducts']);
     Route::get('/getProductStatistics', [DashboardController::class, 'getOverallProductStatistics']); // Get product statistics
-    Route::get('/getAllProductsWithCategories', [DashboardController::class, 'getAllProductsWithCategories']); // Get product statistics
     Route::get('/getProductsByAlarmLimit', [DashboardController::class, 'getProductsByAlarmLimit']); // Get product statistics
     Route::get('/getProductsByStockLimit', [DashboardController::class, 'getProductsByStockLimit']); // Get product statistics
 

@@ -4,9 +4,11 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\API\BaseController;
 use App\Http\Resources\CategoryResource;
+use App\Http\Resources\ProductCatalogResource;
 use App\Http\Resources\ProductResource;
 use App\Http\Resources\TopSellingProductResource;
 use App\Models\Category;
+use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductInventory;
 use Illuminate\Http\Request;
@@ -397,6 +399,286 @@ class ProductController extends BaseController
             return $this->sendError('Error fetching products.', [$e->getMessage()]);
         }
     }
+
+    public function getAllProductsWithCategories()
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
+            // Get all products with their categories, images, and order items
+            $products = Product::with(['category', 'orderItems', 'inventories'])
+                ->where('merchant_id', $merchantID)->get();
+
+            // Use the resource collection to transform the products
+            return $this->sendResponse(ProductCatalogResource::collection($products), 'All products with categories retrieved successfully.');
+
+        } catch (\Exception $e) {
+            return $this->sendError('Error fetching products with categories.', [$e->getMessage()]);
+        }
+    }
+
+    public function getSoldProducts()
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
+            // Fetch sold products with their sold date from OrderItems
+            $soldProducts = OrderItem::with(['product' => function ($query) use ($merchantID) {
+                // Load the products along with their inventories
+                $query->where('merchant_id', $merchantID)
+                    ->with(['category', 'inventories' => function ($inventoryQuery) {
+                        // Filter inventories for 'shop' and 'stock' types
+                        $inventoryQuery->whereIn('type', ['shop', 'stock']);
+                    }]);
+            }])
+                ->select('product_id', 'created_at', DB::raw('SUM(quantity) as total_sold'))
+                ->groupBy('product_id', 'created_at')
+                ->orderBy('created_at', 'desc') // Order by sold date in descending order
+                ->get();
+
+            // Prepare the result set as a nested array grouped by sold date
+            $data = [];
+            foreach ($soldProducts as $soldProduct) {
+                $product = $soldProduct->product;
+
+                if (!$product) {
+                    continue; // Skip if product is not found
+                }
+
+                // Find in-shop and in-stock quantities
+                $inShopQuantity = $product->inventories
+                        ->firstWhere('type', 'shop')->quantity ?? 0;
+                $inStockQuantity = $product->inventories
+                        ->firstWhere('type', 'stock')->quantity ?? 0;
+
+                $soldDate = $soldProduct->created_at->format('Y-m-d');
+
+                // Add product details to the nested structure
+                $data[$soldDate][] = [
+                    'product_name' => $product->product_name,
+                    'category_name' => $product->category->name ?? 'Uncategorized',
+                    'category_id' => $product->category->id ?? null,
+                    'price' => $product->price,
+                    'in_shop_quantity' => $inShopQuantity,
+                    'in_stock_quantity' => $inStockQuantity,
+                    'total_sold' => $soldProduct->total_sold,
+                    'sold_date' => $soldDate,
+                ];
+            }
+
+            // Return success response with the data
+            return $this->sendResponse($data, 'Sold product listings retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error retrieving sold product listings.', [$e->getMessage()]);
+        }
+    }
+
+
+    public function getTotalProductsInShop()
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
+            // Fetch products available in shop for the merchant
+            $productsInShop = Product::with(['category', 'inventories' => function ($inventoryQuery) {
+                // Filter inventories for 'shop' type
+                $inventoryQuery->where('type', 'shop');
+            }])
+                ->where('merchant_id', $merchantID)
+                ->get();
+
+            // Prepare the result set
+            $data = $productsInShop->map(function ($product) {
+                // Find in-shop and in-stock quantities
+                $inShopQuantity = $product->inventories->sum('quantity'); // Sum of all shop quantities
+
+
+                return [
+                    'product_name' => $product->product_name,
+                    'category_name' => $product->category->name ?? 'Uncategorized',
+                    'category_id' => $product->category->id ?? null,
+                    'price' => $product->price,
+                    'in_shop_quantity' => $inShopQuantity,
+                 ];
+            });
+
+            // Return success response with the data
+            return $this->sendResponse($data, 'Total products in shop retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error retrieving total products in shop.', [$e->getMessage()]);
+        }
+    }
+
+    public function getTotalProductsInStock()
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
+            // Fetch products available in stock for the merchant
+            $productsInStock = Product::with(['category', 'inventories' => function ($inventoryQuery) {
+                // Filter inventories for 'stock' type
+                $inventoryQuery->where('type', 'stock');
+            }])
+                ->where('merchant_id', $merchantID)
+                ->get();
+
+            // Prepare the result set
+            $data = $productsInStock->map(function ($product) {
+                // Find in-stock quantities
+                $inStockQuantity = $product->inventories->sum('quantity'); // Sum of all stock quantities
+
+
+                return [
+                    'product_name' => $product->product_name,
+                    'category_name' => $product->category->name ?? 'Uncategorized',
+                    'category_id' => $product->category->id ?? null,
+                    'price' => $product->price,
+                    'in_stock_quantity' => $inStockQuantity,
+
+                ];
+            });
+
+            // Return success response with the data
+            return $this->sendResponse($data, 'Total products in stock retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error retrieving total products in stock.', [$e->getMessage()]);
+        }
+    }
+
+    public function getNewShopProductsListing()
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
+            // Calculate the date 7 days ago
+            $sevenDaysAgo = now()->subDays(7);
+
+            // Fetch new products added in the last 7 days, grouped by product
+            $newProducts = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
+                $query->where('merchant_id', $merchantID);
+            })
+                ->where('created_at', '>=', $sevenDaysAgo)
+                ->where('type', 'shop')
+                ->select('product_id', DB::raw('SUM(quantity) as total_quantity'))
+                ->groupBy('product_id')
+                ->with(['product.category']) // Eager load category
+                ->get();
+
+            // Prepare the result set
+            $data = $newProducts->map(function ($inventory) {
+                $product = $inventory->product;
+
+                return [
+                    'product_name' => $product->product_name,
+                    'category_name' => $product->category->name ?? 'Uncategorized',
+                    'category_id' => $product->category->id ?? null,
+                    'price' => $product->price,
+                    'in_shop_quantity' => $inventory->total_quantity,
+                ];
+            });
+
+            // Return success response with the data
+            return $this->sendResponse($data, 'New products listing retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error retrieving new products listing.', [$e->getMessage()]);
+        }
+    }
+    public function getNewStockProductsListing()
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
+            // Calculate the date 7 days ago
+            $sevenDaysAgo = now()->subDays(7);
+
+            // Fetch new products added in the last 7 days, grouped by product
+            $newProducts = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
+                $query->where('merchant_id', $merchantID);
+            })
+                ->where('created_at', '>=', $sevenDaysAgo)
+                ->where('type', 'stock')
+                ->select('product_id', DB::raw('SUM(quantity) as total_quantity'))
+                ->groupBy('product_id')
+                ->with(['product.category']) // Eager load category
+                ->get();
+
+            // Prepare the result set
+            $data = $newProducts->map(function ($inventory) {
+                $product = $inventory->product;
+
+                return [
+                    'product_name' => $product->product_name,
+                    'category_name' => $product->category->name ?? 'Uncategorized',
+                    'category_id' => $product->category->id ?? null,
+                    'price' => $product->price,
+                    'in_stock_quantity' => $inventory->total_quantity,
+                ];
+            });
+
+            // Return success response with the data
+            return $this->sendResponse($data, 'New products listing retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error retrieving new products listing.', [$e->getMessage()]);
+        }
+    }
+
+
+
+
 
 
 

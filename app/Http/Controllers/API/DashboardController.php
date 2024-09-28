@@ -339,30 +339,6 @@ class DashboardController extends BaseController
     }
 
 
-    public function getAllProductsWithCategories()
-    {
-        try {
-            // Get authenticated user
-            $authUser = auth()->user();
-
-            // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
-                return $this->sendError('Merchant not found for the authenticated user.');
-            }
-
-            // Get merchant ID from authenticated user's merchant relation
-            $merchantID = $authUser->merchant->id;
-
-            // Get all products with their categories, images, and order items
-            $products = Product::with(['category', 'orderItems', 'inventories'])->where('merchant_id', $merchantID)->get();
-
-            // Use the resource collection to transform the products
-            return $this->sendResponse(ProductCatalogResource::collection($products), 'All products with categories retrieved successfully.');
-
-        } catch (\Exception $e) {
-            return $this->sendError('Error fetching products with categories.', [$e->getMessage()]);
-        }
-    }
 
 
     // Function to get products based on alarm limit
