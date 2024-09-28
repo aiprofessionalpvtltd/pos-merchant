@@ -192,6 +192,24 @@ class DashboardController extends BaseController
             $startOfWeek = now()->startOfWeek();
             $endOfWeek = now()->endOfWeek();
 
+            // Get total transaction amount for the current week
+            $weeklyTransactions = Transaction::with('order')
+                ->where('merchant_id', $merchantID)
+                ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
+                ->get();
+
+            // Calculate total transaction amount from the current week
+            $totalAmountFromTransactions = $weeklyTransactions->sum('transaction_amount');
+
+            // Get the total transaction amount for all time for this merchant
+            $totalAmountAllTime = Transaction::where('merchant_id', $merchantID)
+                ->sum('transaction_amount');
+
+            // Calculate the percentage of weekly transactions from total transactions
+            $totalAmountPercentage = $totalAmountAllTime > 0
+                ? ($totalAmountFromTransactions / $totalAmountAllTime) * 100
+                : 0;
+
             // Get orders within the week with transaction amount
             $weeklySalesData = Order::where('merchant_id', $merchantID)
                 ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
@@ -199,15 +217,6 @@ class DashboardController extends BaseController
                 ->groupBy('date')
                 ->orderBy('date')
                 ->get();
-
-            // Get total amount from transactions table within the week
-            $weeklyTransactions = Transaction::with('order')
-                ->where('merchant_id', $merchantID)
-                ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
-                ->get();
-
-            // Calculate total transaction amount from the week
-            $totalAmountFromTransactions = $weeklyTransactions->sum('transaction_amount');
 
             // Get order items within the week to count the sold products
             $weeklyProductData = OrderItem::whereHas('order', function ($query) use ($merchantID, $startOfWeek, $endOfWeek) {
@@ -243,10 +252,11 @@ class DashboardController extends BaseController
                 ];
             }
 
-            // Response data including total transaction amount
+            // Response data including total transaction amount and percentage
             $response = [
                 'total_amount_from_transactions_slsh' => $totalAmountFromTransactions,
                 'total_amount_from_transactions_usd' => convertShillingToUSD($totalAmountFromTransactions),
+                'total_amount_from_transactions_percentage' => round($totalAmountPercentage, 2), // Rounded to 2 decimal places
                 'weekly_sales_statistics' => $data,
             ];
 
