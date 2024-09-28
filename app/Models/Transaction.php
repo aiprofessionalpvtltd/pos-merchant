@@ -21,4 +21,8 @@ class Transaction extends Model
     {
         return $this->belongsTo(Merchant::class);
     }
+    public function order()
+    {
+        return $this->belongsTo(Order::class);
+    }
 }

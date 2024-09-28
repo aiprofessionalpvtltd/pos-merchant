@@ -41,11 +41,15 @@ class DashboardController extends BaseController
             $pendingCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Pending')->count();
             $completeCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Complete')->count();
 
+
+            $weeklyStatistics = $this->getWeeklySalesAndStatistics()->getData(true);
+            $weeklyStatistics = $weeklyStatistics['data'];
+
             // Prepare response data
             $data = [
                 'pending_order_count' => $pendingCount,
                 'complete_order_count' => $completeCount,
-                'weekly_summary' => $this->getWeeklySalesAndStatistics(),
+                'weekly_summary' => $weeklyStatistics,
 
 
             ];
@@ -135,10 +139,13 @@ class DashboardController extends BaseController
             $transactionHistories = $this->getInvoicesWithOrders()->getData(true);
             $transactionHistories = $transactionHistories['data'];
 
+            $weeklyStatistics = $this->getWeeklySalesAndStatistics()->getData(true);
+            $weeklyStatistics = $weeklyStatistics['data'];
+
             // Prepare response data
             $data = [
                 'top_selling' => $this->getTopSellingProducts(),
-                'weekly_summary' => $this->getWeeklySalesAndStatistics(),
+                'weekly_summary' => $weeklyStatistics,
                 'limit' => $this->getProductLimitCounts(),
                 'transaction_history' => $transactionHistories,
                 'pending_order_count' => $pendingCount,
@@ -180,14 +187,11 @@ class DashboardController extends BaseController
             // Get merchant ID from authenticated user's merchant relation
             $merchantID = $authUser->merchant->id;
 
-            // Total amount from transactions table
-            $totalAmountFromTransactions = Transaction::where('merchant_id', $merchantID)->sum('transaction_amount');
-
             // Set start of the week (Monday) and end of the week (Sunday)
             $startOfWeek = now()->startOfWeek();
             $endOfWeek = now()->endOfWeek();
 
-            // Get orders within the week
+            // Get orders within the week with transaction amount
             $weeklySalesData = Order::where('merchant_id', $merchantID)
                 ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
                 ->selectRaw('DATE(created_at) as date, SUM(sub_total) as total_sales')
@@ -195,7 +199,16 @@ class DashboardController extends BaseController
                 ->orderBy('date')
                 ->get();
 
-            // Get order items within the week and count the sold products
+            // Get total amount from transactions table within the week
+            $weeklyTransactions = Transaction::with('order')
+                ->where('merchant_id', $merchantID)
+                ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
+                ->get();
+
+            // Calculate total transaction amount from the week
+            $totalAmountFromTransactions = $weeklyTransactions->sum('transaction_amount');
+
+            // Get order items within the week to count the sold products
             $weeklyProductData = OrderItem::whereHas('order', function ($query) use ($merchantID, $startOfWeek, $endOfWeek) {
                 $query->where('merchant_id', $merchantID)
                     ->whereBetween('created_at', [$startOfWeek, $endOfWeek]);
@@ -204,26 +217,26 @@ class DashboardController extends BaseController
                 ->orderBy('date')
                 ->get();
 
-            // Prepare response data
+            // Prepare response data by combining sales, product, and transaction data
             $data = [];
+            $daysOfWeek = \Carbon\CarbonPeriod::create($startOfWeek, $endOfWeek); // Monday to Sunday
 
-            // Combine sales and product data
-            foreach ($weeklySalesData as $sales) {
-                $date = $sales->date;
-                $totalSales = $sales->total_sales;
+            foreach ($daysOfWeek as $day) {
+                $date = $day->format('Y-m-d'); // Format date for comparison
+                $formattedDay = $day->format('D'); // Day like Mon, Tue
+                $formattedDate = $day->format('j.m'); // Date like 11.9
 
-                // Find the matching product count for the date
-                $totalProducts = optional($weeklyProductData->firstWhere('date', $date))->total_products ?? 0;
+                // Find the matching sales and product count for the date
+                $salesForDay = optional($weeklySalesData->firstWhere('date', $date))->total_sales ?? 0;
+                $totalProductsForDay = optional($weeklyProductData->firstWhere('date', $date))->total_products ?? 0;
 
-                // Format the date (e.g., Monday 11 Sept)
-                $formattedDay = \Carbon\Carbon::parse($date)->format('D');
-                $formattedDate = \Carbon\Carbon::parse($date)->format('j.m');
-
+                // Add the data to the response array
                 $data[] = [
                     'day' => $formattedDay,
                     'date' => $formattedDate,
-                    'total_sales' => $totalSales,
-                    'total_products_sold' => $totalProducts,
+                    'total_sales' => $salesForDay,
+                    'total_sales_in_usd' => convertShillingToUSD($salesForDay),
+                    'total_products_sold' => $totalProductsForDay,
                 ];
             }
 
@@ -235,12 +248,13 @@ class DashboardController extends BaseController
             ];
 
             // Return success response
-            return $response;
+            return $this->sendResponse($response, 'Weekly sales and statistics retrieved successfully.');
 
         } catch (\Exception $e) {
             return $this->sendError('Error fetching weekly sales and statistics.', [$e->getMessage()]);
         }
     }
+
 
     public function getTopSellingProducts()
     {
@@ -280,15 +294,26 @@ class DashboardController extends BaseController
     public function getProductLimitCounts()
     {
         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
             // Count products where any inventory's quantity is less than or equal to the alarm_limit
             $alarmLimitCount = Product::whereHas('inventories', function ($query) {
                 $query->whereColumn('quantity', '<=', 'alarm_limit')->where('type', 'shop');
-            })->count();
+            })->where('merchant_id', $merchantID)->count();
 
             // Count products where any inventory's quantity is less than or equal to the stock_limit
             $stockLimitCount = Product::whereHas('inventories', function ($query) {
                 $query->whereColumn('quantity', '<=', 'stock_limit')->where('type', 'shop');
-            })->count();
+            })->where('merchant_id', $merchantID)->count();
 
             // Return the response with both counts
             return [
@@ -305,8 +330,19 @@ class DashboardController extends BaseController
     public function getAllProductsWithCategories()
     {
         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
             // Get all products with their categories, images, and order items
-            $products = Product::with(['category', 'orderItems', 'inventories'])->get();
+            $products = Product::with(['category', 'orderItems', 'inventories'])->where('merchant_id', $merchantID)->get();
 
             // Use the resource collection to transform the products
             return $this->sendResponse(ProductCatalogResource::collection($products), 'All products with categories retrieved successfully.');
@@ -321,6 +357,16 @@ class DashboardController extends BaseController
     public function getProductsByAlarmLimit()
     {
         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
             // Get products with their inventories where quantity is less than or equal to alarm limit
             $products = Product::whereHas('inventories', function ($query) {
                 $query->whereColumn('quantity', '<=', 'alarm_limit')->where('type', 'shop');
@@ -328,6 +374,7 @@ class DashboardController extends BaseController
                 ->with(['inventories' => function ($query) {
                     $query->select('id', 'product_id', 'type', 'quantity'); // Select relevant fields
                 }])
+                ->where('merchant_id', $merchantID)
                 ->get(['id', 'product_name']); // Select only the necessary fields from Product
 
             // Transform the products to include shop and stock quantities
@@ -364,13 +411,24 @@ class DashboardController extends BaseController
     public function getProductsByStockLimit()
     {
         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
             // Get products with their inventories where quantity is less than or equal to stock limit
             $products = Product::whereHas('inventories', function ($query) {
                 $query->whereColumn('quantity', '<=', 'stock_limit')->where('type', 'shop');
             })
                 ->with(['inventories' => function ($query) {
                     $query->select('id', 'product_id', 'type', 'quantity'); // Select relevant fields
-                }])
+                }])->where('merchant_id', $merchantID)
                 ->get(['id', 'product_name']); // Select only the necessary fields from Product
 
             // Transform the products to include shop and stock quantities
@@ -432,7 +490,7 @@ class DashboardController extends BaseController
                     'name' => $order ? ($order->name ?? $order->mobile_number) : 'N/A',
                     'order_date' => $order ? $order->created_at->format('Y-m-d') : 'N/A',
                     'invoice_amount' => $invoice->amount,
-                    'name_initial' => $this->getInitials($order ? ($order->name ?? $order->mobile_number) : 'N/A')
+                    'name_initial' => $this->getInitials($order ? ($order->name) : 'N/A')
                 ];
             });
 
