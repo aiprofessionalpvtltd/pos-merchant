@@ -729,8 +729,21 @@ class OrderController extends BaseController
     public function getOrderDetailsForInvoice($orderID)
     {
         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
             // Retrieve the order with items and product relationship
-            $order = Order::with('items.product', 'merchant', 'invoice')->find($orderID);
+            $order = Order::with('items.product', 'merchant', 'invoice')
+                ->where('merchant_id', $merchantID)
+                ->find($orderID);
 
             if (!$order || $order->items->isEmpty()) {
                 return $this->sendError('Order not found or has no items.');
@@ -758,44 +771,43 @@ class OrderController extends BaseController
             $mobileNumberPrefix = substr($order->mobile_number, 0, 2);
 
             // Determine if it's edahab_number or zaad_number
-            $mobileNumberType = in_array($mobileNumberPrefix, $dahabPrefixes) ? 'edahab_number' : 'zaad_number';
+            $mobileNumberType = in_array($mobileNumberPrefix, $dahabPrefixes) ? 'E-Dahab' : 'Zaad';
 
-            // Prepare the response data
+             // Prepare the response data
             $data = [
                 'order_id' => $order->id,
-                'name' => $order->name,
-                'initial_name' => $this->getInitials($order->name),
-                'mobile_number' => $order->mobile_number,
-                $mobileNumberType => $order->mobile_number, // Dynamically set based on the prefix
                 'merchant' => [
                     'business_name' => $order->merchant->business_name,
                     'merchant_code' => $order->merchant->merchant_code,
-                    'first_name' => $order->merchant->first_name,
-                    'last_name' => $order->merchant->last_name,
+                    'cashier_name' => $order->merchant->first_name  . ' ' .  $order->merchant->last_name ,
                     'phone_number' => $order->merchant->phone_number,
+                    'zaad_number' => $order->merchant->phone_number,
                 ],
                 'invoice' => [
                     'invoice_no' => $order->invoice->id,
-                    'invoice_date' => $order->invoice->created_at->format('Y-m-d'),
-                    'status' => $order->invoice->status,
-                    'mobile_number' => $order->invoice->mobile_number,
+                    'invoice_date' => showDate($order->invoice->created_at),
+                    'payment_status' => $order->order_status,
                 ],
-                'merchant_id' => $order->merchant_id,
-                'sub_total' => round($subtotal),
-                'vat' => round($vat),
-                'exelo_amount' => round($exeloAmount),
-                'total' => round($totalPriceWithVAT),
-                'order_status' => $order->order_status,
-                'created_at' => showDatePicker($order->created_at),
+                'customer' => [
+                    'name' => $order->name,
+                    'mobile_number' => $order->mobile_number,
+                    'account' => $mobileNumberType,
+                    'initial_name' => $this->getInitials($order->name),
+                ],
                 'order_items' => $order->items->map(function ($item) {
                     return [
-                        'product_id' => $item->product->id,
                         'product_name' => $item->product->product_name,
                         'quantity' => $item->quantity,
                         'price' => $item->price,
                         'total_price' => $item->quantity * $item->price,
                     ];
                 }),
+                'sub_total' => round($subtotal),
+                'vat' => round($vat),
+                'vat_charge' => env('VAT_CHARGE') * 100 . '%',
+                'exelo_amount' => round($exeloAmount),
+                'total' => round($totalPriceWithVAT),
+
             ];
 
             return $this->sendResponse($data, 'Order details retrieved successfully.');
