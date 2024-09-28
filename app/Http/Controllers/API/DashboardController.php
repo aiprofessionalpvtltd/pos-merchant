@@ -143,25 +143,33 @@ class DashboardController extends BaseController
             $weeklyStatistics = $this->getWeeklySalesAndStatistics()->getData(true);
             $weeklyStatistics = $weeklyStatistics['data'];
 
+            $pendingTransaction = $this->getPendingOrders()->getData(true);
+            $pendingTransaction = $pendingTransaction['data'];
+
+            $latestClient= $this->getLatestClients()->getData(true);
+            $latestClient = $latestClient['data'];
+
             // Prepare response data
             $data = [
                 'top_selling' => $this->getTopSellingProducts(),
                 'weekly_summary' => $weeklyStatistics,
                 'limit' => $this->getProductLimitCounts(),
                 'transaction_history' => $transactionHistories,
+                'pending_transaction' => $pendingTransaction,
+                'latest_client' => $latestClient,
                 'pending_order_count' => $pendingCount,
                 'complete_order_count' => $completeCount,
                 'total_products_in_shop' => $totalProductsInShop,
-                'total_products_in_shop_percentage' => round($shopPercentage, 2) ,
+                'total_products_in_shop_percentage' => round($shopPercentage, 2),
                 'total_products_in_stock' => $totalProductsInStock,
-                'total_products_in_stock_percentage' => round($stockPercentage, 2) ,
+                'total_products_in_stock_percentage' => round($stockPercentage, 2),
                 'overall_total' => $overallTotal,
                 'total_products_sold' => $totalProductsSold,
-                'total_products_sold_percentage' => round($soldPercentage, 2) ,
+                'total_products_sold_percentage' => round($soldPercentage, 2),
                 'new_products_in_shop' => $newProductsInShop,
-                'new_products_in_shop_percentage' => round($newProductShopPercentage, 2) ,
+                'new_products_in_shop_percentage' => round($newProductShopPercentage, 2),
                 'new_products_in_stock' => $newProductsInStock,
-                'new_products_in_stock_percentage' => round($newProductStockPercentage, 2) ,
+                'new_products_in_stock_percentage' => round($newProductStockPercentage, 2),
 
             ];
 
@@ -339,8 +347,6 @@ class DashboardController extends BaseController
     }
 
 
-
-
     // Function to get products based on alarm limit
     public function getProductsByAlarmLimit()
     {
@@ -485,6 +491,75 @@ class DashboardController extends BaseController
             return $this->sendResponse($invoiceData, 'Invoices with orders fetched successfully.');
         } catch (\Exception $e) {
             return $this->sendError('An error occurred while fetching invoices.', ['error' => $e->getMessage()]);
+        }
+    }
+
+    public function getPendingOrders()
+    {
+        try {
+            // Get the authenticated merchant ID
+            $authUser = auth()->user();
+
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            $merchantID = $authUser->merchant->id;
+
+            // Fetch pending orders for the authenticated merchant
+            $pendingOrders = Order::where('merchant_id', $merchantID)
+                ->where('order_status', 'Pending')
+                ->orderBy('created_at', 'desc') // Order by creation date descending
+                ->limit(5) // Limit to 5 latest pending orders
+                ->get();
+
+            // Format the response
+            $orderData = $pendingOrders->map(function ($order) {
+                return [
+                    'order_id' => $order->id,
+                    'name' => $order->name ?? $order->mobile_number,
+                    'order_date' => dateInsert($order->created_at),
+                    'invoice_amount' => $order->total_price ?? 0,
+                    'invoice_amount_in_usd' => convertShillingToUSD($order->total_price ?? 0),
+                    'name_initial' => $this->getInitials($order->name ?? 'N A')
+                ];
+            });
+
+            return $this->sendResponse($orderData, 'Pending orders fetched successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('An error occurred while fetching pending orders.', ['error' => $e->getMessage()]);
+        }
+    }
+
+    public function getLatestClients()
+    {
+        try {
+            // Get the authenticated merchant ID
+            $authUser = auth()->user();
+
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            $merchantID = $authUser->merchant->id;
+
+            // Fetch the latest clients based on orders for the authenticated merchant
+            $latestClients = Order::where('merchant_id', $merchantID)
+                ->orderBy('created_at', 'desc') // Order by creation date descending
+                ->limit(5) // Limit to 5 latest clients
+                ->get();
+
+            // Format the response
+            $clientData = $latestClients->map(function ($order) {
+                return [
+                    'name' => $order->name ?? $order->mobile_number,
+                    'name_initial' => $this->getInitials($order->name ?? 'N A')
+                ];
+            });
+
+            return $this->sendResponse($clientData, 'Latest clients fetched successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('An error occurred while fetching latest clients.', ['error' => $e->getMessage()]);
         }
     }
 
