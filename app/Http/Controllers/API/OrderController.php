@@ -799,7 +799,7 @@ class OrderController extends BaseController
                         'product_name' => $item->product->product_name,
                         'quantity' => $item->quantity,
                         'price' => $item->price,
-                        'total_price' => $item->quantity * $item->price,
+                        'total_price' => $item->total_price,
                     ];
                 }),
                 'sub_total' => round($subtotal),
