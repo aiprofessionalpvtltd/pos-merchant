@@ -18,7 +18,7 @@ class TopSellingProductResource extends JsonResource
         return [
             'id' => $this->id,
             'product_name' => $this->product_name,
-            'price' => $this->price,
+            'price' => convertShillingToUSD($this->price),
             'quantity' => $this->total_quantity_sold,
             'image' => Storage::url($this->image),
         ];

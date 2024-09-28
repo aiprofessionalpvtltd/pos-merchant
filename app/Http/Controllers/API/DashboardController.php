@@ -205,7 +205,7 @@ class DashboardController extends BaseController
                 ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
                 ->get();
 
-            // Calculate total transaction amount from the current week
+             // Calculate total transaction amount from the current week
             $totalAmountFromTransactions = $weeklyTransactions->sum('transaction_amount');
 
             // Get the total transaction amount for all time for this merchant

@@ -22,7 +22,7 @@ class ProductResource extends JsonResource
             'category' => new CategoryResource($this->whenLoaded('category')), // Assuming you have a CategoryResource
             'merchant_id' => $this->merchant_id,
             'merchant' => new MerchantResource($this->whenLoaded('merchant')),
-            'price' => $this->price,
+            'price' => convertShillingToUSD($this->price),
             'stock_limit' => $this->stock_limit,
             'alarm_limit' => $this->alarm_limit,
             'image' => Storage::url($this->image),

@@ -305,7 +305,7 @@ class ProductController extends BaseController
                 return [
                     'id' => $product->id,
                     'product_name' => $product->product_name,
-                    'price' => $product->price,
+                    'price' => convertShillingToUSD($product->price),
                     'in_stock_quantity' => $inStockQuantity,
                     'in_shop_quantity' => $inShopQuantity,
                     'in_transportation_quantity' => $inTransportationQuantity,
@@ -315,7 +315,7 @@ class ProductController extends BaseController
 
             return $this->sendResponse($productsData, 'Products retrieved successfully.');
 
-        } catch (Exception $e) {
+        } catch (\Exception $e) {
             return $this->sendError('Error fetching products.', $e->getMessage());
         }
     }
@@ -476,7 +476,7 @@ class ProductController extends BaseController
                     'product_name' => $product->product_name,
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
-                    'price' => $product->price,
+                    'price' => convertShillingToUSD($product->price),
                     'in_shop_quantity' => $inShopQuantity,
                     'in_stock_quantity' => $inStockQuantity,
                     'total_sold' => $soldProduct->total_sold,
@@ -524,7 +524,7 @@ class ProductController extends BaseController
                     'product_name' => $product->product_name,
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
-                    'price' => $product->price,
+                    'price' => convertShillingToUSD($product->price),
                     'in_shop_quantity' => $inShopQuantity,
                  ];
             });
@@ -568,7 +568,7 @@ class ProductController extends BaseController
                     'product_name' => $product->product_name,
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
-                    'price' => $product->price,
+                    'price' => convertShillingToUSD($product->price),
                     'in_stock_quantity' => $inStockQuantity,
 
                 ];
@@ -617,7 +617,7 @@ class ProductController extends BaseController
                     'product_name' => $product->product_name,
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
-                    'price' => $product->price,
+                    'price' => convertShillingToUSD($product->price),
                     'in_shop_quantity' => $inventory->total_quantity,
                 ];
             });
@@ -664,7 +664,7 @@ class ProductController extends BaseController
                     'product_name' => $product->product_name,
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
-                    'price' => $product->price,
+                    'price' => convertShillingToUSD($product->price),
                     'in_stock_quantity' => $inventory->total_quantity,
                 ];
             });

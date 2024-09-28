@@ -234,18 +234,18 @@ class OrderController extends BaseController
 
             // Prepare the response data
             $data = [
-                'subtotal' => round($subtotal),
-                'vat' => round($vat),
-                'exelo_amount' => round($exeloAmount),
-                'total' => round($totalPriceWithVAT),
-                'total_in_usd' => convertShillingToUSD(round($totalPriceWithVAT)),
+                'subtotal' => convertShillingToUSD($subtotal),
+                'vat' => convertShillingToUSD($vat),
+                'exelo_amount' => convertShillingToUSD($exeloAmount),
+                'total' => round($totalPriceWithVAT,2),
+                'total_in_usd' => convertShillingToUSD($totalPriceWithVAT),
                 'cart_items' => $cart->items->map(function ($item) {
                     return [
                         'product_id' => $item->product->id,
                         'product_name' => $item->product->product_name,
                         'quantity' => $item->quantity,
-                        'price' => $item->product->price,
-                        'total_price' => $item->quantity * $item->product->price,
+                        'price' =>convertShillingToUSD( $item->product->price),
+                        'total_price' => convertShillingToUSD($item->quantity * $item->product->price),
                     ];
                 })
             ];
@@ -576,18 +576,18 @@ class OrderController extends BaseController
             $data = $orders->map(function ($order) {
                 return [
                     'order_id' => $order->id,
-                    'sub_total' => $order->sub_total,
-                    'vat' => $order->vat,
-                    'exelo_amount' => $order->exelo_amount,
-                    'total_price' => $order->total_price,
+                    'sub_total' =>convertShillingToUSD( $order->sub_total),
+                    'vat' => convertShillingToUSD($order->vat),
+                    'exelo_amount' => convertShillingToUSD($order->exelo_amount),
+                    'total_price' => convertShillingToUSD($order->total_price),
                     'order_status' => $order->order_status,
                     'order_items' => $order->items->map(function ($item) {
                         return [
                             'product_id' => $item->product_id,
                             'product_name' => $item->product->product_name,
                             'quantity' => $item->quantity,
-                            'price' => $item->price,
-                            'total_price' => $item->quantity * $item->price,
+                            'price' => convertShillingToUSD($item->price),
+                            'total_price' => convertShillingToUSD($item->quantity * $item->price),
                         ];
                     }),
                 ];
@@ -642,10 +642,11 @@ class OrderController extends BaseController
                     'initial_name' => $this->getInitials($order->name),
                     'mobile_number' => $order->mobile_number,
                     'signature' => Storage::url($order->signature),
-                    'sub_total' => $order->sub_total,
-                    'vat' => $order->vat,
-                    'exelo_amount' => $order->exelo_amount,
-                    'total_price' => $order->total_price,
+                    'sub_total' => convertShillingToUSD($order->sub_total),
+                    'vat' => convertShillingToUSD($order->vat),
+                    'exelo_amount' => convertShillingToUSD($order->exelo_amount),
+                    'total_price' => round($order->total_price,2),
+                    'total_price_in_usd' => convertShillingToUSD($order->total_price),
                     'order_status' => $order->order_status,
                     'created_at' => showDatePicker($order->created_at),
                     'order_items' => $order->items->map(function ($item) {
@@ -653,8 +654,8 @@ class OrderController extends BaseController
                             'product_id' => $item->product_id,
                             'product_name' => $item->product->product_name,
                             'quantity' => $item->quantity,
-                            'price' => $item->price,
-                            'total_price' => $item->quantity * $item->price,
+                            'price' => convertShillingToUSD($item->price),
+                            'total_price' => convertShillingToUSD($item->quantity * $item->price),
                         ];
                     }),
                 ];
@@ -703,10 +704,11 @@ class OrderController extends BaseController
                 'mobile_number' => $order->mobile_number,
                 'signature' => Storage::url($order->signature),
                 'merchant_id' => $order->merchant_id,
-                'sub_total' => round($subtotal),
-                'vat' => round($vat),
-                'exelo_amount' => round($exeloAmount),
-                'total' => round($totalPriceWithVAT),
+                'sub_total' => convertShillingToUSD($subtotal),
+                'vat' => convertShillingToUSD($vat),
+                'exelo_amount' => convertShillingToUSD($exeloAmount),
+                'total' => round($totalPriceWithVAT,2),
+                'total_in_usd' => convertShillingToUSD($totalPriceWithVAT),
                 'order_status' => $order->order_status,
                 'created_at' => showDatePicker($order->created_at),
                 'order_items' => $order->items->map(function ($item) {
@@ -714,8 +716,8 @@ class OrderController extends BaseController
                         'product_id' => $item->product->id,
                         'product_name' => $item->product->product_name,
                         'quantity' => $item->quantity,
-                        'price' => $item->price,
-                        'total_price' => $item->quantity * $item->price,
+                        'price' => convertShillingToUSD($item->price),
+                        'total_price' =>convertShillingToUSD($item->quantity * $item->price),
                     ];
                 }),
             ];
@@ -802,11 +804,11 @@ class OrderController extends BaseController
                         'total_price' => convertShillingToUSD($item->quantity * $item->price),
                     ];
                 }),
-                'sub_total' => round(convertShillingToUSD($subtotal),2),
-                'vat' => round(convertShillingToUSD($vat),2),
+                'sub_total' => convertShillingToUSD($subtotal),
+                'vat' => convertShillingToUSD($vat),
                 'vat_charge' => env('VAT_CHARGE') * 100 . '%',
-                'exelo_amount' => round(convertShillingToUSD($exeloAmount),2),
-                'total' => round(convertShillingToUSD($totalPriceWithVAT),2)
+                'exelo_amount' => convertShillingToUSD($exeloAmount),
+                'total' => convertShillingToUSD($totalPriceWithVAT)
 
 
             ];
