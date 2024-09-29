@@ -779,11 +779,14 @@ class OrderController extends BaseController
 
             // Dahab and Zaad prefixes
             $dahabPrefixes = ['65', '66', '62'];
-            $mobileNumberPrefix = substr(($order->mobile_number ?? $order->invoice->mobile_number) , 0, 2);
+            $mobileNO = ($order->mobile_number ?? $order->invoice->mobile_number);
+            $phoneNo = str_replace('+252','',$mobileNO);
+            $mobileNumberPrefix = substr($phoneNo , 0, 2);
 
             // Determine if it's edahab_number or zaad_number
             $mobileNumberType = in_array($mobileNumberPrefix, $dahabPrefixes) ? 'E-Dahab' : 'Zaad';
 
+//            dd($mobileNumberType);
              // Prepare the response data
             $data = [
                 'order_id' => $order->id,
@@ -800,10 +803,10 @@ class OrderController extends BaseController
                     'payment_status' => $order->order_status,
                 ],
                 'customer' => [
-                    'name' => $order->name,
-                    'mobile_number' => $order->mobile_number,
+                    'name' => $order->name ?? 'N/A',
+                    'mobile_number' => $mobileNO,
                     'account' => $mobileNumberType,
-                    'initial_name' => $this->getInitials($order->name),
+                    'initial_name' => $this->getInitials($order->name ?? 'Not Avaibale'),
                 ],
                 'order_items' => $order->items->map(function ($item) {
                     return [
