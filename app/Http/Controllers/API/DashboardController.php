@@ -137,8 +137,15 @@ class DashboardController extends BaseController
             $completeCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Complete')->count();
 
 
-            $transactionHistories = $this->getInvoicesWithOrders()->getData(true);
-            $transactionHistories = $transactionHistories['data'];
+            if($authUser->merchant->currentSubscription->subscription_plan_id == 2){
+                $transactionHistories = $this->getInvoicesForSilver()->getData(true);
+                $transactionHistories = $transactionHistories['data'];
+            }else{
+                $transactionHistories = $this->getInvoicesWithOrders()->getData(true);
+                $transactionHistories = $transactionHistories['data'];
+            }
+
+            dd($transactionHistories);
 
             $weeklyStatistics = $this->getWeeklySalesAndStatistics()->getData(true);
             $weeklyStatistics = $weeklyStatistics['data'];
@@ -146,7 +153,7 @@ class DashboardController extends BaseController
             $pendingTransaction = $this->getPendingOrders()->getData(true);
             $pendingTransaction = $pendingTransaction['data'];
 
-            $latestClient= $this->getLatestClients()->getData(true);
+            $latestClient = $this->getLatestClients()->getData(true);
             $latestClient = $latestClient['data'];
 
             // Prepare response data
@@ -205,7 +212,7 @@ class DashboardController extends BaseController
                 ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
                 ->get();
 
-             // Calculate total transaction amount from the current week
+            // Calculate total transaction amount from the current week
             $totalAmountFromTransactions = $weeklyTransactions->sum('transaction_amount');
 
             // Get the total transaction amount for all time for this merchant
@@ -453,6 +460,45 @@ class DashboardController extends BaseController
         }
     }
 
+    public function getInvoicesForSilver()
+    {
+        try {
+            // Get the authenticated merchant
+            $authUser = auth()->user();
+
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            $merchant = $authUser->merchant;
+            $merchantID = $merchant->id;
+
+            // Fetch invoices where order_id is null
+            $invoices = Invoice::where('merchant_id', $merchantID)
+                ->where('type', 'POS')
+                ->whereNull('order_id') // Only fetch invoices without an order
+                ->orderBy('id', 'desc') // Order by creation date descending
+                ->limit(5) // Limit to 5 latest invoices
+                ->get();
+
+            // Format the response
+            $invoiceData = $invoices->map(function ($invoice) {
+                return [
+                    'invoice_id' => $invoice->id,
+                    'order_id' => null, // No order details
+                    'name' => $invoice->mobile_number, // Assuming mobile number stored in the invoice
+                    'order_date' => dateInsert($invoice->created_at), // Use invoice creation date
+                    'invoice_amount' => convertShillingToUSD($invoice->amount), // Use invoice amount
+                    'name_initial' => 'N/A' // Since no order details exist, initials not applicable
+                ];
+            });
+
+            return $this->sendResponse($invoiceData, 'Invoices without orders fetched successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('An error occurred while fetching invoices.', ['error' => $e->getMessage()]);
+        }
+    }
+
 
     public function getInvoicesWithOrders()
     {
@@ -470,6 +516,7 @@ class DashboardController extends BaseController
             $invoices = Invoice::with('order')
                 ->where('merchant_id', $merchantID)
                 ->where('type', 'POS')
+                ->whereNotNull('order_id') // Only fetch invoices with an order
                 ->orderBy('created_at', 'desc') // Order by creation date descending
                 ->limit(5) // Limit to 5 latest invoices
                 ->get();
