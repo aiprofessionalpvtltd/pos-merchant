@@ -41,8 +41,11 @@ class InvoiceController extends Controller
 
             return DataTables::of($invoices)
                 ->addColumn('merchant', function ($invoice) {
-                    return $invoice->merchant->first_name . ' ' . $invoice->merchant->last_name . ' (' . $invoice->merchant->business_name . ')';
+                    return $invoice->merchant_id
+                        ? $invoice->merchant->first_name . ' ' . $invoice->merchant->last_name . ' (' . $invoice->merchant->business_name . ')'
+                        : ''; // Provide a default value when merchant is null
                 })
+
                 ->addColumn('type', function ($invoice) {
                     return $invoice->type;
                 })
