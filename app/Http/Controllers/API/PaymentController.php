@@ -349,8 +349,17 @@ class PaymentController extends BaseController
             if ($response->status() === 200) {
                 $invoiceData = $response->json();
 
+                $merchantID = NULL;
+                // Get the authenticated merchant
+                $authUser = auth()->user();
+                if ($authUser || $authUser->merchant) {
+                    $merchant = $authUser->merchant;
+                    $merchantID = $merchant->id;
+                }
+
                 // Simulating database insertion of the transaction details
                 $invoice = Invoice::create([
+                    'merchant_id' => $merchantID,
                     'invoice_id' => $invoiceData['InvoiceId'],
                     'first_name' => $firstName,
                     'last_name' => $lastName,
@@ -363,6 +372,7 @@ class PaymentController extends BaseController
                     'e_transaction_id' => $transactionId,
                     'type' => $type,
                 ]);
+
 
 
                 // Commit the transaction if everything is successful
@@ -618,29 +628,24 @@ class PaymentController extends BaseController
                 ])
                 ->post('https://api.waafipay.net/asm', $payload);
 
-//            $invoiceData = [
-//                "schemaVersion" => "1.0",
-//                "timestamp" => "2024-09-06 11:46:41.426",
-//                "responseId" => "7897342012",
-//                "responseCode" => "2001",
-//                "errorCode" => "0",
-//                "responseMsg" => "RCS_SUCCESS",
-//                "params" => [
-//                    "state" => "APPROVED",
-//                    "referenceId" => "582591",
-//                    "transactionId" => "42630206",
-//                    "txAmount" => "500.0"
-//                ]
-//            ];
-
             // Return the response body as JSON
             if ($response->successful()) {
 //            if (true) {
                 $invoiceData = $response->json();
 
                 if ($invoiceData['errorCode'] == 0) {
+                    
+                    $merchantID = NULL;
+                    // Get the authenticated merchant
+                    $authUser = auth()->user();
+                    if ($authUser || $authUser->merchant) {
+                        $merchant = $authUser->merchant;
+                        $merchantID = $merchant->id;
+                    }
+
                     // Simulating database insertion of the transaction details
                     $invoice = Invoice::create([
+                        'merchant_id' => $merchantID,
                         'invoice_id' => $invoiceData['params']['referenceId'],
                         'mobile_number' => str_replace('252', '', $accountNo),
                         'transaction_id' => $invoiceData['params']['transactionId'],
