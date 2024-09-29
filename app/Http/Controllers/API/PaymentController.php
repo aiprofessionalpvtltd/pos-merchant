@@ -312,7 +312,7 @@ class PaymentController extends BaseController
         $currency = $request->input('currency');
         $type = $request->input('type');
 
-        if($type === 'POS'){
+        if($type === 'POS' || $type == 'Subscription'){
             $merchantID = $request->input('merchant_id');
         }
 
@@ -592,10 +592,9 @@ class PaymentController extends BaseController
         $currency = $request->input('currency', 'SLSH');  // Currency
         $type = $request->input('type');  // Type of invoice
         $merchantID = NULL;
-        if($type === 'POS'){
+        if($type === 'POS' || $type == 'Subscription'){
             $merchantID = $request->input('merchant_id');
         }
-
 
         // Prepare the payload for the Waafi API request
         $payload = [
