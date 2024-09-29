@@ -36,103 +36,111 @@
                         <h6 class="m-4"><strong>Phone NO:</strong> {{ $merchant->phone_number }}</h6>
                     </div>
                     <div class="col-md-6">
-
                         <h6 class="m-4"><strong>Pin Generated:</strong> {{ ($merchant->user->pin != null) ? showBoolean(1) : showBoolean(0) }}</h6>
                         <h6 class="m-4"><strong>Verification Status:</strong> {{ showVerification($merchant->confirmation_status) }}</h6>
                         <h6 class="m-4"><strong>Account Approval Status:</strong> {{ showApproval($merchant->is_approved) }}</h6>
-
                         <h6 class="m-4"><strong>Account Created At:</strong> {{ $merchant->created_at->format('Y-m-d H:i:s') }}</h6>
                         <h6 class="m-4"><strong>Last Updated At:</strong> {{ $merchant->updated_at->format('Y-m-d H:i:s') }}</h6>
                     </div>
                 </div>
             </div>
         </div>
-        <!-- Sales Details -->
-        <!-- Sales Details -->
-        <h3>Sales Details</h3>
+
+        <!-- Orders Table -->
+        <h3>Order Details</h3>
         <div class="table-responsive mb-5">
-
-        <table class="table table-bordered table-hover ">
-            <thead>
-            <tr>
-                <th>#</th>
-                <th>Amount</th>
-                <th>Payment Method</th>
-                <th>Is Successful</th>
-                <th>Is Completed</th>
-                <th>Total Amount After Conversion</th>
-                <th>Amount to Merchant</th>
-                <th>Conversion Fee</th>
-                <th>Transaction Fee</th>
-                <th>Total Fee Charged to Customer</th>
-                <th>Amount Sent to Exelo</th>
-                <th>Total Amount Charged to Customer</th>
-                <th>Conversion Rate</th>
-                 <th>Created At</th>
-            </tr>
-            </thead>
-            <tbody>
-            @foreach($merchant->sales as $key => $sale)
+            <table class="table table-bordered table-hover">
+                <thead>
                 <tr>
-                    <td>{{ $loop->iteration }}</td> <!-- Using $loop->iteration for numbering -->
-
-                    <td>{{ $sale->amount }}</td>
-                    <td>{{ ucfirst($sale->payment_method) }}</td>
-                    <td>{{ $sale->is_successful ? 'Yes' : 'No' }}</td>
-                    <td>{{ $sale->is_completed ? 'Yes' : 'No' }}</td>
-                    <td>{{ showCurrency($sale->currency,$sale->total_amount_after_conversion) }}</td>
-                    <td>{{ showCurrency($sale->currency,$sale->amount_to_merchant) }}</td>
-                    <td>{{ showCurrency($sale->currency,$sale->conversion_fee_amount) }}</td>
-                    <td>{{ showCurrency($sale->currency,$sale->transaction_fee_amount) }}</td>
-                    <td>{{ showCurrency($sale->currency,$sale->total_fee_charge_to_customer) }}</td>
-                    <td>{{ showCurrency($sale->currency,$sale->amount_sent_to_exelo) }}</td>
-                    <td>{{ showCurrency($sale->currency,$sale->total_amount_charge_to_customer) }}</td>
-                    <td>{{ $sale->conversion_rate }}</td>
-                     <td>{{ $sale->created_at }}</td>
+                    <th>#</th>
+                    <th>Order Status</th>
+                    <th>Total Price</th>
+                    <th>Name</th>
+                    <th>Mobile Number</th>
+                    <th>Order Type</th>
+                    <th>Created At</th>
                 </tr>
-            @endforeach
-            </tbody>
-        </table>
-        </div>
-        <!-- Payment Details -->
-        <h3>Payment Details</h3>
-        <table class="table table-bordered table-hover ">
-            <thead>
-            <tr>
-                <th>#</th>
-                 <th>Amount</th>
-                <th>Payment Method</th>
-                <th>Transaction ID</th>
-                <th>Is Successful</th>
-                <th>Amount to Merchant</th>
-                <th>Amount to Exelo</th>
-                <th>Created At</th>
-            </tr>
-            </thead>
-            <tbody>
-            @foreach($merchant->sales as $sale)
-                @foreach($sale->payments as $key => $payment)
+                </thead>
+                <tbody>
+                @foreach($orders as $order)
                     <tr>
-                        <td>{{ $loop->parent->iteration }}.{{ $loop->iteration }}</td> <!-- Using $loop->iteration for numbering -->
-                         <td>{{ $payment->amount }}</td>
-                        <td>{{ ucfirst($payment->payment_method) }}</td>
-                        <td>{{ $payment->transaction_id }}</td>
-                        <td>{{ $payment->is_successful ? 'Yes' : 'No' }}</td>
-                        <td>{{ showCurrency($sale->currency,$payment->amount_to_merchant) }}</td>
-                        <td>{{ showCurrency($sale->currency,$payment->amount_to_exelo) }}</td>
-                        <td>{{ $payment->created_at }}</td>
+                        <td>{{ $loop->iteration }}</td>
+                        <td>{{ ucfirst($order->order_status) }}</td>
+                        <td>{{ $order->total_price }}</td>
+                        <td>{{ $order->name }}</td>
+                        <td>{{ $order->mobile_number }}</td>
+                        <td>{{ ucfirst($order->order_type) }}</td>
+                        <td>{{ $order->created_at->format('Y-m-d H:i:s') }}</td>
                     </tr>
                 @endforeach
-            @endforeach
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
 
+        <!-- Invoices Table -->
+        <h3>Invoice Details</h3>
+        <div class="table-responsive mb-5">
+            <table class="table table-bordered table-hover">
+                <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Invoice ID</th>
+                    <th>Transaction ID</th>
+                    <th>Amount</th>
+                    <th>Currency</th>
+                    <th>Status</th>
+                    <th>Created At</th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach($invoices as $invoice)
+                    <tr>
+                        <td>{{ $loop->iteration }}</td>
+                        <td>{{ $invoice->invoice_id }}</td>
+                        <td>{{ $invoice->transaction_id }}</td>
+                        <td>{{ $invoice->amount }}</td>
+                        <td>{{ $invoice->currency }}</td>
+                        <td>{{ ucfirst($invoice->status) }}</td>
+                        <td>{{ $invoice->created_at->format('Y-m-d H:i:s') }}</td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Transactions Table -->
+        <h3>Transaction Details</h3>
+        <div class="table-responsive mb-5">
+            <table class="table table-bordered table-hover">
+                <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Transaction Amount</th>
+                    <th>Transaction Status</th>
+                    <th>Transaction Message</th>
+                    <th>Phone Number</th>
+                     <th>Created At</th>
+                </tr>
+                </thead>
+                <tbody>
+                @foreach($transactions as $transaction)
+                    <tr>
+                        <td>{{ $loop->iteration }}</td>
+                        <td>{{ $transaction->transaction_amount }}</td>
+                        <td>{{ ucfirst($transaction->transaction_status) }}</td>
+                        <td>{{ $transaction->transaction_message }}</td>
+                        <td>{{ $transaction->phone_number }}</td>
+                         <td>{{ $transaction->created_at->format('Y-m-d H:i:s') }}</td>
+                    </tr>
+                @endforeach
+                </tbody>
+            </table>
+        </div>
     </div>
     <!-- /content area -->
     <!--**********************************
         Content body end
     ***********************************-->
-
 @endsection
 
 @push('script')

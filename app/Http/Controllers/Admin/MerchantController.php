@@ -4,8 +4,11 @@ namespace App\Http\Controllers\Admin;
 
 
 use App\Http\Controllers\Controller;
+use App\Models\Invoice;
 use App\Models\Merchant;
+use App\Models\Order;
 use App\Models\Sale;
+use App\Models\Transaction;
 use Carbon\Carbon;
 use DB;
 use File;
@@ -14,6 +17,7 @@ use Illuminate\Support\Facades\Validator;
 use pdf;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Middlewares\PermissionMiddleware;
+use Yajra\DataTables\DataTables;
 
 
 class MerchantController extends Controller
@@ -31,15 +35,33 @@ class MerchantController extends Controller
     /**
      * Display a listing of the resource.
      *
-     * @return \Illuminate\Http\Response
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function show()
+    public function index(Request $request)
     {
-        $data = array();
+        if ($request->ajax()) {
+            $merchants = Merchant::with('user')->get();
+            return DataTables::of($merchants)
+                ->addColumn('action', function ($merchant) {
+                    $viewBtn = '';
+                    $deleteBtn = '';
+
+                    if (auth()->user()->can('view-merchant')) {
+                        $viewBtn = '<a title="View" href="' . route('view-merchant', $merchant->id) . '" class="badge bg-primary m-1"><i class="fas fa-fw fa-eye"></i></a>';
+                    }
+
+                    if (auth()->user()->can('delete-merchant')) {
+                        $deleteBtn = '<a href="javascript:void(0)" data-url="' . route('delete-merchant') . '" data-status="0" data-label="delete" data-id="' . $merchant->id . '" class="badge bg-danger m-1 change-status-record" title="Delete Record"><i class="fas fa-trash"></i></a>';
+                    }
+
+                    return '<div class="d-flex">' . $viewBtn . $deleteBtn . '</div>';
+                })
+                ->rawColumns(['action'])
+                ->make(true);
+        }
+
         $title = 'Add Merchant';
-        $merchants = Merchant::with('user')->get();
-//        dd($merchants);
-        return view('admin.merchant.index', compact('title', 'merchants', 'data'));
+        return view('admin.merchant.index', compact('title'));
     }
 
     /**
@@ -50,14 +72,20 @@ class MerchantController extends Controller
     public function view($id)
     {
         $title = 'View Merchant';
-        $merchant = Merchant::with('user','sales.payments')->find($id);
+        $merchant = Merchant::with('user')->find($id);
 
         if (!$merchant) {
             return redirect()->route('show-merchant')->with('error', 'Merchant not found.');
         }
 
-        return view('admin.merchant.view', compact('merchant', 'title' ));
+        // Load orders, invoices, and transactions
+        $orders = Order::where('merchant_id', $merchant->id)->get();
+        $invoices = Invoice::where('merchant_id', $merchant->id)->get();
+        $transactions = Transaction::where('merchant_id', $merchant->id)->get();
+
+        return view('admin.merchant.view', compact('merchant', 'title', 'orders', 'invoices', 'transactions'));
     }
+
 
 
 

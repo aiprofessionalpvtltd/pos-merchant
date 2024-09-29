@@ -38,5 +38,9 @@ class Invoice extends Model
     {
         return $this->belongsTo(Order::class)->withDefault();
     }
+   public function merchant()
+    {
+        return $this->belongsTo(Merchant::class)->withDefault();
+    }
 
 }

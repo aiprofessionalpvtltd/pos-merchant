@@ -20,6 +20,7 @@ class ModuleSeeder extends Seeder
             'Merchant',
             'Invoice',
             'Transaction',
+            'Order',
         );
 
         foreach ($modules as $row) {

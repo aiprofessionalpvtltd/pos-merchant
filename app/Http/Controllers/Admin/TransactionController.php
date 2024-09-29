@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Validator;
 use pdf;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Middlewares\PermissionMiddleware;
+use Yajra\DataTables\DataTables;
 
 
 class TransactionController extends Controller
@@ -31,20 +32,39 @@ class TransactionController extends Controller
     /**
      * Display a listing of the resource.
      *
-     * @return \Illuminate\Http\Response
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function show()
+    public function show(Request $request)
     {
-        $data = array();
-        $title = 'Add Transaction';
-        $transactions = Transaction::with('merchant')->get();
-//        dd($transactions);
-        return view('admin.transaction.index', compact('title', 'transactions', 'data'));
+        if ($request->ajax()) {
+            $transactions = Transaction::with('merchant')->select('transactions.*');
+
+            return DataTables::of($transactions)
+                ->addColumn('merchant_name', function ($transaction) {
+                    return $transaction->merchant->first_name . ' ' . $transaction->merchant->last_name . ' (' . $transaction->merchant->business_name . ')';
+                })
+                ->addColumn('amount', function ($transaction) {
+                    return $transaction->transaction_amount;
+                })
+                ->addColumn('phone_number', function ($transaction) {
+                    return $transaction->phone_number;
+                })
+                ->addColumn('message', function ($transaction) {
+                    return $transaction->transaction_message;
+                })
+                ->addColumn('transaction_id', function ($transaction) {
+                    return $transaction->transaction_id;
+                })
+                ->addColumn('status', function ($transaction) {
+                    return $transaction->transaction_status;
+                })
+                ->rawColumns(['merchant_name', 'amount', 'phone_number', 'message', 'transaction_id', 'status'])
+                ->make(true);
+        }
+
+        $title = 'All Transactions';
+        return view('admin.transaction.index', compact('title'));
     }
-
-
-
-
 
 
 }

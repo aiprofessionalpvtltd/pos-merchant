@@ -2,23 +2,16 @@
 
 @section('content')
 
-
     <!-- Page header -->
     <div class="page-header page-header-light">
         <div class="page-header-content header-elements-md-inline">
             <div class="page-title d-flex">
-                <h4><span class="font-weight-semibold">{{$title}}</span>
-                </h4>
+                <h4><span class="font-weight-semibold">{{ $title }}</span></h4>
                 <a href="#" class="header-elements-toggle text-default d-md-none"><i class="icon-more"></i></a>
-
             </div>
-
-
         </div>
-
     </div>
     <!-- /page header -->
-
 
     <!-- Content area -->
     <div class="content">
@@ -27,65 +20,61 @@
         <div class="card">
             <div class="card-header header-elements-inline">
                 <h5 class="card-title"></h5>
-                <div class="header-elements">
-
-                </div>
+                <div class="header-elements"></div>
             </div>
 
             <div class="card-body">
-                <table id="" class="table table-striped datatables-reponsive">
-                <thead>
-                <tr>
-                    <th>ID</th>
-                    <th>Merchant Name</th>
-                    <th>Agent Code</th>
-                    <th>Phone No</th>
-                    <th>Address</th>
-                    <th>Approval Status</th>
-                    <th>Confirmation Status</th>
-                      <th class="text-center">Actions</th>
-                </tr>
-                </thead>
-                <tbody>
-                @foreach($merchants as $merchant)
+                <table id="merchantTable" class="table table-striped">
+                    <thead>
                     <tr>
-                        <td>{{$merchant->id}}</td>
-                        <td>{{$merchant->first_name . ' ' . $merchant->last_name}}</td>
-                        <td>{{$merchant->business_name}}</td>
-                        <td>{{$merchant->phone_number}}</td>
-                        <td>{{$merchant->location}} </td>
-                        <td>{{showApproval($merchant->is_approved)}}</td>
-                        <td>{{showVerification($merchant->confirmation_status)}}</td>
-                        <td>`
-                            <div class="d-flex">
-                                @can('view-merchant')
-                                    <a title="Edit" href="{{ route('view-merchant', $merchant->id) }}"
-                                       class="badge bg-primary m-1"><i
-                                            class="fas fa-fw fa-eye"></i></a>
-                                @endcan
-
-                                @can('delete-merchant')
-                                    <a href="javascript:void(0)" data-url="{{route('delete-merchant')}}"
-                                       data-status='0' data-label="delete"
-                                       data-id="{{$merchant->id}}"
-                                       class="badge bg-danger m-1 change-status-record"
-                                       title="Suspend Record"><i class="fas fa-trash"></i></a>
-                                @endcan
-                            </div>
-                        </td>
+                        <th>ID</th>
+                        <th>Merchant Name</th>
+                        <th>Business Name</th>
+                        <th>Agent Code</th>
+                        <th>Phone No</th>
+                        <th>Address</th>
+                        <th>Approval Status</th>
+                        <th class="text-center">Actions</th>
                     </tr>
-                @endforeach
-                </tbody>
-            </table>
+                    </thead>
+                </table>
             </div>
         </div>
         <!-- /basic datatable -->
 
     </div>
     <!-- /content area -->
+
 @endsection
 
 @push('script')
+
     <script src="{{asset('backend/js/datatables.js')}}"></script>
 
+    <script>
+        $(document).ready(function () {
+            // Initialize Yajra DataTable
+            $('#merchantTable').DataTable({
+                processing: true,
+                serverSide: true,
+                ajax: '{{ route('admin.merchant.index') }}',
+                columns: [
+                    {data: 'id', name: 'id'},
+                    {data: 'first_name', name: 'first_name', render: function (data, type, full) {
+                            return full.first_name + ' ' + full.last_name;
+                        }},
+                    {data: 'business_name', name: 'business_name'},
+                    {data: 'merchant_code', name: 'merchant_code'},
+                    {data: 'phone_number', name: 'phone_number'},
+                    {data: 'location', name: 'location'},
+                    {data: 'is_approved', name: 'is_approved', render: function (data, type, full) {
+                            return data == 1 ? 'Approved' : 'Not Approved';
+                        }},
+                    {data: 'action', name: 'action', orderable: false, searchable: false, className: 'text-center'}
+                ],
+                order: [[0, 'asc']],
+                responsive: true,
+            });
+        });
+    </script>
 @endpush

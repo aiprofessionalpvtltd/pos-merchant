@@ -23,19 +23,22 @@
             </div>
 
             <div class="card-body">
-                <table id="InvoiceTable" class="table table-striped">
+                <table id="orderTable" class="table table-striped">
                     <thead>
                     <tr>
+                        <th>Order ID</th>
                         <th>Merchant</th>
-                        <th>Type</th>
-                        <th>Phone No</th>
-                        <th>Transaction ID</th>
-                        <th>Amount</th>
-                        <th>Currency</th>
+                        <th>Customer</th>
+                        <th>Sub Total</th>
+                        <th>Vat</th>
+                        <th>Exelo Amount</th>
+                        <th>Total</th>
                         <th>Status</th>
+                        <th>Action</th> <!-- New Action Column -->
+
                     </tr>
                     </thead>
-                    <tbody></tbody> <!-- Removed static content for AJAX -->
+                    <tbody></tbody> <!-- No server-side data needed here, handled by AJAX -->
                 </table>
             </div>
         </div>
@@ -46,24 +49,26 @@
 @endsection
 
 @push('script')
-    <script src="{{ asset('backend/js/datatables.js') }}"></script>
+    <script src="{{asset('backend/js/datatables.js')}}"></script>
     <script>
         $(document).ready(function() {
-            $('#InvoiceTable').DataTable({
+            $('#orderTable').DataTable({
                 processing: true,
                 serverSide: true,
                 ajax: {
-                    url: '{{ route('admin.invoices.show') }}', // Add the correct route for AJAX
+                    url: '{{ route('admin.orders.show') }}', // Add your correct route
                     type: 'GET'
                 },
                 columns: [
+                    {data: 'id', name: 'id'},
                     {data: 'merchant', name: 'merchant'},
-                    {data: 'type', name: 'type'},
-                    {data: 'mobile_number', name: 'mobile_number'},
-                    {data: 'transaction_id', name: 'transaction_id'},
-                    {data: 'amount', name: 'amount'},
-                    {data: 'currency', name: 'currency'},
-                    {data: 'status', name: 'status'}
+                    {data: 'customer', name: 'customer'},
+                    {data: 'sub_total', name: 'sub_total'},
+                    {data: 'vat', name: 'vat'},
+                    {data: 'exelo_amount', name: 'exelo_amount'},
+                    {data: 'total_price', name: 'total_price'},
+                    {data: 'order_status', name: 'order_status'},
+                    {data: 'action', name: 'action'}
                 ]
             });
         });

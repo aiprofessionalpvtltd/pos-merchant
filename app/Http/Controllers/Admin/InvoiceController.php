@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\Validator;
 use pdf;
 use Spatie\Permission\Models\Role;
 use Spatie\Permission\Middlewares\PermissionMiddleware;
+use Yajra\DataTables\DataTables;
 
 
 class InvoiceController extends Controller
@@ -31,16 +32,43 @@ class InvoiceController extends Controller
     /**
      * Display a listing of the resource.
      *
-     * @return \Illuminate\Http\Response
+     * @return \Illuminate\Http\JsonResponse
      */
-    public function show()
+    public function show(Request $request)
     {
-        $data = array();
-        $title = 'Add Invoice';
-        $invoices = Invoice::all();
-//        dd($invoices);
-        return view('admin.invoice.index', compact('title', 'invoices', 'data'));
+        if ($request->ajax()) {
+            $invoices = Invoice::with('merchant')->select('invoices.*');
+
+            return DataTables::of($invoices)
+                ->addColumn('merchant', function ($invoice) {
+                    return $invoice->merchant->first_name . ' ' . $invoice->merchant->last_name . ' (' . $invoice->merchant->business_name . ')';
+                })
+                ->addColumn('type', function ($invoice) {
+                    return $invoice->type;
+                })
+                ->addColumn('mobile_number', function ($invoice) {
+                    return $invoice->mobile_number;
+                })
+                ->addColumn('transaction_id', function ($invoice) {
+                    return $invoice->transaction_id;
+                })
+                ->addColumn('amount', function ($invoice) {
+                    return $invoice->amount;
+                })
+                ->addColumn('currency', function ($invoice) {
+                    return $invoice->currency;
+                })
+                ->addColumn('status', function ($invoice) {
+                    return $invoice->status;
+                })
+                ->rawColumns(['merchant', 'type', 'mobile_number', 'transaction_id', 'amount', 'currency', 'status'])
+                ->make(true);
+        }
+
+        $title = 'All Invoices';
+        return view('admin.invoice.index', compact('title'));
     }
+
 
 
 

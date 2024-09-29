@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\Dashboard\SuperAdminDashboardController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\MerchantController;
+use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\UserController;
@@ -45,21 +46,23 @@ Route::middleware(['auth'])->group(function () {
 
 
     //Merchant Controllers
-    Route::get('show-merchant', [MerchantController::class, 'show'])->name('show-merchant');
+    Route::get('/admin/merchant', [MerchantController::class, 'index'])->name('admin.merchant.index');
     Route::get('view-merchant/{id}', [MerchantController::class, 'view'])->name('view-merchant');
      Route::post('delete-merchant', [MerchantController::class, 'delete'])->name('delete-merchant');
 
 
     //Invoice Controllers
-    Route::get('show-invoice', [InvoiceController::class, 'show'])->name('show-invoice');
-    Route::get('view-invoice/{id}', [InvoiceController::class, 'view'])->name('view-invoice');
-    Route::post('delete-invoice', [InvoiceController::class, 'delete'])->name('delete-invoice');
+    Route::get('/admin/invoices', [InvoiceController::class, 'show'])->name('admin.invoices.show');
+
+
+    //Invoice Controllers
+    Route::get('/admin/orders', [OrderController::class, 'show'])->name('admin.orders.show');
+    Route::get('/admin/orders/{id}/view', [OrderController::class, 'view'])->name('admin.orders.view');
+
 
 
     //Transaction Controllers
-    Route::get('show-transaction', [TransactionController::class, 'show'])->name('show-transaction');
-    Route::get('view-transaction/{id}', [TransactionController::class, 'view'])->name('view-transaction');
-    Route::post('delete-transaction', [TransactionController::class, 'delete'])->name('delete-transaction');
+    Route::get('/admin/transactions', [TransactionController::class, 'show'])->name('admin.transactions.show');
 
 
 });

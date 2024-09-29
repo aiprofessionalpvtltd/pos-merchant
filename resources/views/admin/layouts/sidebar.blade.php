@@ -78,7 +78,7 @@
             @can('view-merchant')
 
                 <li class="sidebar-item  ">
-                    <a class="sidebar-link" href="{{ route('show-merchant') }}">
+                    <a class="sidebar-link" href="{{ route('admin.merchant.index') }}">
                         <i class="fas fa-bank"></i>
                         <span class="align-middle">Merchants</span>
                     </a>
@@ -89,15 +89,26 @@
             @can('view-invoice')
 
                 <li class="sidebar-item  ">
-                    <a class="sidebar-link" href="{{ route('show-invoice') }}">
+                    <a class="sidebar-link" href="{{ route('admin.invoices.show') }}">
                         <i class="fas fa-file-alt"></i>
                         <span class="align-middle">Invoices</span>
                     </a>
                 </li>
             @endcan
+
+
+            @can('view-order')
+                <li class="sidebar-item  ">
+                    <a class="sidebar-link" href="{{ route('admin.orders.show') }}">
+                        <i class="fas fa-file-alt"></i>
+                        <span class="align-middle">Orders</span>
+                    </a>
+                </li>
+
+            @endcan
             @can('view-transaction')
                 <li class="sidebar-item  ">
-                    <a class="sidebar-link" href="{{ route('show-transaction') }}">
+                    <a class="sidebar-link" href="{{ route('admin.transactions.show') }}">
                         <i class="fas fa-dollar"></i>
                         <span class="align-middle">Transaction</span>
                     </a>
