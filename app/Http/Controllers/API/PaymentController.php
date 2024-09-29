@@ -332,6 +332,7 @@ class PaymentController extends BaseController
             return $this->sendError('Merchant mobile number is already registered', '');
         }
 
+
         $payload = [
             "apiKey" => $apiKey,
             "EdahabNumber" => $edahabNumber,
@@ -354,6 +355,7 @@ class PaymentController extends BaseController
 
             if ($response->status() === 200) {
                 $invoiceData = $response->json();
+
 
                 // Simulating database insertion of the transaction details
                 $invoice = Invoice::create([
@@ -594,6 +596,7 @@ class PaymentController extends BaseController
             $merchantID = $request->input('merchant_id');
         }
 
+
         // Prepare the payload for the Waafi API request
         $payload = [
             "schemaVersion" => "1.0",
@@ -619,7 +622,6 @@ class PaymentController extends BaseController
                 ]
             ]
         ];
-
 
 //        dd($payload);
         try {
