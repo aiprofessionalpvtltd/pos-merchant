@@ -689,7 +689,7 @@ class DashboardController extends BaseController
                 return [
                     'invoice_id' => $invoice->id,
                     'order_id' => $order->id,
-                    'name' => $order->name ? $order->name : $order->mobile_number,
+                    'name' => $order->name ? $order->name : $invoice->mobile_number,
                     'order_date' => $order ? dateInsert($order->created_at) : 'N/A',
                     'invoice_amount' => convertShillingToUSD($order->total_price),
                     'name_initial' => $this->getInitials($order ? ($order->name) : 'N/A')
