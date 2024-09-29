@@ -627,6 +627,7 @@ class OrderController extends BaseController
             // Fetch orders by the given type
             $orders = Order::where('order_status', $request->order_status)
                 ->where('merchant_id', $merchantID)
+                ->orderBy('id', 'DESC')
                 ->with('items.product') // Load related order items and products
                 ->get();
 
