@@ -137,30 +137,32 @@ class DashboardController extends BaseController
             $completeCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Complete')->count();
 
 
-            if($authUser->merchant->currentSubscription->subscription_plan_id == 2){
+            if ($authUser->merchant->currentSubscription->subscription_plan_id == 2) {
                 $transactionHistories = $this->getTransactionForSilver()->getData(true);
                 $transactionHistories = $transactionHistories['data'];
 
                 $weeklyStatistics = $this->getWeeklySalesAndStatisticsSilver()->getData(true);
                 $weeklyStatistics = $weeklyStatistics['data'];
 
-            }else{
+                $latestClient = $this->getLatestClientsForSilverMerchant()->getData(true);
+                $latestClient = $latestClient['data'];
+
+            } else {
                 $transactionHistories = $this->getInvoicesWithOrders()->getData(true);
                 $transactionHistories = $transactionHistories['data'];
 
                 $weeklyStatistics = $this->getWeeklySalesAndStatistics()->getData(true);
                 $weeklyStatistics = $weeklyStatistics['data'];
+
+                $latestClient = $this->getLatestClientsForNormalMerchant()->getData(true);
+                $latestClient = $latestClient['data'];
             }
 
 //            dd($transactionHistories);
 
 
-
             $pendingTransaction = $this->getPendingOrders()->getData(true);
             $pendingTransaction = $pendingTransaction['data'];
-
-            $latestClient = $this->getLatestClients()->getData(true);
-            $latestClient = $latestClient['data'];
 
             // Prepare response data
             $data = [
@@ -759,6 +761,77 @@ class DashboardController extends BaseController
             return $this->sendResponse($clientData, 'Latest clients fetched successfully.');
         } catch (\Exception $e) {
             return $this->sendError('An error occurred while fetching latest clients.', ['error' => $e->getMessage()]);
+        }
+    }
+
+    public function getLatestClientsForNormalMerchant()
+    {
+        try {
+            // Get the authenticated merchant
+            $authUser = auth()->user();
+
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            $merchantID = $authUser->merchant->id;
+
+            // Fetch the latest clients based on orders for the authenticated merchant
+            $latestClients = Order::where('merchant_id', $merchantID)
+                ->orderBy('id', 'desc') // Order by creation date descending
+                ->limit(5) // Limit to 5 latest clients
+                ->get();
+
+            // Format the response
+            $clientData = $latestClients->map(function ($order) {
+                return [
+                    'name' => $order->name ?? $order->mobile_number,
+                    'name_initial' => $this->getInitials($order->name ?? 'N A')
+                ];
+            });
+
+            return $this->sendResponse($clientData, 'Latest clients for normal merchants fetched successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('An error occurred while fetching the latest clients for normal merchants.', ['error' => $e->getMessage()]);
+        }
+    }
+
+    public function getLatestClientsForSilverMerchant()
+    {
+        try {
+            // Get the authenticated merchant
+            $authUser = auth()->user();
+
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            $merchantID = $authUser->merchant->id;
+
+            // Fetch the latest invoices with status 'Paid' for the silver merchant
+            $latestClients = Invoice::where('merchant_id', $merchantID)
+                ->where('status', 'Paid') // Only 'Paid' invoices
+                ->whereNull('order_id')
+                ->orderBy('id', 'desc') // Order by invoice creation date
+                ->limit(5) // Limit to 5 latest clients
+                ->get();
+
+            // Format the response
+            $clientData = $latestClients->map(function ($invoice) {
+                // Show first_name + last_name if present, otherwise mobile_number
+                $name = $invoice->first_name && $invoice->last_name
+                    ? $invoice->first_name . ' ' . $invoice->last_name
+                    : $invoice->mobile_number;
+
+                return [
+                    'name' => $name,
+                    'name_initial' => 'N A'
+                ];
+            });
+
+            return $this->sendResponse($clientData, 'Latest clients for silver merchants fetched successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('An error occurred while fetching the latest clients for silver merchants.', ['error' => $e->getMessage()]);
         }
     }
 
