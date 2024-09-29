@@ -15,6 +15,7 @@ class Transaction extends Model
         'phone_number',
         'transaction_id',
         'merchant_id',
+        'order_id',
     ];
 
     public function merchant()

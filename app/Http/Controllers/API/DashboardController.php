@@ -307,18 +307,18 @@ class DashboardController extends BaseController
             $endOfWeek = now()->endOfWeek();
 
             // Get total transaction amount for the current week for invoices (no order_id)
-            $weeklyTransactions = Transaction::where('merchant_id', $merchantID)
+            $weeklyTransactions = Order::where('merchant_id', $merchantID)
                 ->whereNotNull('order_id') // Only transactions without order_id (for silver merchants)
                 ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
                 ->get();
 
             // Calculate total transaction amount from these transactions
-            $totalAmountFromTransactions = $weeklyTransactions->sum('transaction_amount');
+            $totalAmountFromTransactions = $weeklyTransactions->sum('total_price');
 
             // Calculate the total transaction amount for all time (only invoices without order_id)
-            $totalAmountAllTime = Transaction::where('merchant_id', $merchantID)
+            $totalAmountAllTime = Order::where('merchant_id', $merchantID)
                 ->whereNotNull('order_id') // Only transactions without order_id
-                ->sum('transaction_amount');
+                ->sum('total_price');
 
             // Calculate the percentage of weekly transactions from total transactions
             $totalAmountPercentage = $totalAmountAllTime > 0

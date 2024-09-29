@@ -11,6 +11,7 @@ use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\ProductInventory;
+use App\Models\Transaction;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
@@ -352,10 +353,13 @@ class OrderController extends BaseController
 
             $invoice = Invoice::find($request->invoice_id);
 
-            $invoice->order_id = $invoice->id;
+            $invoice->order_id = $order->id;
             $invoice->merchant_id = $order->merchant_id;
             $invoice->save();
 
+            $transaction = Transaction::where('merchant_id', $order->merchant_id)->first();
+            $transaction->order_id = $order->id;
+            $transaction->save();
             DB::commit();
 
             return $this->sendResponse($order, 'Order placed successfully.');
@@ -388,6 +392,10 @@ class OrderController extends BaseController
             $invoice->order_id = $order->id;
             $invoice->merchant_id = $order->merchant_id;
             $invoice->save();
+
+            $transaction = Transaction::where('merchant_id', $order->merchant_id)->first();
+            $transaction->order_id = $order->id;
+            $transaction->save();
 
             DB::commit();
 
