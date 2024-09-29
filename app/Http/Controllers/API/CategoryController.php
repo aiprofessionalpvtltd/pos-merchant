@@ -182,6 +182,18 @@ class CategoryController extends BaseController
     public function search(Request $request)
     {
          try {
+
+             // Get authenticated user
+             $authUser = auth()->user();
+
+             // Ensure the authenticated user has a merchant relation
+             if (!$authUser || !$authUser->merchant) {
+                 return $this->sendError('Merchant not found for the authenticated user.');
+             }
+
+             // Get the merchant's ID
+             $merchantID = $authUser->merchant->id;
+
             // Get search input from the request
             $search = $request->input('search');
 
@@ -190,6 +202,7 @@ class CategoryController extends BaseController
                 ->when($search, function ($query, $search) {
                     return $query->where('name', 'LIKE', "%$search%");
                 })
+                ->where('merchant_id', $merchantID)
                 ->select('id', 'name') // Select only id and name
                 ->latest()
                 ->get();
