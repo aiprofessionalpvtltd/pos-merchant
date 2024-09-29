@@ -145,7 +145,7 @@ class DashboardController extends BaseController
                 $transactionHistories = $transactionHistories['data'];
             }
 
-            dd($transactionHistories);
+//            dd($transactionHistories);
 
             $weeklyStatistics = $this->getWeeklySalesAndStatistics()->getData(true);
             $weeklyStatistics = $weeklyStatistics['data'];
