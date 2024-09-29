@@ -440,7 +440,7 @@ class ProductController extends BaseController
             // Get merchant ID from authenticated user's merchant relation
             $merchantID = $authUser->merchant->id;
 
-            // Fetch sold products with their sold date from OrderItems
+            // Fetch sold products grouped by product_id and sold date (without time)
             $soldProducts = OrderItem::with(['product' => function ($query) use ($merchantID) {
                 // Load the products along with their inventories
                 $query->where('merchant_id', $merchantID)
@@ -449,9 +449,9 @@ class ProductController extends BaseController
                         $inventoryQuery->whereIn('type', ['shop', 'stock']);
                     }]);
             }])
-                ->select('product_id', 'created_at', DB::raw('SUM(quantity) as total_sold'))
-                ->groupBy('product_id', 'created_at')
-                ->orderBy('created_at', 'desc') // Order by sold date in descending order
+                ->select('product_id', DB::raw('DATE(created_at) as sold_date'), DB::raw('SUM(quantity) as total_sold'))
+                ->groupBy('product_id', DB::raw('DATE(created_at)'))
+                ->orderBy('sold_date', 'desc') // Order by sold date in descending order
                 ->get();
 
             // Prepare the result set as a nested array grouped by sold date
@@ -469,18 +469,17 @@ class ProductController extends BaseController
                 $inStockQuantity = $product->inventories
                         ->firstWhere('type', 'stock')->quantity ?? 0;
 
-                $soldDate = $soldProduct->created_at->format('Y-m-d');
-
                 // Add product details to the nested structure
-                $data[$soldDate][] = [
+                $data[] = [
+                    'product_id' => $product->id,
                     'product_name' => $product->product_name,
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
-                    'price' => convertShillingToUSD($product->price),
+                    'price' => convertShillingToUSD($product->price * $soldProduct->total_sold), // Multiply price by total sold
                     'in_shop_quantity' => $inShopQuantity,
                     'in_stock_quantity' => $inStockQuantity,
                     'total_sold' => $soldProduct->total_sold,
-                    'sold_date' => $soldDate,
+                    'sold_date' => $soldProduct->sold_date, // Grouped sold date
                 ];
             }
 
