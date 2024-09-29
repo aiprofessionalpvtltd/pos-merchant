@@ -171,7 +171,7 @@ class ProductInventoryController extends BaseController
             $productsData = $productInventories->map(function ($inventory) {
                 return [
                      'product_id' => $inventory->product->id,
-                    'price' => $inventory->product->price,
+                    'price' => convertShillingToUSD($inventory->product->price),
                     'image' => Storage::url($inventory->product->image),
                     'category_id' => $inventory->product->category->id,
                     'category_name' => $inventory->product->category->name,
