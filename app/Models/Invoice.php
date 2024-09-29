@@ -22,6 +22,7 @@ class Invoice extends Model
      * @var array
      */
     protected $fillable = [
+        'merchant_id',
         'invoice_id',
         'mobile_number',
         'transaction_id',
