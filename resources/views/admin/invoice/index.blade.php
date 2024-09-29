@@ -45,7 +45,7 @@
     <!-- /content area -->
 @endsection
 
-@push('scripts')
+@push('script')
     <script src="{{ asset('backend/js/datatables.js') }}"></script>
     <script>
         $(document).ready(function() {
