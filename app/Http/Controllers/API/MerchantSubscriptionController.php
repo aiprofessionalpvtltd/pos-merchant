@@ -51,10 +51,10 @@ class MerchantSubscriptionController extends BaseController
                 $newRequest->merge(['subscription_plan_id' => $noSubscription->subscription_plan_id]); // Add the subscription plan ID
 
                 // Call the store method with the new request
-               $newSubscription =  $this->store($newRequest);
+                $newSubscription = $this->store($newRequest);
 
                 return $this->current($request);
-               }
+            }
 
             // Load the subscription plan relation (to access the package name and id)
             $currentSubscription->load('subscriptionPlan');
@@ -124,7 +124,7 @@ class MerchantSubscriptionController extends BaseController
 
     public function store(Request $request)
     {
-         // Validate the input
+        // Validate the input
         $validator = Validator::make($request->all(), [
             'subscription_plan_id' => 'required|exists:subscription_plans,id',
         ]);
@@ -158,10 +158,10 @@ class MerchantSubscriptionController extends BaseController
             }
 
 
-             // If the current subscription exists and is not the requested one, delete the all subscriptions
-            if ($currentSubscription == null) {
-                MerchantSubscription::where('merchant_id', $merchantID)->delete();
-            }
+            // If the current subscription exists and is not the requested one, delete the all subscriptions
+
+            MerchantSubscription::where('merchant_id', $merchantID)->delete();
+           
 
             // Create a new subscription for the merchant
             $newSubscription = MerchantSubscription::create([
@@ -211,11 +211,11 @@ class MerchantSubscriptionController extends BaseController
 
 
             // Fetch the subscription by ID
-            $subscription = MerchantSubscription::where('subscription_plan_id',$id)->where('merchant_id', $merchantID)->first();
+            $subscription = MerchantSubscription::where('subscription_plan_id', $id)->where('merchant_id', $merchantID)->first();
 
             // Check if the subscription exists
             if (!$subscription) {
-                 return $this->sendError('Subscription not found.');
+                return $this->sendError('Subscription not found.');
             }
 
             // Check if the subscription is already canceled
