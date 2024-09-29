@@ -784,7 +784,7 @@ class DashboardController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Fetch the latest clients based on orders for the authenticated merchant
-            $latestClients = Order::where('merchant_id', $merchantID)
+            $latestClients = Order::with('invoice')->where('merchant_id', $merchantID)
                 ->orderBy('id', 'desc') // Order by creation date descending
                 ->limit(5) // Limit to 5 latest clients
                 ->get();
@@ -792,8 +792,8 @@ class DashboardController extends BaseController
             // Format the response
             $clientData = $latestClients->map(function ($order) {
                 return [
-                    'name' => $order->name ?? $order->mobile_number,
-                    'name_initial' => $this->getInitials($order->name ?? 'N A')
+                    'name' => $order->name ?? $order->invoice->mobile_number,
+                    'name_initial' => $this->getInitials($order->name ?? 'Not Available')
                 ];
             });
 
@@ -832,7 +832,7 @@ class DashboardController extends BaseController
 
                 return [
                     'name' => $name,
-                    'name_initial' => 'N A'
+                    'name_initial' => $this->getInitials($name ?? 'Not Available')
                 ];
             });
 
