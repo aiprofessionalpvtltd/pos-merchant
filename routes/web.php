@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin\Dashboard\SuperAdminDashboardController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\MerchantController;
+use App\Http\Controllers\Admin\MerchantSubscriptionController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\TransactionController;
@@ -60,10 +61,12 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/orders/{id}/view', [OrderController::class, 'view'])->name('admin.orders.view');
 
 
-
     //Transaction Controllers
     Route::get('/admin/transactions', [TransactionController::class, 'show'])->name('admin.transactions.show');
 
+    //Transaction Controllers
+    Route::get('/admin/subscriptions', [MerchantSubscriptionController::class, 'index'])->name('admin.subscriptions.index');
+    Route::get('merchant_subscriptions/getSubscriptions', [MerchantSubscriptionController::class, 'getSubscriptions'])->name('admin.subscriptions.getSubscriptions');
 
 });
 

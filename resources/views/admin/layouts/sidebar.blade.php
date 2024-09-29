@@ -85,6 +85,16 @@
                 </li>
             @endcan
 
+            @can('view-subscription')
+
+                <li class="sidebar-item  ">
+                    <a class="sidebar-link" href="{{ route('admin.subscriptions.index') }}">
+                        <i class="fas fa-bank"></i>
+                        <span class="align-middle">Subscription</span>
+                    </a>
+                </li>
+            @endcan
+
 
             @can('view-invoice')
 

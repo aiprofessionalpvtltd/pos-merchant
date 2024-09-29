@@ -21,6 +21,7 @@ class ModuleSeeder extends Seeder
             'Invoice',
             'Transaction',
             'Order',
+            'Subscription',
         );
 
         foreach ($modules as $row) {

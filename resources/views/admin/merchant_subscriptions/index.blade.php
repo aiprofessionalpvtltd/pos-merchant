@@ -1,7 +1,6 @@
 @extends('admin.layouts.app')
 
 @section('content')
-
     <!-- Page header -->
     <div class="page-header page-header-light">
         <div class="page-header-content header-elements-md-inline">
@@ -23,19 +22,19 @@
             </div>
 
             <div class="card-body">
-                <table id="InvoiceTable" class="table table-striped">
+                <h1 class="my-4">Merchant Subscriptions</h1>
+                <table class="table table-striped" id="subscriptionsTable">
                     <thead>
                     <tr>
-                        <th>Merchant</th>
-                        <th>Type</th>
-                        <th>Phone No</th>
-                        <th>Transaction ID</th>
-                        <th>Amount</th>
-                        <th>Currency</th>
+                         <th>Merchant Name</th>
+                        <th>Subscription Plan</th>
+                        <th>Start Date</th>
+                        <th>End Date</th>
+                        <th>Cancel Status</th>
+                        <th>Cancellation Date</th>
                         <th>Status</th>
-                    </tr>
+                     </tr>
                     </thead>
-                    <tbody></tbody> <!-- Removed static content for AJAX -->
                 </table>
             </div>
         </div>
@@ -45,26 +44,27 @@
     <!-- /content area -->
 @endsection
 
-@push('scripts')
+@push('script')
     <script src="{{ asset('backend/js/datatables.js') }}"></script>
+
     <script>
-        $(document).ready(function() {
-            $('#InvoiceTable').DataTable({
+        $(document).ready(function () {
+            $('#subscriptionsTable').DataTable({
                 processing: true,
                 serverSide: true,
                 ajax: {
-                    url: '{{ route('admin.invoices.show') }}', // Add the correct route for AJAX
+                    url: '{{ route('admin.subscriptions.index') }}', // Add the correct route for AJAX
                     type: 'GET'
                 },
                 columns: [
-                    {data: 'merchant', name: 'merchant'},
-                    {data: 'type', name: 'type'},
-                    {data: 'mobile_number', name: 'mobile_number'},
-                    {data: 'transaction_id', name: 'transaction_id'},
-                    {data: 'amount', name: 'amount'},
-                    {data: 'currency', name: 'currency'},
-                    {data: 'status', name: 'status'}
-                ]
+                     {data: 'merchant_name', name: 'merchant.business_name'},
+                    {data: 'subscription_plan_name', name: 'subscriptionPlan.name'},
+                    {data: 'start_date', name: 'start_date'},
+                    {data: 'end_date', name: 'end_date'},
+                    {data: 'is_canceled', name: 'is_canceled'},
+                    {data: 'canceled_at', name: 'canceled_at'},
+                    {data: 'status', name: 'status'},
+                 ]
             });
         });
     </script>
