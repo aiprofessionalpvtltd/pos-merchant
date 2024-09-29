@@ -779,7 +779,7 @@ class OrderController extends BaseController
 
             // Dahab and Zaad prefixes
             $dahabPrefixes = ['65', '66', '62'];
-            $mobileNumberPrefix = substr($order->mobile_number, 0, 2);
+            $mobileNumberPrefix = substr(($order->mobile_number ?? $order->invoice->mobile_number) , 0, 2);
 
             // Determine if it's edahab_number or zaad_number
             $mobileNumberType = in_array($mobileNumberPrefix, $dahabPrefixes) ? 'E-Dahab' : 'Zaad';
