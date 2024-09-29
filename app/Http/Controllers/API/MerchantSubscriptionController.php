@@ -161,8 +161,7 @@ class MerchantSubscriptionController extends BaseController
             // If the current subscription exists and is not the requested one, delete the all subscriptions
 
             MerchantSubscription::where('merchant_id', $merchantID)->delete();
-           
-
+            
             // Create a new subscription for the merchant
             $newSubscription = MerchantSubscription::create([
                 'merchant_id' => $merchantID,
