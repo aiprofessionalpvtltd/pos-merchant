@@ -137,7 +137,7 @@ class DashboardController extends BaseController
             $completeCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Complete')->count();
 
 
-            if ($authUser->merchant->currentSubscription->subscription_plan_id == 1) {
+            if ($authUser->merchant->currentSubscription->subscription_plan_id == 2) {
                 $transactionHistories = $this->getTransactionForSilver()->getData(true);
                 $transactionHistories = $transactionHistories['data'];
 
