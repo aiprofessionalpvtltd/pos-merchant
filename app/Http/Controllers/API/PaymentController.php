@@ -302,6 +302,7 @@ class PaymentController extends BaseController
 
         $firstName = '';
         $lastName = '';
+        $merchantID = NULL;
 
         // Inputs from the request
         $firstName = $request->input('first_name');
@@ -310,6 +311,11 @@ class PaymentController extends BaseController
         $totalCustomerCharge = $request->input('total_customer_charge');
         $currency = $request->input('currency');
         $type = $request->input('type');
+
+        if($type === 'POS'){
+            $merchantID = $request->input('merchant_id');
+        }
+
         $iteration = 1;
 
         $transactionId = 'txn_' . $iteration . '_' . round(microtime(true) * 1000);
@@ -348,14 +354,6 @@ class PaymentController extends BaseController
 
             if ($response->status() === 200) {
                 $invoiceData = $response->json();
-
-                $merchantID = NULL;
-                // Get the authenticated merchant
-                $authUser = auth()->user();
-                if ($authUser || $authUser->merchant) {
-                    $merchant = $authUser->merchant;
-                    $merchantID = $merchant->id;
-                }
 
                 // Simulating database insertion of the transaction details
                 $invoice = Invoice::create([
@@ -590,7 +588,11 @@ class PaymentController extends BaseController
 
         $amount = $request->input('total_customer_charge');  // Amount to be paid
         $currency = $request->input('currency', 'SLSH');  // Currency
-        $type = $request->input('type', 'POS');  // Type of invoice
+        $type = $request->input('type');  // Type of invoice
+        $merchantID = NULL;
+        if($type === 'POS'){
+            $merchantID = $request->input('merchant_id');
+        }
 
         // Prepare the payload for the Waafi API request
         $payload = [
@@ -634,14 +636,6 @@ class PaymentController extends BaseController
                 $invoiceData = $response->json();
 
                 if ($invoiceData['errorCode'] == 0) {
-                    
-                    $merchantID = NULL;
-                    // Get the authenticated merchant
-                    $authUser = auth()->user();
-                    if ($authUser || $authUser->merchant) {
-                        $merchant = $authUser->merchant;
-                        $merchantID = $merchant->id;
-                    }
 
                     // Simulating database insertion of the transaction details
                     $invoice = Invoice::create([
