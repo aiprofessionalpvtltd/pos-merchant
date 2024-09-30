@@ -306,42 +306,69 @@ class DashboardController extends BaseController
             $startOfWeek = now()->startOfWeek();
             $endOfWeek = now()->endOfWeek();
 
+//            // Get total transaction amount for the current week for invoices (no order_id)
+//            $weeklyTransactions = Order::where('merchant_id', $merchantID)
+//                ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
+//                ->where('order_status', 'Paid')
+//                ->get();
+//
+//            // Calculate total transaction amount from these transactions
+//            $totalAmountFromTransactions = $weeklyTransactions->sum('total_price');
+//
+//            // Calculate the total transaction amount for all time (only invoices without order_id)
+//            $totalAmountAllTime = Order::where('merchant_id', $merchantID)
+//                ->sum('total_price');
+//
+//            // Calculate the percentage of weekly transactions from total transactions
+//            $totalAmountPercentage = $totalAmountAllTime > 0
+//                ? ($totalAmountFromTransactions / $totalAmountAllTime) * 100
+//                : 0;
+//
+//            // Get orders within the week and sales data
+//            $weeklySalesData = Order::where('merchant_id', $merchantID)
+//                ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
+//                ->where('order_status', 'Paid')
+//                ->selectRaw('DATE(created_at) as date, SUM(sub_total) as total_sales')
+//                ->groupBy('date')
+//                ->orderBy('date')
+//                ->get();
+
             // Get total transaction amount for the current week for invoices (no order_id)
-            $weeklyTransactions = Order::where('merchant_id', $merchantID)
-                ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
+            $weeklyTransactions = Transaction::where('merchant_id', $merchantID)
+                 ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
                 ->get();
 
             // Calculate total transaction amount from these transactions
-            $totalAmountFromTransactions = $weeklyTransactions->sum('total_price');
+            $totalAmountFromTransactions = $weeklyTransactions->sum('transaction_amount');
 
             // Calculate the total transaction amount for all time (only invoices without order_id)
-            $totalAmountAllTime = Order::where('merchant_id', $merchantID)
-                ->sum('total_price');
+            $totalAmountAllTime = Transaction::where('merchant_id', $merchantID)
+                 ->sum('transaction_amount');
 
             // Calculate the percentage of weekly transactions from total transactions
             $totalAmountPercentage = $totalAmountAllTime > 0
                 ? ($totalAmountFromTransactions / $totalAmountAllTime) * 100
                 : 0;
 
-            // Get orders within the week and sales data
-            $weeklySalesData = Order::where('merchant_id', $merchantID)
-                ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
-                ->selectRaw('DATE(created_at) as date, SUM(sub_total) as total_sales')
+            // Get invoices for the week (no order associated)
+            $weeklyInvoiceData = Transaction::where('merchant_id', $merchantID)
+                 ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
+                ->selectRaw('DATE(created_at) as date, SUM(transaction_amount) as total_sales')
                 ->groupBy('date')
                 ->orderBy('date')
                 ->get();
 
-            // Get order items for sold products count
-            $weeklyProductData = OrderItem::whereHas('order', function ($query) use ($merchantID, $startOfWeek, $endOfWeek) {
-                $query->where('merchant_id', $merchantID)
-                    ->whereBetween('created_at', [$startOfWeek, $endOfWeek]);
-            })->selectRaw('DATE(created_at) as date, COUNT(*) as total_products')
-                ->groupBy('date')
-                ->orderBy('date')
-                ->get();
+//            // Get order items for sold products count
+//            $weeklyProductData = OrderItem::whereHas('order', function ($query) use ($merchantID, $startOfWeek, $endOfWeek) {
+//                $query->where('merchant_id', $merchantID)
+//                    ->whereBetween('created_at', [$startOfWeek, $endOfWeek]);
+//            })->selectRaw('DATE(created_at) as date, COUNT(*) as total_products')
+//                ->groupBy('date')
+//                ->orderBy('date')
+//                ->get();
 
             // Prepare response data for the week
-            $data = $this->prepareWeeklySalesData($startOfWeek, $endOfWeek, $weeklySalesData, $weeklyProductData);
+            $data = $this->prepareWeeklySalesData($startOfWeek, $endOfWeek, $weeklyInvoiceData, null);
 
             // Response data including transaction details
             $response = [
