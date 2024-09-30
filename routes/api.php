@@ -140,6 +140,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/cart/paidOrder', [OrderController::class, 'paidOrder']); // Paid an order
     Route::post('/cart/placePendingOrder', [OrderController::class, 'placePendingOrder']); // Place an order
     Route::post('/cart/updateOrderStatusToComplete', [OrderController::class, 'updateOrderStatusToComplete']); // Place an order
+    Route::post('/cart/updateOrderStatusToPending', [OrderController::class, 'updateOrderStatusToPending']); // Place an order
     Route::post('/cart/getOrderDetails', [OrderController::class, 'getOrderDetails']); // Place an order
     Route::get('/order/getOrderDetailsForInvoice/{orderID}', [OrderController::class, 'getOrderDetailsForInvoice']); // Show checkout details
 

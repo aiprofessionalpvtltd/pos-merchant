@@ -405,8 +405,7 @@ class OrderController extends BaseController
             return $this->sendError('Error updating the invoice.', $e->getMessage());
         }
     }
-
-
+    
     public function placePendingOrder(Request $request)
     {
         $user = auth()->user();
@@ -547,6 +546,39 @@ class OrderController extends BaseController
             DB::commit();
 
             return $this->sendResponse(new OrderResource($order), 'Order status updated to Complete.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->sendError('Error updating invoice status.', $e->getMessage());
+        }
+    }
+
+    public function updateOrderStatusToPending(Request $request)
+    {
+        // Validate the request data
+        $validated = $request->validate([
+            'cart_type' => 'required|in:shop,stock',
+            'order_id' => 'required|exists:orders,id',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+
+
+            // Retrieve the order by the provided order_id
+            $order = Order::find($validated['order_id']);
+
+
+            if (!$order) {
+                return $this->sendError('Order not found.');
+            }
+
+            $order->order_status = 'Pending'; // Update invoice status to 'Complete'
+            $order->save();
+
+            DB::commit();
+
+            return $this->sendResponse(new OrderResource($order), 'Order status updated to Pending.');
         } catch (\Exception $e) {
             DB::rollBack();
             return $this->sendError('Error updating invoice status.', $e->getMessage());
