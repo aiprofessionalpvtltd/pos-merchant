@@ -224,7 +224,7 @@ class OrderController extends BaseController
             $subtotal = 0;
             foreach ($cart->items as $item) {
                 $product = $item->product;
-                $subtotal += $product->price * $item->quantity;
+                $subtotal += $item->price * $item->quantity;
             }
 
 
@@ -250,8 +250,8 @@ class OrderController extends BaseController
                         'product_id' => $item->product->id,
                         'product_name' => $item->product->product_name,
                         'quantity' => $item->quantity,
-                        'price' =>convertShillingToUSD( $item->product->price),
-                        'total_price' => convertShillingToUSD($item->quantity * $item->product->price),
+                        'price' =>convertShillingToUSD( $item->price),
+                        'total_price' => convertShillingToUSD($item->quantity * $item->price),
                     ];
                 })
             ];
