@@ -20,7 +20,6 @@ use Illuminate\Support\Facades\Route;
 Route::post('login', [PassportAuthController::class, 'login']);
 Route::post('logout', [PassportAuthController::class, 'logout'])->middleware('auth:api');
 Route::post('login/verifyUser', [PassportAuthController::class, 'verifyUser']);
-Route::post('login/verifyUser', [PassportAuthController::class, 'verifyUser']);
 Route::post('login/checkInvoice', [PassportAuthController::class, 'checkInvoiceAndRegisterMerchant']);
 
 Route::post('merchants', [MerchantController::class, 'store']);

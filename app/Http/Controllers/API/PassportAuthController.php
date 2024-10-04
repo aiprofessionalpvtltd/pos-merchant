@@ -66,6 +66,7 @@ class PassportAuthController extends BaseController
             $phoneNumber = str_replace(' ', '', $request->phone_number);
             $merchant = Merchant::where('phone_number', $phoneNumber)->first();
 
+//            dd($phoneNumber);
             if (!$merchant) {
                 return $this->sendError('Phone number not found.', '', 404);
             }
@@ -90,8 +91,7 @@ class PassportAuthController extends BaseController
             }
 
 
-
-             return $this->sendResponse([
+            return $this->sendResponse([
                 'user' => new UserResource($user),
                 'merchant' => new MerchantResource($merchant),
                 'token' => $token,
@@ -103,7 +103,6 @@ class PassportAuthController extends BaseController
             return $this->sendError('An error occurred during the verification process.', ['error' => $e->getMessage()]);
         }
     }
-
 
 
     /**
@@ -156,6 +155,7 @@ class PassportAuthController extends BaseController
             // Step 1: Check if an invoice exists for the phone number with type == 'Registration'
             $registrationInvoice = Invoice::where('mobile_number', $phoneNumber)
                 ->where('type', 'Registration')
+                ->where('status', 'Paid')
                 ->first();
 
 //            dd($phoneNumber);
@@ -171,6 +171,8 @@ class PassportAuthController extends BaseController
             // Case 2: If invoice is found but merchant is not found, return invoice data
             if ($registrationInvoice && !$existingMerchant) {
                 return $this->sendResponse([
+                    'is_invoice' => true,
+                    'is_registration' => false,
                     'invoice_id' => $registrationInvoice->id,
                     'type' => $registrationInvoice->type,
                     'invoice_amount' => $registrationInvoice->amount,
@@ -183,7 +185,9 @@ class PassportAuthController extends BaseController
             if (!$registrationInvoice && !$existingMerchant) {
 
 
-                return $this->sendResponse([], 'No Invoice and no merchant found');
+                return $this->sendResponse([[
+                    'is_invoice' => false,
+                    'is_registration' => falses]], 'No Invoice and no merchant found');
             }
 
         } catch (\Exception $e) {

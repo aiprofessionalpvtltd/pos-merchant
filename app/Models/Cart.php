@@ -11,6 +11,8 @@ class Cart extends Model
 
     protected $fillable = [
         'merchant_id',
+        'quantity',
+        'price',
         'cart_type', // 'shop' or 'stock'
     ];
 

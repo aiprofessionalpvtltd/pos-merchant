@@ -10,6 +10,7 @@ use App\Models\CartItem;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
+use App\Models\Product;
 use App\Models\ProductInventory;
 use App\Models\Transaction;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -40,9 +41,12 @@ class OrderController extends BaseController
                 ['merchant_id' => $user->merchant->id, 'cart_type' => $validated['cart_type']]
             );
 
+            $product = Product::find($validated['product_id']);
+
             // Add the product to the cart
             $cartItem = CartItem::updateOrCreate(
                 ['cart_id' => $cart->id, 'product_id' => $validated['product_id']],
+                ['price' => $product->price],
                 ['quantity' => DB::raw("quantity + {$validated['quantity']}")]
             );
 
@@ -107,6 +111,7 @@ class OrderController extends BaseController
             'cart_type' => 'required|in:shop,stock',
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|integer|min:1', // Ensure quantity is provided and is a positive integer
+            'price' => 'required', // Ensure quantity is provided and is a positive integer
         ]);
 
         $user = auth()->user();
@@ -131,6 +136,7 @@ class OrderController extends BaseController
 
             // Update the quantity for the cart item
             $cartItem->quantity = $validated['quantity'];
+            $cartItem->price = $validated['price'];
             $cartItem->save();
 
             // Prepare the updated cart items data
@@ -139,8 +145,8 @@ class OrderController extends BaseController
                     'product_id' => $item->product_id,
                     'product_name' => $item->product->product_name,
                     'quantity' => $item->quantity,
-                    'price' => $item->product->price,
-                    'total' => $item->quantity * $item->product->price,
+                    'price' => $item->price,
+                    'total' => $item->quantity * $item->price,
                 ];
             });
 
@@ -405,7 +411,7 @@ class OrderController extends BaseController
             return $this->sendError('Error updating the invoice.', $e->getMessage());
         }
     }
-    
+
     public function placePendingOrder(Request $request)
     {
         $user = auth()->user();
