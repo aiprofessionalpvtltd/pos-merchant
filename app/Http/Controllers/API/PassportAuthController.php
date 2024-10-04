@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Resources\MerchantResource;
 use App\Http\Resources\UserResource;
+use App\Models\Invoice;
 use App\Models\Merchant;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -140,5 +141,55 @@ class PassportAuthController extends BaseController
         // Return a successful response
         return $this->sendResponse([], 'User logout successful.');
     }
+
+
+    public function checkInvoiceAndRegisterMerchant(Request $request)
+    {
+        try {
+            // Validate the request inputs
+            $this->validateRequest($request, [
+                'phone_number' => 'required|string|max:15',
+            ]);
+
+            $phoneNumber = str_replace(' ', '', $request->phone_number);
+
+            // Step 1: Check if an invoice exists for the phone number with type == 'Registration'
+            $registrationInvoice = Invoice::where('mobile_number', $phoneNumber)
+                ->where('type', 'Registration')
+                ->first();
+
+//            dd($phoneNumber);
+            // Step 2: Check if a merchant exists for the phone number
+            $existingMerchant = Merchant::where('phone_number', $phoneNumber)->first();
+
+//            dd($existingMerchant);
+            // Case 1: If boths invoice and merchant are found, block registration
+            if ($registrationInvoice && $existingMerchant) {
+                return $this->sendError('Merchant already exists and registration invoice has already been generated for this phone number.', '', 403);
+            }
+
+            // Case 2: If invoice is found but merchant is not found, return invoice data
+            if ($registrationInvoice && !$existingMerchant) {
+                return $this->sendResponse([
+                    'invoice_id' => $registrationInvoice->id,
+                    'type' => $registrationInvoice->type,
+                    'invoice_amount' => $registrationInvoice->amount,
+                    'invoice_date' => $registrationInvoice->created_at,
+                    'message' => 'Invoice found, but no merchant registered with this phone number.'
+                ], 'Invoice data found.');
+            }
+
+            // Case 3: If no invoice and no merchant, proceed to register the merchant
+            if (!$registrationInvoice && !$existingMerchant) {
+
+
+                return $this->sendResponse([], 'No Invoice and no merchant found');
+            }
+
+        } catch (\Exception $e) {
+            return $this->sendError('An error occurred during the registration process.', ['error' => $e->getMessage()]);
+        }
+    }
+
 
 }
