@@ -135,7 +135,7 @@ class OrderController extends BaseController
 
             // Update the quantity for the cart item
             $cartItem->quantity = $validated['quantity'];
-            $cartItem->price = $validated['price'];
+            $cartItem->price = convertUSDToShilling($validated['price']);
             $cartItem->save();
 
             // Prepare the updated cart items data
@@ -250,7 +250,7 @@ class OrderController extends BaseController
                         'product_id' => $item->product->id,
                         'product_name' => $item->product->product_name,
                         'quantity' => $item->quantity,
-                        'price' =>convertShillingToUSD( $item->price),
+                        'price' =>convertShillingToUSD($item->price),
                         'total_price' => convertShillingToUSD($item->quantity * $item->price),
                     ];
                 })
