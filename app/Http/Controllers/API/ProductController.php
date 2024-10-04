@@ -426,7 +426,7 @@ class ProductController extends BaseController
         }
     }
 
-    public function getSoldProducts()
+    public function getSoldProducts(Request $request)
     {
         try {
             // Get authenticated user
@@ -440,6 +440,9 @@ class ProductController extends BaseController
             // Get merchant ID from authenticated user's merchant relation
             $merchantID = $authUser->merchant->id;
 
+            // Get the date parameter from the request
+            $filterDate = $request->input('date'); // Expected format: YYYY-MM-DD
+
             // Fetch sold products grouped by product_id and sold date (without time)
             $soldProducts = OrderItem::with(['product' => function ($query) use ($merchantID) {
                 // Load the products along with their inventories
@@ -451,8 +454,15 @@ class ProductController extends BaseController
             }])
                 ->select('product_id', DB::raw('DATE(created_at) as sold_date'), DB::raw('SUM(quantity) as total_sold'))
                 ->groupBy('product_id', DB::raw('DATE(created_at)'))
-                ->orderBy('sold_date', 'desc') // Order by sold date in descending order
-                ->get();
+                ->orderBy('sold_date', 'desc');
+
+            // If a date filter is provided, apply it to the query
+            if ($filterDate) {
+                $soldProducts->whereDate('created_at', $filterDate);
+            }
+
+            // Execute the query
+            $soldProducts = $soldProducts->get();
 
             // Prepare the result set as a nested array grouped by sold date
             $data = [];
