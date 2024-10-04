@@ -185,9 +185,9 @@ class PassportAuthController extends BaseController
             if (!$registrationInvoice && !$existingMerchant) {
 
 
-                return $this->sendResponse([[
+                return $this->sendResponse([
                     'is_invoice' => false,
-                    'is_registration' => false]], 'This is new user');
+                    'is_registration' => false], 'This is new user');
             }
 
         } catch (\Exception $e) {

@@ -17,6 +17,7 @@ class CartItemResource extends JsonResource
         return [
             'id' => $this->id,
             'quantity' => $this->quantity,
+            'price' => $this->price,
             'cart_type' => $this->whenLoaded('cart', function () {
                 return $this->cart->cart_type;
             }),

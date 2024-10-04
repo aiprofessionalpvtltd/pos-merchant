@@ -45,9 +45,8 @@ class OrderController extends BaseController
 
             // Add the product to the cart
             $cartItem = CartItem::updateOrCreate(
-                ['cart_id' => $cart->id, 'product_id' => $validated['product_id']],
-                ['price' => $product->price],
-                ['quantity' => DB::raw("quantity + {$validated['quantity']}")]
+                ['cart_id' => $cart->id, 'price' => $product->price , 'product_id' => $validated['product_id']],
+                                ['quantity' => DB::raw("quantity + {$validated['quantity']}")]
             );
 
             $cartItems = CartItem::with('cart.merchant', 'product')->where('cart_id', $cart->id)->get();
