@@ -22,7 +22,7 @@ class BaseController extends Controller
         $response = [
             'success' => true,
             'message' => $message,
-            'data'    => $result,
+            'data' => $result,
         ];
 
         return response()->json($response, Response::HTTP_OK);
@@ -62,7 +62,8 @@ class BaseController extends Controller
         return Validator::make($request->all(), $rules);
     }
 
-    public function getInitials($name) {
+    public function getInitials($name)
+    {
         // Explode the name into words
         $words = explode(' ', $name);
 
@@ -100,5 +101,33 @@ class BaseController extends Controller
 
         // Return the path where the image is saved
         return $filePath;
+    }
+
+
+    public function verifiedPhoneNumber($phoneNumber)
+    {
+        // Remove any spaces, hyphens, or other formatting characters from the phone number
+        $phoneNumber = preg_replace('/\D/', '', $phoneNumber);
+
+        // Ensure the phone number starts with the Somaliland country code (+252)
+        if (strpos($phoneNumber, '252') !== 0) {
+            return "Invalid Somaliland phone number";
+        }
+
+        // Extract the relevant part after the country code
+        $localNumber = substr($phoneNumber, 3); // Strip country code (+252)
+
+        // Check the company based on the starting digits
+        if (strpos($localNumber, '65') === 0) {
+            return "edahab_number";
+        } elseif (strpos($localNumber, '63') === 0) {
+            return "zaad_number";
+        } elseif (strpos($localNumber, '90') === 0) { // Replace XXX with the Golis prefix when remembered
+            return "golis_number";
+        } elseif (strpos($localNumber, '61') === 0) { // Replace YYY with the EVC prefix when remembered
+            return "evc_number";
+        } else {
+            return null;
+        }
     }
 }

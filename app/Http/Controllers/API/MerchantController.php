@@ -77,8 +77,13 @@ class MerchantController extends BaseController
             // Remove spaces from phone number
             $phoneNumber = str_replace(' ', '', $request->input('phone_number'));
 
+            $verifiedNumber = getCompanyNameByPhone($phoneNumber);
+
             // Merge the modified phone number back into the request data
-            $request->merge(['phone_number' => $phoneNumber]);
+            $request->merge([
+                'phone_number' => $phoneNumber,
+                $verifiedNumber => $phoneNumber,
+            ]);
 
             // Create the merchant with the modified request data
             $merchant = Merchant::create($request->all());
@@ -191,11 +196,6 @@ class MerchantController extends BaseController
         // Generate OTP
         $otp = rand(1000, 9999);
 
-        // Send OTP to the merchant's phone number using SMS
-//        SMS::send("Your OTP code is: $otp", [], function($sms) use ($merchant) {
-//            $sms->to($merchant->phone_number);
-//        });
-
         // Save OTP to the database
         $merchant->otp = $otp;
         $merchant->otp_expires_at = now()->addMinutes(10); // OTP valid for 10 minutes
@@ -245,6 +245,184 @@ class MerchantController extends BaseController
         $merchant->save();
 
         return $this->sendResponse(['merchant' => new MerchantResource($merchant), 'user' => new UserResource($user)], 'PIN code updated successfully.');
+    }
+
+
+    public function verifyPhoneNumberByCompany(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'phone_number' => 'required|string|max:15',
+            ]);
+
+            if ($validator->fails()) {
+                return $this->sendError('Validation Error.', $validator->errors());
+            }
+
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Check if the authenticated user has an associated merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant
+            $merchant = $authUser->merchant;
+
+            if (!$merchant) {
+                return $this->sendError('Merchant Not Found', 404);
+            }
+
+            // Verify the phone number to get the company name
+            $company = trim($this->verifiedPhoneNumber($request->phone_number)); // Trim any extra spaces
+
+            // If the company is not recognized, return an error
+            if ($company === null) {
+                return $this->sendError('Invalid phone number. Company not recognized.');
+            }
+            $companyName = strtoupper(str_replace('_number', ' ', $company));
+            // Static column checks based on the company
+            if ($company === 'edahab_number') {
+                if ($merchant->edahab_number === $request->phone_number) {
+                    return $this->sendResponse(['status' => 'Verified'], 'Phone Number is already verified by ' . $companyName, 404);
+                }
+            } elseif ($company === 'zaad_number') {
+                if ($merchant->zaad_number === $request->phone_number) {
+                    return $this->sendResponse(['status' => 'Verified'], 'Phone Number is already verified by ' . $companyName, 404);
+                }
+            } elseif ($company === 'golis_number') {
+                if ($merchant->golis_number === $request->phone_number) {
+                    return $this->sendResponse(['status' => 'Verified'], 'Phone Number is already verified by ' . $companyName, 404);
+                }
+            } elseif ($company === 'evc_number') {
+                if ($merchant->evc_number === $request->phone_number) {
+                    return $this->sendResponse(['status' => 'Verified'], 'Phone Number is already verified by ' . $companyName, 404);
+                }
+            } else {
+                return $this->sendError('Invalid company type.', 404);
+            }
+
+            // Success response for verification
+            return $this->sendResponse([
+                'phone_number' => $request->phone_number,
+                'company' => $companyName,
+            ], 'Ready for verification');
+
+        } catch (\Exception $e) {
+            // Catch any exception and return an error message
+            return $this->sendError('Something went wrong: ' . $e->getMessage(), 500);
+        }
+    }
+
+
+    public function verificationComplete(Request $request)
+    {
+        try {
+            $validator = Validator::make($request->all(), [
+                'phone_number' => 'required|string|max:15',
+            ]);
+
+            if ($validator->fails()) {
+                return $this->sendError('Validation Error.', $validator->errors());
+            }
+
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Check if the authenticated user has an associated merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant
+            $merchant = $authUser->merchant;
+
+            if (!$merchant) {
+                return $this->sendError('Merchant Not Found', 404);
+            }
+
+            // Verify the phone number to get the company name (column name)
+            $company = $this->verifiedPhoneNumber($request->phone_number);
+
+            // If the company is not recognized, return an error
+            if ($company === null) {
+                return $this->sendError('Invalid phone number. Company not recognized.');
+            }
+
+            // Static column update based on the company
+            if ($company === 'edahab_number') {
+                $merchant->edahab_number = $request->phone_number;
+            } elseif ($company === 'zaad_number') {
+                $merchant->zaad_number = $request->phone_number;
+            } elseif ($company === 'golis_number') {
+                $merchant->golis_number = $request->phone_number;
+            } elseif ($company === 'evc_number') {
+                $merchant->evc_number = $request->phone_number;
+            } else {
+                return $this->sendError('Invalid company type.', 404);
+            }
+
+            // Save the updated phone number for the specific column
+            $merchant->save();
+
+            // Return success message
+            return $this->sendResponse([
+                'merchant' => new MerchantResource($merchant),
+                'company' => $company
+            ], 'Phone number verification complete and updated successfully.');
+
+        } catch (\Exception $e) {
+            // Catch any exception and return an error message
+            return $this->sendError('Something went wrong: ' . $e->getMessage(), 500);
+        }
+    }
+
+    public function getPhoneNumbersStatus()
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Check if the authenticated user has an associated merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant
+            $merchant = $authUser->merchant;
+
+            if (!$merchant) {
+                return $this->sendError('Merchant Not Found', 404);
+            }
+
+            // Prepare the response data
+            $phoneNumbersStatus = [
+                'edahab_number' => [
+                    'number' => $merchant->edahab_number,
+                    'status' => !empty($merchant->edahab_number) ? 'Verified' : 'Not verified',
+                ],
+                'zaad_number' => [
+                    'number' => $merchant->zaad_number,
+                    'status' => !empty($merchant->zaad_number) ? 'Verified' : 'Not verified',
+                ],
+                'golis_number' => [
+                    'number' => $merchant->golis_number,
+                    'status' => !empty($merchant->golis_number) ? 'Verified' : 'Not verified',
+                ],
+                'evc_number' => [
+                    'number' => $merchant->evc_number,
+                    'status' => !empty($merchant->evc_number) ? 'Verified' : 'Not verified',
+                ],
+            ];
+
+            // Return the response with phone numbers status
+            return $this->sendResponse($phoneNumbersStatus, 'Phone numbers status retrieved successfully.');
+
+        } catch (\Exception $e) {
+            // Catch any exception and return an error message
+            return $this->sendError('Something went wrong: ' . $e->getMessage(), 500);
+        }
     }
 
 
