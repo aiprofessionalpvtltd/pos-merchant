@@ -3,6 +3,7 @@
 use App\Http\Controllers\API\CartController;
 use App\Http\Controllers\API\CategoryController;
 use App\Http\Controllers\API\DashboardController;
+use App\Http\Controllers\API\EmployeeController;
 use App\Http\Controllers\API\MerchantConfirmationController;
 use App\Http\Controllers\API\MerchantController;
 use App\Http\Controllers\API\MerchantSubscriptionController;
@@ -159,5 +160,11 @@ Route::middleware('auth:api')->group(function () {
         Route::delete('/{id}', [CategoryController::class, 'destroy']); // Delete a category
         Route::post('/search', [CategoryController::class, 'search']); // Delete a category
     });
+
+
+
+    // Employee Module Routes
+    Route::post('/employees', [EmployeeController::class, 'store']); // Store employee
+    Route::get('/employees', [EmployeeController::class, 'index']); // Get employee records
 
 });

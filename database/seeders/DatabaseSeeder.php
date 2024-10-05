@@ -22,6 +22,7 @@ class DatabaseSeeder extends Seeder
             SettingSeeder::class,
             PermissionsSeeder::class,
             SubscriptionPlanSeeder::class,
+            POSPermissionsTableSeeder::class
         ]);
 
         $this->createPersonalAccessClient();

@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('name');
             $table->string('email', 191)->unique(); // Reduced length
-            $table->enum('user_type', ['teleoperator', 'merchant', 'mobileoperator', 'admin' , 'super_admin'])->default('merchant');
+            $table->enum('user_type', ['teleoperator', 'merchant', 'mobileoperator', 'admin' , 'super_admin' ,'employee'])->default('merchant');
             $table->timestamp('email_verified_at')->nullable();
             $table->string('password');
             $table->string('pin')->nullable();
