@@ -1,7 +1,6 @@
 <?php
 
-use App\Http\Controllers\API\CartController;
-use App\Http\Controllers\API\CategoryController;
+ use App\Http\Controllers\API\CategoryController;
 use App\Http\Controllers\API\DashboardController;
 use App\Http\Controllers\API\EmployeeController;
 use App\Http\Controllers\API\MerchantConfirmationController;
@@ -39,6 +38,15 @@ Route::post('merchant/invoice/status', [PaymentController::class, 'checkInvoiceS
 // Zaad Pre Authorize
 Route::post('/zaad/issue', [PaymentController::class, 'callWaafiAPIForPreAuthorize']);
 Route::post('/zaad/commit', [PaymentController::class, 'connectToWaafiCommitAPI']);
+
+
+
+
+//Employee
+
+Route::get('/employee/getMerchantDetail', [EmployeeController::class, 'getMerchantDetail']); // Get employee records
+Route::get('/employee/verifyEmployee', [EmployeeController::class, 'verifyEmployee']); // Get employee records
+Route::post('employee/store-pin', [EmployeeController::class, 'storePin']);
 
 Route::middleware('auth:api')->group(function () {
 

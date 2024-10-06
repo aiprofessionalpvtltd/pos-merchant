@@ -15,7 +15,6 @@ class EmployeePermissionResource extends JsonResource
     public function toArray($request)
     {
         return [
-            'id' => $this->id,
             'name' => $this->permission->name ?? null, // Access the related permission directly
         ];
     }

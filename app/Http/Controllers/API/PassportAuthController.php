@@ -19,7 +19,7 @@ class PassportAuthController extends BaseController
      * Handle login and return a token.
      *
      * @param \Illuminate\Http\Request $request
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\Response
      */
 
 

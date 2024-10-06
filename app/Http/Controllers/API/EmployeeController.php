@@ -3,7 +3,10 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\MerchantResource;
+use App\Http\Resources\UserResource;
 use App\Models\EmployeePermission;
+use App\Models\Merchant;
 use App\Models\POSPermission;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -13,6 +16,7 @@ use App\Http\Controllers\API\BaseController;
 use App\Models\Employee;
 use App\Models\Permission;
 use App\Http\Resources\EmployeeResource;
+use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
@@ -94,7 +98,7 @@ class EmployeeController extends BaseController
             $employee->save();
 
 
-            $employee->load('permissions.permission' ,'user');
+            $employee->load('permissions.permission', 'user');
             // Commit the transaction
             DB::commit();
             return response()->json([
@@ -124,7 +128,7 @@ class EmployeeController extends BaseController
 
         try {
             // Fetch employees associated with the authenticated merchant, including their permissions
-            $employees = Employee::with('permissions.permission' ,'user')
+            $employees = Employee::with('permissions.permission', 'user')
                 ->where('merchant_id', $authUser->merchant->id)
                 ->get();
 
@@ -138,5 +142,144 @@ class EmployeeController extends BaseController
             return response()->json(['error' => 'Failed to retrieve employees: ' . $e->getMessage()], 500);
         }
     }
+
+    public function getMerchantDetail(Request $request)
+    {
+        try {
+            // Validate the request input
+            $this->validateRequest($request, [
+                'phone_number' => 'required|string|max:15',
+            ]);
+
+            // Clean the phone number by removing spaces
+            $phoneNumber = str_replace(' ', '', $request->phone_number);
+
+            // Find the employee by phone number
+            $employee = Employee::where('phone_number', $phoneNumber)->first();
+
+            // Return error if employee is not found
+            if (!$employee) {
+                return $this->sendError('Phone number not found.', '', 404);
+            }
+
+            // Get the associated merchant
+            $merchant = $employee->merchant;
+            $user = $employee->user;
+
+            // Check if the user has a PIN
+            $isPin = !is_null($user->pin);
+
+            // Prepare the response data
+            $responseData = [
+                'employee' => new EmployeeResource($employee),
+                'merchant' => new MerchantResource($merchant),
+                'merchant_short_name' => $this->getInitials($merchant->first_name . ' ' . $merchant->last_name),
+                'employee_short_name' => $this->getInitials($employee->first_name . ' ' . $employee->last_name),
+                'is_pin' => $isPin,
+            ];
+
+            return $this->sendResponse($responseData, 'Merchant Detail retrieved successfully.');
+
+        } catch (\Exception $e) {
+            return $this->sendError('An error occurred during the verification process.', ['error' => $e->getMessage()]);
+        }
+    }
+
+    public function verifyEmployee(Request $request)
+    {
+        try {
+            // Validate the request based on user type
+            $this->validateRequest($request, [
+                'phone_number' => 'required|string|max:15',
+                'pin' => 'required|string|size:4',
+            ]);
+
+            $phoneNumber = str_replace(' ', '', $request->phone_number);
+            $employee = Employee::where('phone_number', $phoneNumber)->first();
+
+//            dd($phoneNumber);
+            if (!$employee) {
+                return $this->sendError('Phone number not found.', '', 404);
+            }
+
+            if (!Hash::check($request->pin, $employee->user->password)) {
+                return $this->sendError('Invalid PIN code.', '', 401);
+            }
+
+            $user = $employee->user;
+            $merchant = $employee->merchant;
+            $token = $user->createToken('PassportAuth')->accessToken;
+
+            $employee->load('permissions.permission');
+            return $this->sendResponse([
+                'user' => new UserResource($user),
+                'employee' => new EmployeeResource($employee),
+                'merchant' => new MerchantResource($merchant),
+                'token' => $token,
+                'user_type' => $user->user_type,
+                'short_name' => $this->getInitials($employee->first_name . ' ' . $employee->last_name),
+            ], 'Employee Login successful.');
+
+        } catch (\Exception $e) {
+            return $this->sendError('An error occurred during the verification process.', ['error' => $e->getMessage()]);
+        }
+    }
+
+    public function storePin(Request $request)
+    {
+        // Validate the request data
+        $validator = Validator::make($request->all(), [
+            'phone_number' => 'required|string|max:15',
+            'pin' => 'required|string|size:4',
+            'repeat_pin' => 'required|string|same:pin',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // Normalize the phone number
+            $phoneNumber = str_replace(' ', '', $request->phone_number);
+
+            // Check if the merchant exists
+            $employee = Employee::where('phone_number', $phoneNumber)->first();
+
+            if (!$employee) {
+                return $this->sendError('Employee mobile number is not registered', '');
+            }
+
+            // Fetch the user associated with the merchant
+            $user = $employee->user;
+            $merchant = $employee->merchant;
+
+            // Update the user's PIN and password
+            $user->pin = $request->pin;
+            $user->password = Hash::make($request->pin);
+            $user->save();
+
+            // Generate the access token
+            $token = $user->createToken('PassportAuth')->accessToken;
+
+            DB::commit();
+
+            // Prepare the response data
+            return $this->sendResponse([
+                'employee' => new EmployeeResource($employee),
+                'user' => new UserResource($user),
+                'merchant' => new MerchantResource($merchant),
+                'token' => $token,
+                'user_type' => $user->user_type,
+                'short_name' => $this->getInitials($employee->first_name . ' ' . $employee->last_name),
+            ], 'Employee Login successful.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->sendError('An error occurred while storing the PIN code.', ['error' => $e->getMessage()]);
+        }
+    }
+
 
 }
