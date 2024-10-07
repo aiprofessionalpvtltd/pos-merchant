@@ -44,7 +44,7 @@ Route::post('/zaad/commit', [PaymentController::class, 'connectToWaafiCommitAPI'
 
 //Employee
 
-Route::get('/employee/getMerchantDetail', [EmployeeController::class, 'getMerchantDetail']); // Get employee records
+Route::post('/employee/getMerchantDetail', [EmployeeController::class, 'getMerchantDetail']); // Get employee records
 Route::get('/employee/verifyEmployee', [EmployeeController::class, 'verifyEmployee']); // Get employee records
 Route::post('employee/store-pin', [EmployeeController::class, 'storePin']);
 Route::get('employee/getPOSPermission', [EmployeeController::class, 'getPOSPermission']);
