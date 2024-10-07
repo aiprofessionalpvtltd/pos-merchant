@@ -422,6 +422,19 @@ class EmployeeController extends BaseController
             // Load the employee's permissions
             $employee->load('permissions.permission');
 
+            $merchant->load(['currentSubscription.subscriptionPlan']); // Load both subscription and subscriptionPlan relationships
+
+            $currentSubscription = $merchant->currentSubscription;
+            $noSubscription = new \stdClass();
+            // If currentSubscription is null, set default values
+            if (!$currentSubscription) {
+                // Create a new stdClass object
+                $noSubscription->subscription_plan_id = 1; // Default to Silver
+                $noSubscription->reSubscriptionEligible = true; // Eligible for re-subscription
+                // Add the current subscription back to the merchant for the resource
+                $merchant->currentSubscription = $noSubscription;
+            }
+
             // Return a successful response with the user, employee, merchant, and token
             return $this->sendResponse([
                 'user' => new UserResource($user),

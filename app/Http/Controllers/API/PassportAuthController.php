@@ -104,6 +104,42 @@ class PassportAuthController extends BaseController
         }
     }
 
+    public function verifyUserPin(Request $request)
+    {
+        try {
+            // Validate the request based on user type
+            $this->validateRequest($request, [
+                'phone_number' => 'required|string|max:15',
+                'pin' => 'required|string|size:4',
+            ]);
+
+            $phoneNumber = str_replace(' ', '', $request->phone_number);
+            $merchant = Merchant::where('phone_number', $phoneNumber)->first();
+
+             if (!$merchant) {
+                return $this->sendError('Phone number not found.', '', 404);
+            }
+
+            if (!Hash::check($request->pin, $merchant->user->password)) {
+                return $this->sendError('Invalid PIN code.', '', 401);
+            }
+
+            $user = $merchant->user;
+
+
+            return $this->sendResponse([
+                'user' => new UserResource($user),
+                'merchant' => new MerchantResource($merchant),
+
+                'user_type' => $user->user_type,
+                'short_name' => $this->getInitials($user->name)
+            ], 'Merchant Pin Verified successful.');
+
+        } catch (\Exception $e) {
+            return $this->sendError('An error occurred during the verification process.', ['error' => $e->getMessage()]);
+        }
+    }
+
 
     /**
      * Get the authenticated user information.

@@ -20,6 +20,7 @@ use Illuminate\Support\Facades\Route;
 Route::post('login', [PassportAuthController::class, 'login']);
 Route::post('logout', [PassportAuthController::class, 'logout'])->middleware('auth:api');
 Route::post('login/verifyUser', [PassportAuthController::class, 'verifyUser']);
+Route::post('login/verifyUserPin', [PassportAuthController::class, 'verifyUserPin']);
 Route::post('login/checkInvoice', [PassportAuthController::class, 'checkInvoiceAndRegisterMerchant']);
 
 Route::post('merchants', [MerchantController::class, 'store']);
@@ -45,7 +46,7 @@ Route::post('/zaad/commit', [PaymentController::class, 'connectToWaafiCommitAPI'
 //Employee
 
 Route::post('/employee/getMerchantDetail', [EmployeeController::class, 'getMerchantDetail']); // Get employee records
-Route::get('/employee/verifyEmployee', [EmployeeController::class, 'verifyEmployee']); // Get employee records
+Route::post('/employee/verifyEmployee', [EmployeeController::class, 'verifyEmployee']); // Get employee records
 Route::post('employee/store-pin', [EmployeeController::class, 'storePin']);
 Route::get('employee/getPOSPermission', [EmployeeController::class, 'getPOSPermission']);
 

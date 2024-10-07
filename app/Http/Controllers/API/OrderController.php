@@ -322,6 +322,7 @@ class OrderController extends BaseController
             // Create an order
             $order = Order::create([
                 'merchant_id' => $user->merchant->id,
+                'user_id' => $user->id,
                 'sub_total' => round($totalPrice),
                 'vat' => round($vat),
                 'exelo_amount' => round($exeloAmount),
@@ -478,6 +479,7 @@ class OrderController extends BaseController
             // Create the order
             $order = Order::create([
                 'merchant_id' => $user->merchant->id,
+                'user_id' => $user->id,
                 'name' => $request->input('name') ?? null,
                 'mobile_number' => $request->input('mobile_number') ?? null,
                 'signature' => $signaturePath,
@@ -789,7 +791,7 @@ class OrderController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Retrieve the order with items and product relationship
-            $order = Order::with('items.product', 'merchant', 'invoice')
+            $order = Order::with('items.product','user.merchant', 'merchant', 'invoice')
                 ->where('merchant_id', $merchantID)
                 ->find($orderID);
 
@@ -830,7 +832,7 @@ class OrderController extends BaseController
                 'merchant' => [
                     'business_name' => $order->merchant->business_name,
                     'merchant_code' => $order->merchant->merchant_code,
-                    'cashier_name' => $order->merchant->first_name  . ' ' .  $order->merchant->last_name ,
+                    'cashier_name' => $order->user->merchant->first_name  . ' ' .  $order->user->merchant->last_name ,
                     'phone_number' => $order->merchant->phone_number,
                     'zaad_number' => $order->merchant->phone_number,
                 ],
