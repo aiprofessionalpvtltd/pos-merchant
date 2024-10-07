@@ -11,6 +11,7 @@ class Cart extends Model
 
     protected $fillable = [
         'merchant_id',
+        'user_id',
         'quantity',
         'price',
         'cart_type', // 'shop' or 'stock'
@@ -25,5 +26,10 @@ class Cart extends Model
     public function merchant()
     {
         return $this->belongsTo(Merchant::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 }

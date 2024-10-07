@@ -24,8 +24,14 @@ class CartItemResource extends JsonResource
             'merchant_id' => $this->whenLoaded('cart', function () {
                 return $this->cart->merchant_id;
             }),
+            'user_id' => $this->whenLoaded('cart', function () {
+                return $this->cart->user_id;
+            }),
              'merchant' => $this->whenLoaded('cart', function () {
                 return new MerchantResource($this->cart->merchant);
+            }),
+            'user' => $this->whenLoaded('cart', function () {
+                return new UserResource($this->cart->user);
             }),
             'product_id' => $this->product_id,
             'product' => new ProductResource($this->whenLoaded('product')),

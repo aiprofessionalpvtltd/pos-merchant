@@ -101,6 +101,10 @@ class ProductInventoryController extends BaseController
             // Get authenticated user
             $authUser = auth()->user();
 
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
@@ -137,10 +141,10 @@ class ProductInventoryController extends BaseController
         }
     }
 
-    public function getProductsByTypeWithCategory($categoryID , $type)
+    public function getProductsByTypeWithCategory($categoryID, $type)
     {
 
-         try {
+        try {
             // Validate the type input (must be either 'stock' or 'shop')
             if (!in_array($type, ['stock', 'shop', 'transportation'])) {
                 return $this->sendError('Invalid type provided. It must be either "stock" or "shop".');
@@ -148,6 +152,10 @@ class ProductInventoryController extends BaseController
 
             // Get authenticated user
             $authUser = auth()->user();
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
 
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
@@ -158,7 +166,7 @@ class ProductInventoryController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Retrieve products based on the type (stock or shop)
-            $productInventories = ProductInventory::whereHas('product', function ($query) use ($merchantID,$categoryID) {
+            $productInventories = ProductInventory::whereHas('product', function ($query) use ($merchantID, $categoryID) {
                 $query->where('merchant_id', $merchantID)->where('category_id', $categoryID);
             })->where('type', $type)->with('product.category')->get();
 
@@ -170,7 +178,7 @@ class ProductInventoryController extends BaseController
             // Map through the product inventories to structure the response
             $productsData = $productInventories->map(function ($inventory) {
                 return [
-                     'product_id' => $inventory->product->id,
+                    'product_id' => $inventory->product->id,
                     'price' => convertShillingToUSD($inventory->product->price),
                     'image' => Storage::url($inventory->product->image),
                     'category_id' => $inventory->product->category->id,
@@ -204,6 +212,28 @@ class ProductInventoryController extends BaseController
 
             $productId = $request->input('product_id');
             $quantity = $request->input('quantity');
+
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
+            // Find the product by ID
+            $product = Product::where('merchant_id', $merchantID)->find($productId);
+
+            if (!$product) {
+                return $this->sendError('Product not found.', ['Product not found with ID ' . $productId]);
+            }
 
             // Get shop inventory for the product
             $shopInventory = ProductInventory::where('product_id', $productId)
@@ -261,6 +291,28 @@ class ProductInventoryController extends BaseController
             $productId = $request->input('product_id');
             $quantity = $request->input('quantity');
 
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
+            // Find the product by ID
+            $product = Product::where('merchant_id', $merchantID)->find($productId);
+
+            if (!$product) {
+                return $this->sendError('Product not found.', ['Product not found with ID ' . $productId]);
+            }
+
             // Get stock inventory for the product
             $stockInventory = ProductInventory::where('product_id', $productId)
                 ->where('type', 'stock')
@@ -315,6 +367,27 @@ class ProductInventoryController extends BaseController
 
             $productId = $request->input('product_id');
             $quantity = $request->input('quantity');
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
+            // Find the product by ID
+            $product = Product::where('merchant_id', $merchantID)->find($productId);
+
+            if (!$product) {
+                return $this->sendError('Product not found.', ['Product not found with ID ' . $productId]);
+            }
 
             // Get transportation inventory for the product
             $transportationInventory = ProductInventory::where('product_id', $productId)
@@ -369,6 +442,28 @@ class ProductInventoryController extends BaseController
             $productId = $request->input('product_id');
             $quantity = $request->input('quantity');
 
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
+            // Find the product by ID
+            $product = Product::where('merchant_id', $merchantID)->find($productId);
+
+            if (!$product) {
+                return $this->sendError('Product not found.', ['Product not found with ID ' . $productId]);
+            }
+
             // Get transportation inventory for the product
             $transportationInventory = ProductInventory::where('product_id', $productId)
                 ->where('type', 'transportation')
@@ -421,6 +516,28 @@ class ProductInventoryController extends BaseController
 
             $productId = $request->input('product_id');
             $quantity = $request->input('quantity');
+
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
+            // Find the product by ID
+            $product = Product::where('merchant_id', $merchantID)->find($productId);
+
+            if (!$product) {
+                return $this->sendError('Product not found.', ['Product not found with ID ' . $productId]);
+            }
 
             // Get shop inventory for the product
             $shopInventory = ProductInventory::where('product_id', $productId)
@@ -475,6 +592,28 @@ class ProductInventoryController extends BaseController
             $productId = $request->input('product_id');
             $quantity = $request->input('quantity');
 
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
+            // Find the product by ID
+            $product = Product::where('merchant_id', $merchantID)->find($productId);
+
+            if (!$product) {
+                return $this->sendError('Product not found.', ['Product not found with ID ' . $productId]);
+            }
+
             // Get stock inventory for the product
             $stockInventory = ProductInventory::where('product_id', $productId)
                 ->where('type', 'stock')
@@ -522,8 +661,27 @@ class ProductInventoryController extends BaseController
         ]);
 
         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
             // Find the product
-            $product = Product::findOrFail($request->product_id);
+            $product = Product::where('merchant_id', $merchantID)->find($request->product_id);
+
+            if (!$product) {
+                return $this->sendError('Product not found.', ['Product not found with ID ' . $id]);
+            }
 
             // Check for existing inventories
             $shopInventory = $product->inventories()->firstWhere('type', 'shop');
@@ -606,7 +764,6 @@ class ProductInventoryController extends BaseController
 //            return $this->sendError('Error retrieving orders.', $e->getMessage());
 //        }
 //    }
-
 
 
 }

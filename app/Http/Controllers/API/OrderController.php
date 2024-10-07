@@ -24,33 +24,55 @@ class OrderController extends BaseController
     public function addToCart(Request $request)
     {
         // Validate the incoming request data
-        $validated = $request->validate([
+        $validator = $this->validateRequest($request, [
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|integer|min:1',
             'cart_type' => 'required|in:shop,stock',
         ]);
-
-        $user = auth()->user();
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
 
         // Begin a database transaction
         DB::beginTransaction();
 
         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
+            // Find the product by ID
+            $product = Product::where('merchant_id', $merchantID)->find($request->product_id);
+
+            if (!$product) {
+                return $this->sendError('Product not found.', ['Product not found with ID ' . $request->product_id]);
+            }
+
             // Find or create a cart for the user
             $cart = Cart::firstOrCreate(
-                ['merchant_id' => $user->merchant->id, 'cart_type' => $validated['cart_type']]
+                ['merchant_id' => $merchantID, 'user_id' => $authUser->id, 'cart_type' =>$request->cart_type]
             );
 
-            $product = Product::find($validated['product_id']);
 
             // Add the product to the cart
             $cartItem = CartItem::updateOrCreate(
-                ['cart_id' => $cart->id, 'price' => $product->price , 'product_id' => $validated['product_id']],
-                                ['quantity' => DB::raw("quantity + {$validated['quantity']}")]
+                ['cart_id' => $cart->id, 'price' => $product->price, 'product_id' => $request->product_id],
+                ['quantity' => DB::raw("quantity + {$request->quantity}")]
             );
 
-            $cartItems = CartItem::with('cart.merchant', 'product')->where('cart_id', $cart->id)->get();
-//            dd($cartItems);
+            $cartItems = CartItem::with('cart.merchant', 'cart.user', 'product')->where('cart_id', $cart->id)->get();
+
             // Commit the transaction
             DB::commit();
 
@@ -65,16 +87,34 @@ class OrderController extends BaseController
     public function getCartItems(Request $request)
     {
         // Validate cart type
-        $validated = $request->validate([
+        $validator = $this->validateRequest($request, [
             'cart_type' => 'required|in:shop,stock',
         ]);
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
 
-        $user = auth()->user();
 
         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
             // Fetch the user's cart for the given type
-            $cart = Cart::where('merchant_id', $user->merchant->id)
-                ->where('cart_type', $validated['cart_type'])
+            $cart = Cart::where('merchant_id', $merchantID)
+                ->where('user_id', $authUser->id)
+                ->where('cart_type',$request->cart_type)
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
@@ -94,7 +134,7 @@ class OrderController extends BaseController
             });
 
             return $this->sendResponse([
-                'cart_type' => $validated['cart_type'],
+                'cart_type' => $request->cart_type,
                 'items' => $cartItems,
                 'total' => $cartItems->sum('total'),
             ], 'Cart items retrieved successfully.');
@@ -106,19 +146,38 @@ class OrderController extends BaseController
     public function updateCartItem(Request $request)
     {
         // Validate cart type and product_id
-        $validated = $request->validate([
+
+        $validator = $this->validateRequest($request, [
             'cart_type' => 'required|in:shop,stock',
             'product_id' => 'required|exists:products,id',
             'quantity' => 'required|integer|min:1', // Ensure quantity is provided and is a positive integer
             'price' => 'required', // Ensure quantity is provided and is a positive integer
         ]);
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
 
-        $user = auth()->user();
 
         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
             // Fetch the user's cart for the given type
-            $cart = Cart::where('merchant_id', $user->merchant->id)
-                ->where('cart_type', $validated['cart_type'])
+            $cart = Cart::where('merchant_id', $merchantID)
+                ->where('user_id', $authUser->id)
+                ->where('cart_type', $validator['cart_type'])
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
@@ -126,16 +185,23 @@ class OrderController extends BaseController
                 return $this->sendError('Cart not found.');
             }
 
+            // Find the product by ID
+            $product = Product::where('merchant_id', $merchantID)->find($validator['product_id']);
+
+            if (!$product) {
+                return $this->sendError('Product not found.', ['Product not found with ID ' . $validator['product_id']]);
+            }
+
             // Find the specific cart item by product_id
-            $cartItem = $cart->items->where('product_id', $validated['product_id'])->first();
+            $cartItem = $cart->items->where('product_id', $validator['product_id'])->first();
 
             if (!$cartItem) {
                 return $this->sendError('Product not found in the cart.');
             }
 
             // Update the quantity for the cart item
-            $cartItem->quantity = $validated['quantity'];
-            $cartItem->price = convertUSDToShilling($validated['price']);
+            $cartItem->quantity = $validator['quantity'];
+            $cartItem->price = convertUSDToShilling($validator['price']);
             $cartItem->save();
 
             // Prepare the updated cart items data
@@ -150,7 +216,7 @@ class OrderController extends BaseController
             });
 
             return $this->sendResponse([
-                'cart_type' => $validated['cart_type'],
+                'cart_type' => $validator['cart_type'],
                 'items' => $cartItems,
                 'total' => $cartItems->sum('total'),
             ], 'Cart item updated successfully.');
@@ -161,27 +227,50 @@ class OrderController extends BaseController
 
     public function deleteCartItem(Request $request)
     {
-        // Validate cart type and product_id
-        $validated = $request->validate([
+        $validator = $this->validateRequest($request, [
             'cart_type' => 'required|in:shop,stock',
-            'product_id' => 'required|exists:products,id',
-        ]);
+            'product_id' => 'required|exists:products,id',]);
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
 
-        $user = auth()->user();
 
         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
             // Fetch the user's cart for the given type
-            $cart = Cart::where('merchant_id', $user->merchant->id)
-                ->where('cart_type', $validated['cart_type'])
-                ->with('items') // Load cart items
+            $cart = Cart::where('merchant_id', $merchantID)
+                ->where('user_id', $authUser->id)
+                ->where('cart_type', $validator['cart_type'])
+                ->with('items.product') // Load products in the cart items
                 ->first();
 
             if (!$cart) {
                 return $this->sendError('Cart not found.');
             }
 
+            // Find the product by ID
+            $product = Product::where('merchant_id', $merchantID)->find($validator['product_id']);
+
+            if (!$product) {
+                return $this->sendError('Product not found.', ['Product not found with ID ' . $validator['product_id']]);
+            }
+
             // Find the specific cart item by product_id
-            $cartItem = $cart->items->where('product_id', $validated['product_id'])->first();
+            $cartItem = $cart->items->where('product_id', $validator['product_id'])->first();
 
             if (!$cartItem) {
                 return $this->sendError('Product not found in the cart.');
@@ -199,19 +288,37 @@ class OrderController extends BaseController
 
     public function checkout(Request $request)
     {
-        $user = auth()->user();
-
         // Validate cart type (shop/stock)
-        $validated = $request->validate([
+        $validator = $this->validateRequest($request, [
             'cart_type' => 'required|in:shop,stock',
         ]);
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
 
         DB::beginTransaction();
 
         try {
+
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
             // Fetch the user's cart for the given type
-            $cart = Cart::where('merchant_id', $user->merchant->id)
-                ->where('cart_type', $validated['cart_type'])
+            $cart = Cart::where('merchant_id', $merchantID)
+                ->where('user_id', $authUser->id)
+                ->where('cart_type', $validator['cart_type'])
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
@@ -243,14 +350,14 @@ class OrderController extends BaseController
                 'subtotal' => convertShillingToUSD($subtotal),
                 'vat' => convertShillingToUSD($vat),
                 'exelo_amount' => convertShillingToUSD($exeloAmount),
-                'total' => round($totalPriceWithVAT,2),
+                'total' => round($totalPriceWithVAT, 2),
                 'total_in_usd' => convertShillingToUSD($totalPriceWithVAT),
                 'cart_items' => $cart->items->map(function ($item) {
                     return [
                         'product_id' => $item->product->id,
                         'product_name' => $item->product->product_name,
                         'quantity' => $item->quantity,
-                        'price' =>convertShillingToUSD($item->price),
+                        'price' => convertShillingToUSD($item->price),
                         'total_price' => convertShillingToUSD($item->quantity * $item->price),
                     ];
                 })
@@ -267,26 +374,57 @@ class OrderController extends BaseController
 
     public function placeOrder(Request $request)
     {
-        $user = auth()->user();
 
-        // Validate cart type (shop/stock)
-        $validated = $request->validate([
+        $validator = $this->validateRequest($request, [
             'cart_type' => 'required|in:shop,stock',
             'invoice_id' => 'required|exists:invoices,id',
         ]);
 
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
+
+
         DB::beginTransaction();
 
         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
             // Fetch the user's cart for the given type
-            $cart = Cart::where('merchant_id', $user->merchant->id)
-                ->where('cart_type', $validated['cart_type'])
+            $cart = Cart::where('merchant_id', $merchantID)
+                ->where('user_id', $authUser->id)
+                ->where('cart_type', $validator['cart_type'])
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
             if (!$cart || $cart->items->isEmpty()) {
                 DB::rollBack();
                 return $this->sendError('Cart is empty.');
+            }
+
+            $invoice = Invoice::where('type', 'POS')->find($request->invoice_id);
+            if (!$invoice) {
+                DB::rollBack();
+                return $this->sendError('Invoice not found.');
+            }
+
+            $transaction = Transaction::where('merchant_id', $merchantID)->whereNull('order_id')->latest()->first();
+            if (!$transaction) {
+                DB::rollBack();
+                return $this->sendError('transaction not found.');
             }
 
             // Calculate the total price before VAT
@@ -296,7 +434,7 @@ class OrderController extends BaseController
 
                 // Fetch the product's inventory based on the cart type (shop/stock)
                 $inventory = ProductInventory::where('product_id', $product->id)
-                    ->where('type', $validated['cart_type'])
+                    ->where('type', $validator['cart_type'])
                     ->first();
 
                 if (!$inventory || $inventory->quantity < $item->quantity) {
@@ -321,13 +459,13 @@ class OrderController extends BaseController
 
             // Create an order
             $order = Order::create([
-                'merchant_id' => $user->merchant->id,
-                'user_id' => $user->id,
+                'merchant_id' => $merchantID,
+                'user_id' => $authUser->id,
                 'sub_total' => round($totalPrice),
                 'vat' => round($vat),
                 'exelo_amount' => round($exeloAmount),
                 'total_price' => round($totalPriceWithVAT),
-                'order_type' => $validated['cart_type'],
+                'order_type' => $validator['cart_type'],
                 'order_status' => 'Paid',
             ]);
 
@@ -345,7 +483,7 @@ class OrderController extends BaseController
 
                 // Decrement the inventory quantity for the specific cart type
                 $inventory = ProductInventory::where('product_id', $product->id)
-                    ->where('type', $validated['cart_type'])
+                    ->where('type', $validator['cart_type'])
                     ->first();
 
                 if ($inventory) {
@@ -357,13 +495,13 @@ class OrderController extends BaseController
             $cart->items()->delete();
             $cart->delete();
 
-            $invoice = Invoice::find($request->invoice_id);
-
+            // update invoice
             $invoice->order_id = $order->id;
             $invoice->merchant_id = $order->merchant_id;
+            $invoice->user_id = $order->user_id;
             $invoice->save();
 
-            $transaction = Transaction::where('merchant_id', $order->merchant_id)->first();
+
             $transaction->order_id = $order->id;
             $transaction->save();
             DB::commit();
@@ -378,21 +516,24 @@ class OrderController extends BaseController
     public function paidOrder(Request $request)
     {
         // Validate the incoming request for order_id and invoice_id
-        $validated = $request->validate([
+        $validator = $this->validateRequest($request, [
             'order_id' => 'required|exists:orders,id',
             'invoice_id' => 'required|exists:invoices,id',
         ]);
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
 
         DB::beginTransaction();
 
         try {
             // Fetch the order by order_id
-            $order = Order::findOrFail($validated['order_id']);
+            $order = Order::findOrFail($validator['order_id']);
             $order->order_status = "Paid";
             $order->save();
 
             // Fetch the invoice by invoice_id
-            $invoice = Invoice::findOrFail($validated['invoice_id']);
+            $invoice = Invoice::findOrFail($validator['invoice_id']);
 
             // Update the invoice with the order_id and merchant_id from the order
             $invoice->order_id = $order->id;
@@ -417,21 +558,23 @@ class OrderController extends BaseController
         $user = auth()->user();
 
         // Validate the input fields
-        $validated = $request->validate([
+        $validator = $this->validateRequest($request, [
             'cart_type' => 'required|in:shop,stock',
             'name' => 'nullable|string|max:255',
             'mobile_number' => 'nullable|string|max:20',
             'signature' => 'required|string',  // Expecting base64 string for signature
 
         ]);
-
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
         DB::beginTransaction();
 
         try {
 
             // Fetch the user's cart for the given type
             $cart = Cart::where('merchant_id', $user->merchant->id)
-                ->where('cart_type', $validated['cart_type'])
+                ->where('cart_type', $validator['cart_type'])
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
@@ -448,7 +591,7 @@ class OrderController extends BaseController
 
                 // Fetch the product's inventory based on the cart type (shop/stock)
                 $inventory = ProductInventory::where('product_id', $product->id)
-                    ->where('type', $validated['cart_type'])
+                    ->where('type', $validator['cart_type'])
                     ->first();
 
                 if (!$inventory || $inventory->quantity < $item->quantity) {
@@ -470,7 +613,7 @@ class OrderController extends BaseController
             $exeloAmount = ($totalPrice) * $exeloCharge;
 
             // Calculate total price including VAT and Exelo amount
-            $totalPriceWithVAT = $totalPrice + $vat ;
+            $totalPriceWithVAT = $totalPrice + $vat;
 
             // Handle signature as base64 image upload
             $signaturePath = $this->saveBase64Image($request->signature, 'signatures');
@@ -487,7 +630,7 @@ class OrderController extends BaseController
                 'vat' => round($vat),
                 'exelo_amount' => round($exeloAmount),
                 'total_price' => round($totalPriceWithVAT),
-                'order_type' => $validated['cart_type'],
+                'order_type' => $validator['cart_type'],
                 'order_status' => 'Pending',
             ]);
 
@@ -505,7 +648,7 @@ class OrderController extends BaseController
 
                 // Decrement inventory for the specific cart type
                 $inventory = ProductInventory::where('product_id', $product->id)
-                    ->where('type', $validated['cart_type'])
+                    ->where('type', $validator['cart_type'])
                     ->first();
 
                 if ($inventory) {
@@ -529,10 +672,14 @@ class OrderController extends BaseController
     public function updateOrderStatusToComplete(Request $request)
     {
         // Validate the request data
-        $validated = $request->validate([
+
+        $validator = $this->validateRequest($request, [
             'cart_type' => 'required|in:shop,stock',
             'order_id' => 'required|exists:orders,id',
         ]);
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
 
         DB::beginTransaction();
 
@@ -540,7 +687,7 @@ class OrderController extends BaseController
 
 
             // Retrieve the order by the provided order_id
-            $order = Order::find($validated['order_id']);
+            $order = Order::find($validator['order_id']);
 
 
             if (!$order) {
@@ -562,10 +709,14 @@ class OrderController extends BaseController
     public function updateOrderStatusToPending(Request $request)
     {
         // Validate the request data
-        $validated = $request->validate([
+
+        $validator = $this->validateRequest($request, [
             'cart_type' => 'required|in:shop,stock',
             'order_id' => 'required|exists:orders,id',
         ]);
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
 
         DB::beginTransaction();
 
@@ -573,7 +724,7 @@ class OrderController extends BaseController
 
 
             // Retrieve the order by the provided order_id
-            $order = Order::find($validated['order_id']);
+            $order = Order::find($validator['order_id']);
 
 
             if (!$order) {
@@ -595,9 +746,12 @@ class OrderController extends BaseController
 
     public function getOrdersByType(Request $request)
     {
-        $validated = $request->validate([
+        $validator = $this->validateRequest($request, [
             'order_type' => 'required|in:shop,stock',
         ]);
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
 
         try {
             // Get the authenticated merchant ID
@@ -610,7 +764,7 @@ class OrderController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Fetch orders by the given type
-            $orders = Order::where('order_type', $validated['order_type'])
+            $orders = Order::where('order_type', $validator['order_type'])
                 ->where('merchant_id', $merchantID)
                 ->with('items.product') // Load related order items and products
                 ->get();
@@ -623,7 +777,7 @@ class OrderController extends BaseController
             $data = $orders->map(function ($order) {
                 return [
                     'order_id' => $order->id,
-                    'sub_total' =>convertShillingToUSD( $order->sub_total),
+                    'sub_total' => convertShillingToUSD($order->sub_total),
                     'vat' => convertShillingToUSD($order->vat),
                     'exelo_amount' => convertShillingToUSD($order->exelo_amount),
                     'total_price' => convertShillingToUSD($order->total_price),
@@ -649,12 +803,9 @@ class OrderController extends BaseController
     public function getOrdersByStatus(Request $request)
     {
 
-        $validator = Validator::make($request->all(), [
+        $validator = $this->validateRequest($request, [
             'order_status' => 'required|in:Pending,Paid,Complete',
         ]);
-
-
-        // If validation fails, return an error response
         if ($validator->fails()) {
             return $this->sendError('Validation Error.', $validator->errors());
         }
@@ -693,7 +844,7 @@ class OrderController extends BaseController
                     'sub_total' => convertShillingToUSD($order->sub_total),
                     'vat' => convertShillingToUSD($order->vat),
                     'exelo_amount' => convertShillingToUSD($order->exelo_amount),
-                    'total_price' => round($order->total_price,2),
+                    'total_price' => round($order->total_price, 2),
                     'total_price_in_usd' => convertShillingToUSD($order->total_price),
                     'order_status' => $order->order_status,
                     'created_at' => showDatePicker($order->created_at),
@@ -742,7 +893,7 @@ class OrderController extends BaseController
             $exeloAmount = ($subtotal) * $exeloCharge;
 
             // Calculate total price including VAT and Exelo amount
-            $totalPriceWithVAT = $subtotal + $vat ;
+            $totalPriceWithVAT = $subtotal + $vat;
 
             // Prepare the response data
             $data = [
@@ -755,7 +906,7 @@ class OrderController extends BaseController
                 'sub_total' => convertShillingToUSD($subtotal),
                 'vat' => convertShillingToUSD($vat),
                 'exelo_amount' => convertShillingToUSD($exeloAmount),
-                'total' => round($totalPriceWithVAT,2),
+                'total' => round($totalPriceWithVAT, 2),
                 'total_in_usd' => convertShillingToUSD($totalPriceWithVAT),
                 'order_status' => $order->order_status,
                 'created_at' => showDatePicker($order->created_at),
@@ -765,7 +916,7 @@ class OrderController extends BaseController
                         'product_name' => $item->product->product_name,
                         'quantity' => $item->quantity,
                         'price' => convertShillingToUSD($item->price),
-                        'total_price' =>convertShillingToUSD($item->quantity * $item->price),
+                        'total_price' => convertShillingToUSD($item->quantity * $item->price),
                     ];
                 }),
             ];
@@ -791,7 +942,7 @@ class OrderController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Retrieve the order with items and product relationship
-            $order = Order::with('items.product','user.merchant', 'merchant', 'invoice')
+            $order = Order::with('items.product', 'user.merchant', 'merchant', 'invoice')
                 ->where('merchant_id', $merchantID)
                 ->find($orderID);
 
@@ -819,20 +970,20 @@ class OrderController extends BaseController
             // Dahab and Zaad prefixes
             $dahabPrefixes = ['65', '66', '62'];
             $mobileNO = ($order->mobile_number ?? $order->invoice->mobile_number);
-            $phoneNo = str_replace('+252','',$mobileNO);
-            $mobileNumberPrefix = substr($phoneNo , 0, 2);
+            $phoneNo = str_replace('+252', '', $mobileNO);
+            $mobileNumberPrefix = substr($phoneNo, 0, 2);
 
             // Determine if it's edahab_number or zaad_number
             $mobileNumberType = in_array($mobileNumberPrefix, $dahabPrefixes) ? 'E-Dahab' : 'Zaad';
 
 //            dd($mobileNumberType);
-             // Prepare the response data
+            // Prepare the response data
             $data = [
                 'order_id' => $order->id,
                 'merchant' => [
                     'business_name' => $order->merchant->business_name,
                     'merchant_code' => $order->merchant->merchant_code,
-                    'cashier_name' => $order->user->merchant->first_name  . ' ' .  $order->user->merchant->last_name ,
+                    'cashier_name' => $order->user->merchant->first_name . ' ' . $order->user->merchant->last_name,
                     'phone_number' => $order->merchant->phone_number,
                     'zaad_number' => $order->merchant->phone_number,
                 ],

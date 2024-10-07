@@ -97,15 +97,16 @@ Route::middleware('auth:api')->group(function () {
 
 // Product Routes
     Route::get('/products', [ProductController::class, 'index']);           // Get all products
-    Route::get('/products/barcode/{id}', [ProductController::class, 'searchBarcode']); // Search by barcode
-    Route::get('/products/barcode/{id}/{type}', [ProductController::class, 'searchBarcodeWithType']); // Search by barcode
-    Route::post('/products', [ProductController::class, 'store']);          // Create a new product
     Route::get('/products/merchant', [ProductController::class, 'getByMerchant']); // Get products by merchant
+    Route::get('products/category/{category_id}', [ProductController::class, 'getProductsByCategory']);
     Route::get('/products/{id}', [ProductController::class, 'show']);       // Get a single product by ID
     Route::get('/products/{id}/{type}', [ProductController::class, 'showByType']);       // Get a single product by ID
+    Route::get('/products/barcode/search/{id}', [ProductController::class, 'searchBarcode']); // Search by barcode
+    Route::get('/products/barcode/{id}/{type}', [ProductController::class, 'searchBarcodeWithType']); // Search by barcode
+
+    Route::post('/products', [ProductController::class, 'store']);          // Create a new product
     Route::post('/products/{id}', [ProductController::class, 'update']);    // Update a product
     Route::delete('/products/{product}', [ProductController::class, 'destroy']); // Delete a product
-    Route::get('products/category/{category_id}', [ProductController::class, 'getProductsByCategory']);
     Route::get('/getSoldProducts', [ProductController::class, 'getSoldProducts']);
     Route::get('/getAllProductsWithCategories', [ProductController::class, 'getAllProductsWithCategories']); // Get product statistics
     Route::get('/getTotalProductsInShop', [ProductController::class, 'getTotalProductsInShop']); // Get product statistics
@@ -131,13 +132,13 @@ Route::middleware('auth:api')->group(function () {
 // Product Inventory Transfer Routes
     Route::post('inventory/transfer/shop-to-stock', [ProductInventoryController::class, 'transferShopToStock']);
     Route::post('inventory/transfer/stock-to-shop', [ProductInventoryController::class, 'transferStockToShop']);
-    Route::get('inventory/products/{type}', [ProductInventoryController::class, 'getProductsByType']);
-    Route::get('inventory/products/{id}/{type}', [ProductInventoryController::class, 'getProductsByTypeWithCategory']);
-
     Route::post('inventory/transfer/transportation-to-shop', [ProductInventoryController::class, 'transferTransportationToShop']);
     Route::post('inventory/transfer/transportation-to-stock', [ProductInventoryController::class, 'transferTransportationToStock']);
     Route::post('inventory/transfer/shop-to-transportation', [ProductInventoryController::class, 'transferShopToTransportation']);
     Route::post('inventory/transfer/stock-to-transportation', [ProductInventoryController::class, 'transferStockToTransportation']);
+    Route::get('inventory/products/{type}', [ProductInventoryController::class, 'getProductsByType']);
+    Route::get('inventory/products/{id}/{type}', [ProductInventoryController::class, 'getProductsByTypeWithCategory']);
+
     Route::post('inventory/updateInventory', [ProductInventoryController::class, 'updateInventory']);
     Route::get('inventory/getSoldItems', [ProductInventoryController::class, 'getSoldItems']);
 

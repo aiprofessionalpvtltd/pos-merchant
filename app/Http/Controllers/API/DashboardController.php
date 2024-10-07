@@ -31,6 +31,11 @@ class DashboardController extends BaseController
             // Get authenticated user
             $authUser = auth()->user();
 
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
@@ -69,6 +74,11 @@ class DashboardController extends BaseController
         try {
             // Get authenticated user
             $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
 
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
@@ -300,6 +310,11 @@ class DashboardController extends BaseController
             // Get authenticated user
             $authUser = auth()->user();
 
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
@@ -394,6 +409,11 @@ class DashboardController extends BaseController
             // Get authenticated user
             $authUser = auth()->user();
 
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
@@ -482,6 +502,11 @@ class DashboardController extends BaseController
             // Get authenticated user
             $authUser = auth()->user();
 
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
@@ -516,6 +541,11 @@ class DashboardController extends BaseController
         try {
             // Get authenticated user
             $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
 
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
@@ -553,6 +583,11 @@ class DashboardController extends BaseController
         try {
             // Get authenticated user
             $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
 
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
@@ -607,6 +642,11 @@ class DashboardController extends BaseController
         try {
             // Get authenticated user
             $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
 
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {

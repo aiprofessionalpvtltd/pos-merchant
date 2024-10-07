@@ -31,6 +31,10 @@ class CategoryController extends BaseController
             // Get authenticated user
             $authUser = auth()->user();
 
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
             // Ensure the authenticated user has a merchant relation
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
@@ -61,6 +65,10 @@ class CategoryController extends BaseController
             // Get authenticated user
             $authUser = auth()->user();
 
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
             // Ensure the authenticated user has a merchant relation
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
@@ -90,6 +98,10 @@ class CategoryController extends BaseController
 
             // Get authenticated user
             $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
 
             // Ensure the authenticated user has a merchant relation
             if (!$authUser || !$authUser->merchant) {
@@ -125,6 +137,10 @@ class CategoryController extends BaseController
         try {
             // Get authenticated user
             $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
 
             // Ensure the authenticated user has a merchant relation
             if (!$authUser || !$authUser->merchant) {
@@ -185,6 +201,11 @@ class CategoryController extends BaseController
 
              // Get authenticated user
              $authUser = auth()->user();
+
+             if ($authUser->user_type == 'employee') {
+                 $authUser->merchant = $authUser->employee->merchant;
+             }
+
 
              // Ensure the authenticated user has a merchant relation
              if (!$authUser || !$authUser->merchant) {

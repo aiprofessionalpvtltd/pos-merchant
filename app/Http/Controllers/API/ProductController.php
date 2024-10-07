@@ -60,6 +60,10 @@ class ProductController extends BaseController
             // Get authenticated user
             $authUser = auth()->user();
 
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
             // Ensure the authenticated user has a merchant relation
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
@@ -123,7 +127,22 @@ class ProductController extends BaseController
 
     public function show($id)
     {
-        $product = Product::with('category', 'inventories')->find($id);
+        // Get authenticated user
+        $authUser = auth()->user();
+
+        if ($authUser->user_type == 'employee') {
+            $authUser->merchant = $authUser->employee->merchant;
+        }
+
+        // Ensure the authenticated user has a merchant relation
+        if (!$authUser || !$authUser->merchant) {
+            return $this->sendError('Merchant not found for the authenticated user.');
+        }
+
+        // Get the merchant's ID
+        $merchantID = $authUser->merchant->id;
+
+        $product = Product::with('category', 'inventories')->where('merchant_id', $merchantID)->find($id);
 
         if (is_null($product)) {
             return $this->sendError('Single Product not found.');
@@ -134,6 +153,21 @@ class ProductController extends BaseController
 
     public function showByType($id, $type)
     {
+        // Get authenticated user
+        $authUser = auth()->user();
+
+        if ($authUser->user_type == 'employee') {
+            $authUser->merchant = $authUser->employee->merchant;
+        }
+
+        // Ensure the authenticated user has a merchant relation
+        if (!$authUser || !$authUser->merchant) {
+            return $this->sendError('Merchant not found for the authenticated user.');
+        }
+
+        // Get the merchant's ID
+        $merchantID = $authUser->merchant->id;
+
         // Validate the type input (must be either 'stock', 'shop', or 'transportation')
         if (!in_array($type, ['stock', 'shop', 'transportation'])) {
             return $this->sendError('Invalid type provided. It must be either "stock", "shop", or "transportation".');
@@ -143,7 +177,7 @@ class ProductController extends BaseController
         $product = Product::with(['category', 'inventories' => function ($query) use ($type) {
             // Filter the inventories based on the provided type
             $query->where('type', $type);
-        }])->find($id);
+        }])->where('merchant_id', $merchantID)->find($id);
 
         // Check if the product exists and has inventories of the specified type
         if (is_null($product) || $product->inventories->isEmpty()) {
@@ -156,12 +190,25 @@ class ProductController extends BaseController
 
     public function searchBarcodeWithType($barcode, $type)
     {
-//        $product = Product::with('category', 'inventories')->where('bar_code', $barcode)->first();
+        // Get authenticated user
+        $authUser = auth()->user();
+
+        if ($authUser->user_type == 'employee') {
+            $authUser->merchant = $authUser->employee->merchant;
+        }
+
+        // Ensure the authenticated user has a merchant relation
+        if (!$authUser || !$authUser->merchant) {
+            return $this->sendError('Merchant not found for the authenticated user.');
+        }
+
+        // Get the merchant's ID
+        $merchantID = $authUser->merchant->id;
 
         $product = Product::with(['category', 'inventories' => function ($query) use ($type) {
             // Filter the inventories based on the provided type
             $query->where('type', $type);
-        }])->where('bar_code', $barcode)->first();
+        }])->where('merchant_id', $merchantID)->where('bar_code', $barcode)->first();
 
         if (is_null($product)) {
             return $this->sendError('Product not found on bar code.');
@@ -177,7 +224,24 @@ class ProductController extends BaseController
 
     public function searchBarcode($barcode)
     {
-        $product = Product::with('category', 'inventories')->where('bar_code', $barcode)->first();
+        // Get authenticated user
+        $authUser = auth()->user();
+
+        if ($authUser->user_type == 'employee') {
+            $authUser->merchant = $authUser->employee->merchant;
+        }
+
+        // Ensure the authenticated user has a merchant relation
+        if (!$authUser || !$authUser->merchant) {
+            return $this->sendError('Merchant not found for the authenticated user.');
+        }
+
+        // Get the merchant's ID
+        $merchantID = $authUser->merchant->id;
+
+        $product = Product::with('category', 'inventories')
+            ->where('merchant_id', $merchantID)
+            ->where('bar_code', $barcode)->first();
 
         if (is_null($product)) {
             return $this->sendError('Product not found on bar code.');
@@ -209,8 +273,23 @@ class ProductController extends BaseController
         DB::beginTransaction();
 
         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
             // Find the product by ID
-            $product = Product::find($id);
+            $product = Product::where('merchant_id', $merchantID)->find($id);
 
             if (!$product) {
                 return $this->sendError('Product not found.', ['Product not found with ID ' . $id]);
@@ -247,7 +326,7 @@ class ProductController extends BaseController
             }
 
             // Retrieve the updated product data
-            $productData = Product::find($product->id);
+            $productData = Product::where('merchant_id', $merchantID)->find($product->id);
 
             // Commit the transaction
             DB::commit();
@@ -280,6 +359,11 @@ class ProductController extends BaseController
         try {
             // Get authenticated user
             $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
 
             // Ensure the authenticated user has a merchant relation
             if (!$authUser || !$authUser->merchant) {
@@ -325,6 +409,10 @@ class ProductController extends BaseController
         try {
             // Get authenticated user
             $authUser = auth()->user();
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
 
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
@@ -376,8 +464,23 @@ class ProductController extends BaseController
     public function getProductsByCategory($category_id)
     {
         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
             // Validate if the category exists
-            $category = Category::find($category_id);
+            $category = Category::where('merchant_id', $merchantID)->find($category_id);
 
             if (!$category) {
                 return $this->sendError('Category not found.');
@@ -406,6 +509,11 @@ class ProductController extends BaseController
             // Get authenticated user
             $authUser = auth()->user();
 
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
@@ -431,6 +539,11 @@ class ProductController extends BaseController
         try {
             // Get authenticated user
             $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
 
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
@@ -507,6 +620,11 @@ class ProductController extends BaseController
             // Get authenticated user
             $authUser = auth()->user();
 
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
@@ -535,7 +653,7 @@ class ProductController extends BaseController
                     'category_id' => $product->category->id ?? null,
                     'price' => convertShillingToUSD($product->price),
                     'in_shop_quantity' => $inShopQuantity,
-                 ];
+                ];
             });
 
             // Return success response with the data
@@ -550,6 +668,11 @@ class ProductController extends BaseController
         try {
             // Get authenticated user
             $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
 
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
@@ -596,6 +719,11 @@ class ProductController extends BaseController
             // Get authenticated user
             $authUser = auth()->user();
 
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
@@ -637,11 +765,16 @@ class ProductController extends BaseController
             return $this->sendError('Error retrieving new products listing.', [$e->getMessage()]);
         }
     }
+
     public function getNewStockProductsListing()
     {
         try {
             // Get authenticated user
             $authUser = auth()->user();
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
 
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
@@ -684,13 +817,6 @@ class ProductController extends BaseController
             return $this->sendError('Error retrieving new products listing.', [$e->getMessage()]);
         }
     }
-
-
-
-
-
-
-
 
 
 }
