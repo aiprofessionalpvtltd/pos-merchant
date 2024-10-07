@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\CategoryResource;
+use App\Http\Resources\EmployeePermissionResource;
 use App\Http\Resources\MerchantResource;
 use App\Http\Resources\POSPermissionResource;
 use App\Http\Resources\UserResource;
@@ -437,6 +438,7 @@ class EmployeeController extends BaseController
 
             // Return a successful response with the user, employee, merchant, and token
             return $this->sendResponse([
+                'permissions' => EmployeePermissionResource::collection($employee->permissions),
                 'user' => new UserResource($user),
                 'employee' => new EmployeeResource($employee),
                 'merchant' => new MerchantResource($merchant),

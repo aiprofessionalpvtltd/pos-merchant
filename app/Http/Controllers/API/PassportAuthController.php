@@ -2,10 +2,14 @@
 
 namespace App\Http\Controllers\API;
 
+use App\Http\Resources\EmployeePermissionResource;
+use App\Http\Resources\MerchantPermissionResource;
 use App\Http\Resources\MerchantResource;
+use App\Http\Resources\POSPermissionResource;
 use App\Http\Resources\UserResource;
 use App\Models\Invoice;
 use App\Models\Merchant;
+use App\Models\POSPermission;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Http\Controllers\API\BaseController;
@@ -90,8 +94,10 @@ class PassportAuthController extends BaseController
                 $merchant->currentSubscription = $noSubscription;
             }
 
+            $permissions = POSPermission::all();
 
             return $this->sendResponse([
+                'permissions' => MerchantPermissionResource::collection($permissions),
                 'user' => new UserResource($user),
                 'merchant' => new MerchantResource($merchant),
                 'token' => $token,
@@ -116,7 +122,7 @@ class PassportAuthController extends BaseController
             $phoneNumber = str_replace(' ', '', $request->phone_number);
             $merchant = Merchant::where('phone_number', $phoneNumber)->first();
 
-             if (!$merchant) {
+            if (!$merchant) {
                 return $this->sendError('Phone number not found.', '', 404);
             }
 

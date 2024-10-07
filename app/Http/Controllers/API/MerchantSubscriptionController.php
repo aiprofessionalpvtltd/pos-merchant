@@ -29,7 +29,11 @@ class MerchantSubscriptionController extends BaseController
             // Assuming the authenticated user is a merchant
             $authUser = auth()->user();
 
-            // Determine the message and check for re-subscription eligibility
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+             // Determine the message and check for re-subscription eligibility
             $reSubscriptionEligible = false;
 
             if (!$authUser || !$authUser->merchant) {
@@ -161,7 +165,7 @@ class MerchantSubscriptionController extends BaseController
             // If the current subscription exists and is not the requested one, delete the all subscriptions
 
             MerchantSubscription::where('merchant_id', $merchantID)->delete();
-            
+
             // Create a new subscription for the merchant
             $newSubscription = MerchantSubscription::create([
                 'merchant_id' => $merchantID,
