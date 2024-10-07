@@ -58,6 +58,11 @@ class User extends Authenticatable
     {
         return $this->hasOne(Merchant::class)->withDefault();
     }
+
+    public function employee()
+    {
+        return $this->hasOne(Employee::class)->withDefault();
+    }
     public function order()
     {
         return $this->hasOne(Order::class)->withDefault();

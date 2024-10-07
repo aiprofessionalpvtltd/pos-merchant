@@ -137,7 +137,13 @@ class DashboardController extends BaseController
             $completeCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Complete')->count();
 
 
-            if ($authUser->merchant->currentSubscription->subscription_plan_id == 2) {
+            if ($authUser->user_type == 'merchant') {
+                $currentSubscriptionID = $authUser->merchant->currentSubscription->subscription_plan_id;
+            } else {
+                $currentSubscriptionID = $authUser->employee->merchant->currentSubscription->subscription_plan_id;
+            }
+
+            if ($currentSubscriptionID == 2) {
                 $transactionHistories = $this->getTransactionForSilver()->getData(true);
                 $transactionHistories = $transactionHistories['data'];
 
@@ -157,8 +163,6 @@ class DashboardController extends BaseController
                 $latestClient = $this->getLatestClientsForNormalMerchant()->getData(true);
                 $latestClient = $latestClient['data'];
             }
-
-//            dd($transactionHistories);
 
 
             $pendingTransaction = $this->getPendingOrders()->getData(true);
@@ -335,7 +339,7 @@ class DashboardController extends BaseController
 
             // Get total transaction amount for the current week for invoices (no order_id)
             $weeklyTransactions = Transaction::where('merchant_id', $merchantID)
-                 ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
+                ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
                 ->get();
 
             // Calculate total transaction amount from these transactions
@@ -343,7 +347,7 @@ class DashboardController extends BaseController
 
             // Calculate the total transaction amount for all time (only invoices without order_id)
             $totalAmountAllTime = Transaction::where('merchant_id', $merchantID)
-                 ->sum('transaction_amount');
+                ->sum('transaction_amount');
 
             // Calculate the percentage of weekly transactions from total transactions
             $totalAmountPercentage = $totalAmountAllTime > 0
@@ -352,7 +356,7 @@ class DashboardController extends BaseController
 
             // Get invoices for the week (no order associated)
             $weeklyInvoiceData = Transaction::where('merchant_id', $merchantID)
-                 ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
+                ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
                 ->selectRaw('DATE(created_at) as date, SUM(transaction_amount) as total_sales')
                 ->groupBy('date')
                 ->orderBy('date')

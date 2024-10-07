@@ -29,6 +29,7 @@ Route::post('merchants/signup', [MerchantController::class, 'signup']);
 Route::post('merchants/request-otp', [MerchantController::class, 'requestOtp']);
 Route::post('merchants/verify-otp', [MerchantController::class, 'verifyOtp']);
 Route::post('merchants/store-pin', [MerchantVerificationController::class, 'storePin']);
+Route::get('/merchants/subscriptions/current', [MerchantSubscriptionController::class, 'current']);  // List all subscriptions
 
 Route::post('merchant/transaction/process', [PaymentController::class, 'processTransaction']);
 Route::post('merchant/invoice/check', [PaymentController::class, 'checkInvoice']);
@@ -39,9 +40,6 @@ Route::post('merchant/invoice/status', [PaymentController::class, 'checkInvoiceS
 // Zaad Pre Authorize
 Route::post('/zaad/issue', [PaymentController::class, 'callWaafiAPIForPreAuthorize']);
 Route::post('/zaad/commit', [PaymentController::class, 'connectToWaafiCommitAPI']);
-
-
-
 
 //Employee
 
@@ -80,7 +78,6 @@ Route::middleware('auth:api')->group(function () {
 
     // Merchant Subscriptions
     Route::get('/merchants/subscriptions/all', [MerchantSubscriptionController::class, 'index']);  // List all subscriptions
-    Route::get('/merchants/subscriptions/current', [MerchantSubscriptionController::class, 'current']);  // List all subscriptions
     Route::get('/merchants/subscriptions/canceled', [MerchantSubscriptionController::class, 'canceled']);  // List all subscriptions
     Route::post('/merchants/subscriptions', [MerchantSubscriptionController::class, 'store']); // Create a subscription
     Route::get('/merchants/subscriptions/{id}/cancel', [MerchantSubscriptionController::class, 'cancel']);  // Cancel a subscription

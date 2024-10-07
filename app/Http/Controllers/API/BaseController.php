@@ -124,7 +124,7 @@ class BaseController extends Controller
             return "zaad_number";
         } elseif (strpos($localNumber, '90') === 0) { // Replace XXX with the Golis prefix when remembered
             return "golis_number";
-        } elseif (strpos($localNumber, '91') === 0) { // Replace YYY with the EVC prefix when remembered
+        } elseif (strpos($localNumber, '61') === 0) { // Replace YYY with the EVC prefix when remembered
             return "evc_number";
         } else {
             return null;
