@@ -19,6 +19,7 @@ class Employee extends Model
         'location',
         'role',
         'salary',
+        'status',
     ];
 
     // Relationship to User

@@ -22,6 +22,7 @@ return new class extends Migration
             $table->string('location');
             $table->string('role');
             $table->decimal('salary', 10, 2);
+            $table->enum('status', ['active', 'inactive'])->default('active'); // Status column with default value
             $table->timestamps();
         });
     }

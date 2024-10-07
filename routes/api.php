@@ -47,6 +47,7 @@ Route::post('/zaad/commit', [PaymentController::class, 'connectToWaafiCommitAPI'
 Route::get('/employee/getMerchantDetail', [EmployeeController::class, 'getMerchantDetail']); // Get employee records
 Route::get('/employee/verifyEmployee', [EmployeeController::class, 'verifyEmployee']); // Get employee records
 Route::post('employee/store-pin', [EmployeeController::class, 'storePin']);
+Route::get('employee/getPOSPermission', [EmployeeController::class, 'getPOSPermission']);
 
 Route::middleware('auth:api')->group(function () {
 
@@ -172,7 +173,10 @@ Route::middleware('auth:api')->group(function () {
 
 
     // Employee Module Routes
-    Route::post('/employees', [EmployeeController::class, 'store']); // Store employee
-    Route::get('/employees', [EmployeeController::class, 'index']); // Get employee records
+    Route::post('/employee', [EmployeeController::class, 'store']); // Store employee
+    Route::get('/employee', [EmployeeController::class, 'getAllEmployees']); // Get employee records
+    Route::get('/employee/getSingleEmployee/{id}', [EmployeeController::class, 'getSingleEmployee']); // Get employee records
+    Route::post('/employee/{id}', [EmployeeController::class, 'updateEmployee']); // Store employee
+    Route::delete('/employee/{id}', [EmployeeController::class, 'deleteEmployee']); // Store employee
 
 });

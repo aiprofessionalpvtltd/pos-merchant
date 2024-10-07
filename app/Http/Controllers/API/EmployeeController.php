@@ -3,8 +3,11 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
+use App\Http\Resources\CategoryResource;
 use App\Http\Resources\MerchantResource;
+use App\Http\Resources\POSPermissionResource;
 use App\Http\Resources\UserResource;
+use App\Models\Category;
 use App\Models\EmployeePermission;
 use App\Models\Merchant;
 use App\Models\POSPermission;
@@ -23,6 +26,38 @@ use Illuminate\Support\Facades\Hash;
 
 class EmployeeController extends BaseController
 {
+    public function getPOSPermission()
+    {
+        try {
+            $permissions = POSPermission::all();
+            if ($permissions->isEmpty()) {
+                return $this->sendResponse([],'No permissions found.');
+            }
+            return $this->sendResponse(POSPermissionResource::collection($permissions), 'Categories retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error fetching permissions.', $e->getMessage());
+        }
+    }
+
+    public function getSingleEmployee($id)
+    {
+        try {
+            // Find the employee by ID
+            $employee = Employee::with('permissions.permission')->find($id);
+
+            // Check if employee exists
+            if (!$employee) {
+                return $this->sendError('Employee not found.', '', 404);
+            }
+
+            // Return the employee data using the EmployeeResource
+            return $this->sendResponse(new EmployeeResource($employee), 'Employee retrieved successfully.');
+
+        } catch (\Exception $e) {
+            return $this->sendError('An error occurred while fetching the employee.', ['error' => $e->getMessage()]);
+        }
+    }
+
     // Store a new employee
     public function store(Request $request)
     {
@@ -57,6 +92,15 @@ class EmployeeController extends BaseController
             return $this->sendError('Merchant Not Found', 404);
         }
 
+        // Check for duplicate employee with the same phone number
+        $existingEmployee = Employee::where('phone_number', $request->phone_number)
+            ->where('merchant_id', $merchant->id)
+            ->first();
+
+        if ($existingEmployee) {
+            return response()->json(['error' => 'Employee with this phone number already exists.'], 409); // Conflict status code
+        }
+
         // Start a database transaction
         DB::beginTransaction();
 
@@ -89,22 +133,26 @@ class EmployeeController extends BaseController
             // Create a new user account linked to the employee
             $user = User::create([
                 'name' => $employee->first_name . ' ' . $employee->last_name,
-                'email' => $request->phone_number . '@email.com', // Make sure to include email in the request
-                'password' => Hash::make('1234'), // Set a default or random password
+                'email' => $request->phone_number . '@email.com', // Set email based on phone number
+                'password' => Hash::make('1234'), // Default or random password
                 'user_type' => 'employee',
             ]);
 
+            // Associate user with employee
             $employee->user_id = $user->id;
             $employee->save();
 
-
+            // Load relations
             $employee->load('permissions.permission', 'user');
+
             // Commit the transaction
             DB::commit();
+
             return response()->json([
                 'employee' => new EmployeeResource($employee),
                 'message' => 'Employee created successfully.',
             ], 201);
+
         } catch (\Exception $e) {
             // Rollback the transaction if any error occurs
             DB::rollBack();
@@ -115,8 +163,148 @@ class EmployeeController extends BaseController
         }
     }
 
+    public function updateEmployee(Request $request, $id)
+    {
+        // Validate request data
+        $validator = Validator::make($request->all(), [
+            'phone_number' => 'required|string|max:15|unique:employees,phone_number,' . $id,
+            'first_name' => 'required|string|max:50',
+            'last_name' => 'required|string|max:50',
+            'dob' => 'required|date',
+            'location' => 'required|string|max:100',
+            'role' => 'required|string|max:50',
+            'salary' => 'required|numeric|min:0',
+            'permissions' => 'required|array', // Expecting an array of permission IDs
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json(['error' => $validator->errors()], 422);
+        }
+
+        // Get authenticated user
+        $authUser = auth()->user();
+
+        // Check if the authenticated user has an associated merchant
+        if (!$authUser || !$authUser->merchant) {
+            return $this->sendError('Merchant not found for the authenticated user.');
+        }
+
+        // Get the merchant
+        $merchant = $authUser->merchant;
+
+        if (!$merchant) {
+            return $this->sendError('Merchant Not Found', 404);
+        }
+
+        // Find the employee by ID
+        $employee = Employee::find($id);
+
+        if (!$employee) {
+            return $this->sendError('Employee not found.', '', 404);
+        }
+
+        // Start a database transaction
+        DB::beginTransaction();
+
+        try {
+            // Update employee details
+            $employee->update([
+                'phone_number' => $request->phone_number,
+                'first_name' => $request->first_name,
+                'last_name' => $request->last_name,
+                'dob' => $request->dob,
+                'location' => $request->location,
+                'role' => $request->role,
+                'salary' => $request->salary,
+            ]);
+
+            // Sync permissions: remove old and add new permissions
+            EmployeePermission::where('employee_id', $employee->id)->delete();
+
+            foreach ($request->permissions as $permissionId) {
+                // Find the permission by ID
+                $permission = POSPermission::find($permissionId);
+
+                if ($permission) {
+                    EmployeePermission::create([
+                        'employee_id' => $employee->id,
+                        'pos_permission_id' => $permissionId,
+                    ]);
+                }
+            }
+
+            // Update the associated user account
+            $user = $employee->user;
+
+            if ($user) {
+                $user->update([
+                    'name' => $employee->first_name . ' ' . $employee->last_name,
+                    'email' => $request->phone_number . '@email.com', // Adjust as needed
+                ]);
+            }
+
+            $employee->load('permissions.permission', 'user');
+
+            // Commit the transaction
+            DB::commit();
+            return response()->json([
+                'employee' => new EmployeeResource($employee),
+                'message' => 'Employee updated successfully.',
+            ], 200);
+
+        } catch (\Exception $e) {
+            // Rollback the transaction if any error occurs
+            DB::rollBack();
+
+            return response()->json([
+                'error' => 'Failed to update employee: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
+    public function deleteEmployee($id)
+    {
+        // Start a database transaction
+        DB::beginTransaction();
+
+        try {
+            // Find the employee by ID
+            $employee = Employee::find($id);
+
+            if (!$employee) {
+                return response()->json(['error' => 'Employee not found.'], 404);
+            }
+
+            // Update the employee's status to 'inactive'
+            $employee->update([
+                'status' => 'inactive',
+            ]);
+
+            // Check if the employee has an associated user
+            if ($employee->user) {
+                // Soft delete the associated user
+                $employee->user->delete();
+            }
+
+            // Commit the transaction
+            DB::commit();
+
+            return response()->json([
+                'message' => 'Employee status updated to inactive and associated user soft deleted successfully.',
+            ], 200);
+
+        } catch (\Exception $e) {
+            // Rollback the transaction if any error occurs
+            DB::rollBack();
+
+            return response()->json([
+                'error' => 'Failed to delete employee: ' . $e->getMessage(),
+            ], 500);
+        }
+    }
+
     // Get employee records with permissions
-    public function index()
+    public function getAllEmployees()
     {
         // Get authenticated user
         $authUser = auth()->user();
@@ -127,17 +315,24 @@ class EmployeeController extends BaseController
         }
 
         try {
-            // Fetch employees associated with the authenticated merchant, including their permissions
-            $employees = Employee::with('permissions.permission', 'user')
+            // Fetch active employees associated with the authenticated merchant,
+            // exclude soft deleted users and inactive employees
+            $employees = Employee::with(['permissions.permission', 'user' => function ($query) {
+                $query->whereNull('deleted_at'); // Exclude soft-deleted users
+            }])
                 ->where('merchant_id', $authUser->merchant->id)
+                ->where('status', 'active') // Only fetch active employees
+                ->orderBy('id','DESC')
                 ->get();
 
             // Check if employees were found
             if ($employees->isEmpty()) {
-                return response()->json(['message' => 'No employees found for this merchant.'], 404);
+                return response()->json(['message' => 'No active employees found for this merchant.'], 404);
             }
 
-            return EmployeeResource::collection($employees);
+            return $this->sendResponse(EmployeeResource::collection($employees), 'Employees  retrieved successfully.');
+
+
         } catch (\Exception $e) {
             return response()->json(['error' => 'Failed to retrieve employees: ' . $e->getMessage()], 500);
         }
@@ -197,20 +392,37 @@ class EmployeeController extends BaseController
             $phoneNumber = str_replace(' ', '', $request->phone_number);
             $employee = Employee::where('phone_number', $phoneNumber)->first();
 
-//            dd($phoneNumber);
+            // Check if the employee exists
             if (!$employee) {
                 return $this->sendError('Phone number not found.', '', 404);
             }
 
+            // Check if the employee's status is inactive
+            if ($employee->status === 'inactive') {
+                return $this->sendError('Employee is inactive.', '', 403);
+            }
+
+            // Check if the user is soft deleted
+            if ($employee->user->trashed()) {
+                return $this->sendError('User account has been deleted.', '', 403);
+            }
+
+            // Check if the provided PIN matches the user's password
             if (!Hash::check($request->pin, $employee->user->password)) {
                 return $this->sendError('Invalid PIN code.', '', 401);
             }
 
+            // Retrieve the associated user and merchant
             $user = $employee->user;
             $merchant = $employee->merchant;
+
+            // Generate an access token for the user
             $token = $user->createToken('PassportAuth')->accessToken;
 
+            // Load the employee's permissions
             $employee->load('permissions.permission');
+
+            // Return a successful response with the user, employee, merchant, and token
             return $this->sendResponse([
                 'user' => new UserResource($user),
                 'employee' => new EmployeeResource($employee),
@@ -218,7 +430,7 @@ class EmployeeController extends BaseController
                 'token' => $token,
                 'user_type' => $user->user_type,
                 'short_name' => $this->getInitials($employee->first_name . ' ' . $employee->last_name),
-            ], 'Employee Login successful.');
+            ], 'Employee login successful.');
 
         } catch (\Exception $e) {
             return $this->sendError('An error occurred during the verification process.', ['error' => $e->getMessage()]);
