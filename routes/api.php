@@ -23,6 +23,7 @@ Route::post('login/verifyUser', [PassportAuthController::class, 'verifyUser']);
 Route::post('login/verifyUserPin', [PassportAuthController::class, 'verifyUserPin']);
 Route::post('login/checkInvoice', [PassportAuthController::class, 'checkInvoiceAndRegisterMerchant']);
 
+
 Route::post('merchants', [MerchantController::class, 'store']);
 Route::post('merchants/signup', [MerchantController::class, 'signup']);
 
@@ -51,6 +52,9 @@ Route::post('employee/store-pin', [EmployeeController::class, 'storePin']);
 Route::get('employee/getPOSPermission', [EmployeeController::class, 'getPOSPermission']);
 
 Route::middleware('auth:api')->group(function () {
+
+    Route::post('login/userinfo', [PassportAuthController::class, 'userInfo']);
+
 
     Route::post('merchants/change-pin', [MerchantVerificationController::class, 'changePin']);
     Route::post('merchants/verifyPhoneNumberByCompany', [MerchantController::class, 'verifyPhoneNumberByCompany']);

@@ -3,12 +3,14 @@
 namespace App\Http\Controllers\API;
 
 use App\Http\Resources\EmployeePermissionResource;
+use App\Http\Resources\EmployeeResource;
 use App\Http\Resources\MerchantPermissionResource;
 use App\Http\Resources\MerchantResource;
 use App\Http\Resources\POSPermissionResource;
 use App\Http\Resources\UserResource;
 use App\Models\Invoice;
 use App\Models\Merchant;
+use App\Models\Order;
 use App\Models\POSPermission;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -150,13 +152,79 @@ class PassportAuthController extends BaseController
     /**
      * Get the authenticated user information.
      *
-     * @return \Illuminate\Http\JsonResponse
+     * @return \Illuminate\Http\Response
      */
     public function userInfo()
     {
-        $user = Auth::user();
+        try {
+            // Get the authenticated user
+            $authUser = auth()->user();
 
-        return $this->sendResponse($user, 'User information retrieved successfully.');
+            // Ensure the authenticated user exists
+            if (!$authUser) {
+                return $this->sendError('User not authenticated.', '', 401);
+            }
+
+            // Load employee or merchant relationships depending on the user type
+            if ($authUser->user_type === 'employee') {
+                // Load merchant through employee relationship
+                $employee = $authUser->employee;
+                if (!$employee || !$employee->merchant) {
+                    return $this->sendError('Merchant not found for the authenticated employee.');
+                }
+
+                // Load employee permissions
+                $employee->load('permissions.permission');
+
+                // Return response with employee-specific data
+                return $this->sendResponse([
+                    'permissions' => EmployeePermissionResource::collection($employee->permissions),
+                    'user' => new UserResource($employee->user),
+                    'employee' => new EmployeeResource($employee),
+                    'merchant' => new MerchantResource($employee->merchant),
+                    'user_type' => $authUser->user_type,
+                    'short_name' => $this->getInitials($authUser->name),
+                ], 'Employee Info retrieved successfully.');
+            }
+
+            // If the user is not an employee, assume they are a merchant
+            $merchant = $authUser->merchant;
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Load merchant's user and subscription relationships
+            $merchant->load(['currentSubscription.subscriptionPlan']);
+
+            // Handle missing subscription scenario by setting default values
+            $currentSubscription = $merchant->currentSubscription ?? (object)[
+                    'subscription_plan_id' => 1,  // Default to Silver
+                    'reSubscriptionEligible' => true,  // Eligible for re-subscription
+                ];
+
+            // If no subscription exists, attach the default one to the merchant
+            if (!$merchant->currentSubscription) {
+                $merchant->currentSubscription = $currentSubscription;
+            }
+
+            // Fetch all available merchant permissions
+            $permissions = POSPermission::all();
+
+            // Return response with merchant-specific data
+            return $this->sendResponse([
+                'permissions' => MerchantPermissionResource::collection($permissions),
+                'user' => new UserResource($merchant->user),
+                'merchant' => new MerchantResource($merchant),
+                'user_type' => $authUser->user_type,
+                'short_name' => $this->getInitials($authUser->name),
+            ], 'Merchant Info retrieved successfully.');
+
+        } catch (\Exception $e) {
+            // Handle any errors during the process
+            return $this->sendError('An error occurred during the verification process.', ['error' => $e->getMessage()]);
+        }
     }
 
 
