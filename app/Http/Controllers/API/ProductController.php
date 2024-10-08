@@ -42,6 +42,7 @@ class ProductController extends BaseController
             'product_name' => 'required|string|max:255',
             'category_id' => 'nullable|exists:categories,id',
             'price' => 'required|numeric',
+            'vat' => 'required|numeric',
             'stock_limit' => 'required|integer',
             'alarm_limit' => 'required|integer',
             'image' => 'required|image|mimes:jpeg,png,jpg,gif', // Image validation
@@ -83,6 +84,14 @@ class ProductController extends BaseController
             $product = Product::where('bar_code', $request->input('bar_code'))
                 ->where('category_id', $request->input('category_id'))
                 ->first();
+
+
+            $input['price'] = $request->price;
+            $input['vat'] = $request->vat; // Assume this is 0, 5, or 10 as per your formula
+
+            // Calculate final price with VAT
+            $input['total_price'] = $request->price + ($request->price * $request->vat / 100);
+
 
             if ($product) {
                 // If the product exists, update it
@@ -208,7 +217,8 @@ class ProductController extends BaseController
         $product = Product::with(['category', 'inventories' => function ($query) use ($type) {
             // Filter the inventories based on the provided type
             $query->where('type', $type);
-        }])->where('merchant_id', $merchantID)->where('bar_code', $barcode)->first();
+        }])->where('merchant_id', $merchantID)
+            ->where('bar_code', $barcode)->first();
 
         if (is_null($product)) {
             return $this->sendError('Product not found on bar code.');
@@ -306,7 +316,12 @@ class ProductController extends BaseController
             // Check if 'price' is provided, then update
             if ($request->filled('price')) {
                 $input['price'] = $request->price;
+                $input['vat'] = $product->vat; // Assume this is 0, 5, or 10 as per your formula
+
+                // Calculate final price with VAT
+                $input['total_price'] = $request->price + ($request->price * $product->vat / 100);
             }
+
 
             // Check if a new image has been uploaded
             if ($request->hasFile('image')) {
@@ -373,7 +388,9 @@ class ProductController extends BaseController
             // Get the merchant's ID
             $merchantID = $authUser->merchant->id;
 
-            $products = Product::with(['category', 'inventories', 'merchant'])->where('merchant_id', $merchantID)->get();
+            $products = Product::with(['category', 'inventories', 'merchant'])
+                ->where('merchant_id', $merchantID)->get();
+
             if ($products->isEmpty()) {
                 return $this->sendResponse([], 'No products found.');
             }

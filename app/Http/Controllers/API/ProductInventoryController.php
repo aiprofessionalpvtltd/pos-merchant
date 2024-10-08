@@ -680,7 +680,7 @@ class ProductInventoryController extends BaseController
             $product = Product::where('merchant_id', $merchantID)->find($request->product_id);
 
             if (!$product) {
-                return $this->sendError('Product not found.', ['Product not found with ID ' . $id]);
+                return $this->sendError('Product not found.', ['Product not found with ID ' . $request->product_id]);
             }
 
             // Check for existing inventories

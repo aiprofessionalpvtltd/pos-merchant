@@ -153,7 +153,7 @@ class DashboardController extends BaseController
                 $currentSubscriptionID = $authUser->employee->merchant->currentSubscription->subscription_plan_id;
             }
 
-            if ($currentSubscriptionID == 2) {
+             if ($currentSubscriptionID == 2) {
                 $transactionHistories = $this->getTransactionForSilver()->getData(true);
                 $transactionHistories = $transactionHistories['data'];
 
@@ -164,7 +164,7 @@ class DashboardController extends BaseController
                 $latestClient = $latestClient['data'];
 
             } else {
-                $transactionHistories = $this->getInvoicesWithOrders()->getData(true);
+                $transactionHistories = $this->getTransactionForSilver()->getData(true);
                 $transactionHistories = $transactionHistories['data'];
 
                 $weeklyStatistics = $this->getWeeklySalesAndStatistics()->getData(true);
@@ -209,101 +209,6 @@ class DashboardController extends BaseController
         }
     }
 
-
-//    public function getWeeklySalesAndStatistics()
-//    {
-//        try {
-//            // Get authenticated user
-//            $authUser = auth()->user();
-//
-//            // Ensure the authenticated user exists and has a merchant
-//            if (!$authUser || !$authUser->merchant) {
-//                return $this->sendError('Merchant not found for the authenticated user.');
-//            }
-//
-//            // Get merchant ID from authenticated user's merchant relation
-//            $merchantID = $authUser->merchant->id;
-//
-//            // Set start of the week (Monday) and end of the week (Sunday)
-//            $startOfWeek = now()->startOfWeek();
-//            $endOfWeek = now()->endOfWeek();
-//
-//            // Get total transaction amount for the current week
-//            $weeklyTransactions = Transaction::with('order')
-//                ->where('merchant_id', $merchantID)
-//                ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
-//                ->get();
-//
-//            // Calculate total transaction amount from the current week
-//            $totalAmountFromTransactions = $weeklyTransactions->sum('transaction_amount');
-//
-//            // Get the total transaction amount for all time for this merchant
-//            $totalAmountAllTime = Transaction::where('merchant_id', $merchantID)
-//                ->sum('transaction_amount');
-//
-//            // Calculate the percentage of weekly transactions from total transactions
-//            $totalAmountPercentage = $totalAmountAllTime > 0
-//                ? ($totalAmountFromTransactions / $totalAmountAllTime) * 100
-//                : 0;
-//
-//            // Get orders within the week with transaction amount
-//            $weeklySalesData = Order::where('merchant_id', $merchantID)
-//                ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
-//                ->selectRaw('DATE(created_at) as date, SUM(sub_total) as total_sales')
-//                ->groupBy('date')
-//                ->orderBy('date')
-//                ->get();
-//
-//            // Get order items within the week to count the sold products
-//            $weeklyProductData = OrderItem::whereHas('order', function ($query) use ($merchantID, $startOfWeek, $endOfWeek) {
-//                $query->where('merchant_id', $merchantID)
-//                    ->whereBetween('created_at', [$startOfWeek, $endOfWeek]);
-//            })->selectRaw('DATE(created_at) as date, COUNT(*) as total_products')
-//                ->groupBy('date')
-//                ->orderBy('date')
-//                ->get();
-//
-//            // Prepare response data by combining sales, product, and transaction data
-//            $data = [];
-//            $daysOfWeek = \Carbon\CarbonPeriod::create($startOfWeek, $endOfWeek); // Monday to Sunday
-//
-//            foreach ($daysOfWeek as $day) {
-//                $dayString = $day->toDateString(); // Convert Carbon date to string (YYYY-MM-DD)
-//
-//                // Use strtotime to format the date
-//                $formattedDay = date('D', strtotime($dayString)); // Day like Mon, Tue
-//                $formattedDate = date('j.m', strtotime($dayString)); // Date like 11.9
-//
-//                // Find the matching sales and product count for the date
-//                $salesForDay = optional($weeklySalesData->firstWhere('date', $dayString))->total_sales ?? 0;
-//                $totalProductsForDay = optional($weeklyProductData->firstWhere('date', $dayString))->total_products ?? 0;
-//
-//                // Add the data to the response array
-//                $data[] = [
-//                    'day' => $formattedDay,
-//                    'date' => $formattedDate,
-//                    'total_sales' => $salesForDay,
-//                    'total_sales_in_usd' => convertShillingToUSD($salesForDay),
-//                    'total_products_sold' => $totalProductsForDay,
-//                ];
-//            }
-//
-//            // Response data including total transaction amount and percentage
-//            $response = [
-//                'total_amount_from_transactions_slsh' => $totalAmountFromTransactions,
-//                'total_amount_from_transactions_usd' => convertShillingToUSD($totalAmountFromTransactions),
-//                'total_amount_from_transactions_percentage' => round($totalAmountPercentage, 2), // Rounded to 2 decimal places
-//                'weekly_sales_statistics' => $data,
-//            ];
-//
-//            // Return success response
-//            return $this->sendResponse($response, 'Weekly sales and statistics retrieved successfully.');
-//
-//        } catch (\Exception $e) {
-//            return $this->sendError('Error fetching weekly sales and statistics.', [$e->getMessage()]);
-//        }
-//    }
-
     public function getWeeklySalesAndStatistics()
     {
         try {
@@ -325,32 +230,6 @@ class DashboardController extends BaseController
             $startOfWeek = now()->startOfWeek();
             $endOfWeek = now()->endOfWeek();
 
-//            // Get total transaction amount for the current week for invoices (no order_id)
-//            $weeklyTransactions = Order::where('merchant_id', $merchantID)
-//                ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
-//                ->where('order_status', 'Paid')
-//                ->get();
-//
-//            // Calculate total transaction amount from these transactions
-//            $totalAmountFromTransactions = $weeklyTransactions->sum('total_price');
-//
-//            // Calculate the total transaction amount for all time (only invoices without order_id)
-//            $totalAmountAllTime = Order::where('merchant_id', $merchantID)
-//                ->sum('total_price');
-//
-//            // Calculate the percentage of weekly transactions from total transactions
-//            $totalAmountPercentage = $totalAmountAllTime > 0
-//                ? ($totalAmountFromTransactions / $totalAmountAllTime) * 100
-//                : 0;
-//
-//            // Get orders within the week and sales data
-//            $weeklySalesData = Order::where('merchant_id', $merchantID)
-//                ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
-//                ->where('order_status', 'Paid')
-//                ->selectRaw('DATE(created_at) as date, SUM(sub_total) as total_sales')
-//                ->groupBy('date')
-//                ->orderBy('date')
-//                ->get();
 
             // Get total transaction amount for the current week for invoices (no order_id)
             $weeklyTransactions = Transaction::where('merchant_id', $merchantID)
@@ -377,14 +256,6 @@ class DashboardController extends BaseController
                 ->orderBy('date')
                 ->get();
 
-//            // Get order items for sold products count
-//            $weeklyProductData = OrderItem::whereHas('order', function ($query) use ($merchantID, $startOfWeek, $endOfWeek) {
-//                $query->where('merchant_id', $merchantID)
-//                    ->whereBetween('created_at', [$startOfWeek, $endOfWeek]);
-//            })->selectRaw('DATE(created_at) as date, COUNT(*) as total_products')
-//                ->groupBy('date')
-//                ->orderBy('date')
-//                ->get();
 
             // Prepare response data for the week
             $data = $this->prepareWeeklySalesData($startOfWeek, $endOfWeek, $weeklyInvoiceData, null);
@@ -426,7 +297,7 @@ class DashboardController extends BaseController
 
             // Get total transaction amount for the current week for invoices (no order_id)
             $weeklyTransactions = Transaction::where('merchant_id', $merchantID)
-                ->whereNull('order_id') // Only transactions without order_id (for silver merchants)
+//                ->whereNull('order_id') // Only transactions without order_id (for silver merchants)
                 ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
                 ->get();
 
@@ -435,7 +306,7 @@ class DashboardController extends BaseController
 
             // Calculate the total transaction amount for all time (only invoices without order_id)
             $totalAmountAllTime = Transaction::where('merchant_id', $merchantID)
-                ->whereNull('order_id') // Only transactions without order_id
+//                ->whereNull('order_id') // Only transactions without order_id
                 ->sum('transaction_amount');
 
             // Calculate the percentage of weekly transactions from total transactions
@@ -445,7 +316,7 @@ class DashboardController extends BaseController
 
             // Get invoices for the week (no order associated)
             $weeklyInvoiceData = Transaction::where('merchant_id', $merchantID)
-                ->whereNull('order_id') // Only invoices with no order_id
+//                ->whereNull('order_id') // Only invoices with no order_id
                 ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
                 ->selectRaw('DATE(created_at) as date, SUM(transaction_amount) as total_sales')
                 ->groupBy('date')
@@ -708,17 +579,18 @@ class DashboardController extends BaseController
             $merchantID = $merchant->id;
 
             // Fetch transaction where order_id is null
-            $transactions = Transaction::where('merchant_id', $merchantID)
-                ->whereNull('order_id') // Only fetch invoices without an order
+            $transactions = Transaction::with('order')->where('merchant_id', $merchantID)
+//                ->whereNull('order_id') // Only fetch invoices without an order
                 ->orderBy('id', 'desc') // Order by creation date descending
                 ->limit(5) // Limit to 5 latest invoices
                 ->get();
 
+//            dd($transactions);
             // Format the response
             $transactionData = $transactions->map(function ($transaction) {
                 return [
                     'invoice_id' => $transaction->id,
-                    'order_id' => null, // No order details
+                    'order_id' => $transaction->order->id ?? '', // No order details
                     'name' => $transaction->phone_number, // Assuming mobile number stored in the invoice
                     'order_date' => dateInsert($transaction->created_at), // Use invoice creation date
                     'invoice_amount' => convertShillingToUSD($transaction->transaction_amount), // Use invoice amount
@@ -726,7 +598,7 @@ class DashboardController extends BaseController
                 ];
             });
 
-            return $this->sendResponse($transactionData, 'transaction without orders fetched successfully.');
+             return $this->sendResponse($transactionData, 'transaction without orders fetched successfully.');
         } catch (\Exception $e) {
             return $this->sendError('An error occurred while fetching transaction.', ['error' => $e->getMessage()]);
         }
@@ -739,6 +611,10 @@ class DashboardController extends BaseController
             // Get the authenticated merchant ID
             $authUser = auth()->user();
 
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
@@ -749,17 +625,17 @@ class DashboardController extends BaseController
             $invoices = Invoice::with('order')
                 ->where('merchant_id', $merchantID)
                 ->where('type', 'POS')
-                ->whereNotNull('order_id') // Only fetch invoices with an order
+//                ->whereNotNull('order_id') // Only fetch invoices with an order
                 ->orderBy('created_at', 'desc') // Order by creation date descending
                 ->limit(5) // Limit to 5 latest invoices
                 ->get();
 
             // Format the response
             $invoiceData = $invoices->map(function ($invoice) {
-                $order = $invoice->order;
+                $order = $invoice->order ?? '';
                 return [
                     'invoice_id' => $invoice->id,
-                    'order_id' => $order->id,
+                    'order_id' => $order->id ?? '',
                     'name' => $order->name ? $order->name : $invoice->mobile_number,
                     'order_date' => $order ? dateInsert($order->created_at) : 'N/A',
                     'invoice_amount' => convertShillingToUSD($order->total_price),
@@ -778,6 +654,10 @@ class DashboardController extends BaseController
         try {
             // Get the authenticated merchant ID
             $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
 
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
@@ -816,6 +696,10 @@ class DashboardController extends BaseController
             // Get the authenticated merchant ID
             $authUser = auth()->user();
 
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
@@ -847,6 +731,10 @@ class DashboardController extends BaseController
         try {
             // Get the authenticated merchant
             $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
 
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');

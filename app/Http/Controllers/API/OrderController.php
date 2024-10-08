@@ -67,7 +67,7 @@ class OrderController extends BaseController
 
             // Add the product to the cart
             $cartItem = CartItem::updateOrCreate(
-                ['cart_id' => $cart->id, 'price' => $product->price, 'product_id' => $request->product_id],
+                ['cart_id' => $cart->id, 'price' => $product->total_price, 'product_id' => $request->product_id],
                 ['quantity' => DB::raw("quantity + {$request->quantity}")]
             );
 
@@ -93,7 +93,6 @@ class OrderController extends BaseController
         if ($validator->fails()) {
             return $this->sendError('Validation Error.', $validator->errors());
         }
-
 
         try {
             // Get authenticated user
@@ -128,8 +127,8 @@ class OrderController extends BaseController
                     'product_id' => $item->product_id,
                     'product_name' => $item->product->product_name,
                     'quantity' => $item->quantity,
-                    'price' => $item->product->price,
-                    'total' => $item->quantity * $item->product->price,
+                    'price' => $item->product->total_price,
+                    'total' => $item->quantity * $item->product->total_price,
                 ];
             });
 
@@ -186,22 +185,25 @@ class OrderController extends BaseController
             }
 
             // Find the product by ID
-            $product = Product::where('merchant_id', $merchantID)->find($validator['product_id']);
+            $product = Product::where('merchant_id', $merchantID)->find($request->product_id);
 
             if (!$product) {
-                return $this->sendError('Product not found.', ['Product not found with ID ' . $validator['product_id']]);
+                return $this->sendError('Product not found.', ['Product not found with ID ' . $request->product_id]);
             }
 
             // Find the specific cart item by product_id
-            $cartItem = $cart->items->where('product_id', $validator['product_id'])->first();
+            $cartItem = $cart->items->where('product_id', $request->product_id)->first();
 
             if (!$cartItem) {
                 return $this->sendError('Product not found in the cart.');
             }
 
+
+            // Calculate final price with VAT
+
             // Update the quantity for the cart item
-            $cartItem->quantity = $validator['quantity'];
-            $cartItem->price = convertUSDToShilling($validator['price']);
+            $cartItem->quantity = $request->quantity;
+            $cartItem->price = $product->total_price + ($product->total_price * $product->vat / 100);
             $cartItem->save();
 
             // Prepare the updated cart items data
@@ -220,6 +222,7 @@ class OrderController extends BaseController
                 'items' => $cartItems,
                 'total' => $cartItems->sum('total'),
             ], 'Cart item updated successfully.');
+
         } catch (\Exception $e) {
             return $this->sendError('Error updating cart item.', $e->getMessage());
         }
@@ -263,14 +266,14 @@ class OrderController extends BaseController
             }
 
             // Find the product by ID
-            $product = Product::where('merchant_id', $merchantID)->find($validator['product_id']);
+            $product = Product::where('merchant_id', $merchantID)->find($request->product_id);
 
             if (!$product) {
-                return $this->sendError('Product not found.', ['Product not found with ID ' . $validator['product_id']]);
+                return $this->sendError('Product not found.', ['Product not found with ID ' . $request->product_id]);
             }
 
             // Find the specific cart item by product_id
-            $cartItem = $cart->items->where('product_id', $validator['product_id'])->first();
+            $cartItem = $cart->items->where('product_id', $request->product_id)->first();
 
             if (!$cartItem) {
                 return $this->sendError('Product not found in the cart.');
@@ -292,6 +295,7 @@ class OrderController extends BaseController
         $validator = $this->validateRequest($request, [
             'cart_type' => 'required|in:shop,stock',
         ]);
+
         if ($validator->fails()) {
             return $this->sendError('Validation Error.', $validator->errors());
         }
@@ -336,7 +340,8 @@ class OrderController extends BaseController
 
 
             $vatCharge = env('VAT_CHARGE');
-            $vat = $subtotal * $vatCharge;
+//            $vat = $subtotal * $vatCharge;
+            $vat = 0;
 
             // Calculate Exelo amount (on sub total)
             $exeloCharge = env('EXELO_CHARGE');
@@ -348,7 +353,7 @@ class OrderController extends BaseController
             // Prepare the response data
             $data = [
                 'subtotal' => convertShillingToUSD($subtotal),
-                'vat' => convertShillingToUSD($vat),
+//                'vat' => convertShillingToUSD($vat),
                 'exelo_amount' => convertShillingToUSD($exeloAmount),
                 'total' => round($totalPriceWithVAT, 2),
                 'total_in_usd' => convertShillingToUSD($totalPriceWithVAT),
@@ -443,13 +448,13 @@ class OrderController extends BaseController
                 }
 
                 // Update the total price
-                $totalPrice += $product->price * $item->quantity;
+                $totalPrice += $item->price * $item->quantity;
             }
 
             // Calculate VAT (10%)
             $vatCharge = env('VAT_CHARGE');
-            $vat = $totalPrice * $vatCharge;
-
+//            $vat = $totalPrice * $vatCharge;
+            $vat = 0;
             // Calculate Exelo amount (on sub total)
             $exeloCharge = env('EXELO_CHARGE');
             $exeloAmount = ($totalPrice) * $exeloCharge;
@@ -457,6 +462,16 @@ class OrderController extends BaseController
             // Calculate total price including VAT and Exelo amount
             $totalPriceWithVAT = $totalPrice + $vat;
 
+//            dd([
+//                'merchant_id' => $merchantID,
+//                'user_id' => $authUser->id,
+//                'sub_total' => round($totalPrice),
+//                'vat' => round($vat),
+//                'exelo_amount' => round($exeloAmount),
+//                'total_price' => round($totalPriceWithVAT),
+//                'order_type' => $request->cart_type,
+//                'order_status' => 'Paid',
+//            ]);
             // Create an order
             $order = Order::create([
                 'merchant_id' => $merchantID,
@@ -478,7 +493,7 @@ class OrderController extends BaseController
                     'order_id' => $order->id,
                     'product_id' => $product->id,
                     'quantity' => $item->quantity,
-                    'price' => $product->price,
+                    'price' => $product->total_price,
                 ]);
 
                 // Decrement the inventory quantity for the specific cart type
@@ -649,7 +664,7 @@ class OrderController extends BaseController
                 }
 
                 // Update the total price
-                $totalPrice += $product->price * $item->quantity;
+                $totalPrice += $product->total_price * $item->quantity;
             }
 
 
@@ -692,7 +707,7 @@ class OrderController extends BaseController
                     'order_id' => $order->id,
                     'product_id' => $product->id,
                     'quantity' => $item->quantity,
-                    'price' => $product->price,
+                    'price' => $product->total_price,
                 ]);
 
                 // Decrement inventory for the specific cart type
@@ -899,7 +914,7 @@ class OrderController extends BaseController
 
             $merchantID = $authUser->merchant->id;
 
-             // Fetch orders by the given type
+            // Fetch orders by the given type
             $orders = Order::where('order_status', $request->order_status)
                 ->where('merchant_id', $merchantID)
                 ->where('user_id', $authUser->id)

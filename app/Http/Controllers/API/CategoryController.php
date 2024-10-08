@@ -55,9 +55,13 @@ class CategoryController extends BaseController
 
     public function store(Request $request)
     {
-        $request->validate([
+        $validator = $this->validateRequest($request, [
             'name' => 'required|string|max:255',
         ]);
+
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
 
         DB::beginTransaction();
 
@@ -76,6 +80,15 @@ class CategoryController extends BaseController
 
             // Get the merchant's ID
             $merchantID = $authUser->merchant->id;
+
+            // Check for duplicate category name for the same merchant
+            $existingCategory = Category::where('name', $request->name)
+                ->where('merchant_id', $merchantID)
+                ->first();
+
+            if ($existingCategory) {
+                return $this->sendError('Category with the same name already exists for this merchant.');
+            }
 
             // Create the category with the merchant_id
             $category = Category::create([
@@ -125,9 +138,10 @@ class CategoryController extends BaseController
 
     public function update(Request $request, $id)
     {
-        $validator = $this->validateRequest($request,[
+        $validator = $this->validateRequest($request, [
             'name' => 'required|string|max:255',
         ]);
+
         if ($validator->fails()) {
             return $this->sendError('Validation Error.', $validator->errors());
         }
@@ -162,8 +176,20 @@ class CategoryController extends BaseController
                 return $this->sendError('You are not authorized to update this category.');
             }
 
+            // Check for duplicate category name for the same merchant (excluding the current category)
+            $existingCategory = Category::where('name', $request->name)
+                ->where('merchant_id', $merchantID)
+                ->where('id', '!=', $id)
+                ->first();
+
+            if ($existingCategory) {
+                return $this->sendError('A category with the same name already exists for this merchant.');
+            }
+
             // Update the category
-            $category->update($request->name);
+            $category->update([
+                'name' => $request->name
+            ]);
 
             DB::commit();
 
@@ -173,6 +199,7 @@ class CategoryController extends BaseController
             return $this->sendError('Error updating category.', $e->getMessage());
         }
     }
+
 
     public function destroy($id)
     {

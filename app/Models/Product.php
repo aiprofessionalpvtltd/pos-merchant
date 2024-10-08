@@ -15,6 +15,8 @@ class Product extends Model
         'category_id',
         'merchant_id',
         'price',
+        'vat',
+        'total_price',
         'stock_limit',
         'alarm_limit',
         'image',
