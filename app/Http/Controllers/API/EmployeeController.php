@@ -86,6 +86,10 @@ class EmployeeController extends BaseController
             return $this->sendError('Merchant not found for the authenticated user.');
         }
 
+        if ($authUser->user_type == 'employee') {
+            $authUser->merchant = $authUser->employee->merchant;
+        }
+
         // Get the merchant
         $merchant = $authUser->merchant;
 
