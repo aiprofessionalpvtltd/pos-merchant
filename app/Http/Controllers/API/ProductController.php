@@ -42,7 +42,7 @@ class ProductController extends BaseController
             'product_name' => 'required|string|max:255',
             'category_id' => 'nullable|exists:categories,id',
             'price' => 'required|numeric',
-            'vat' => 'required|numeric',
+            'vat' => 'required',
             'stock_limit' => 'required|integer',
             'alarm_limit' => 'required|integer',
             'image' => 'required|image|mimes:jpeg,png,jpg,gif', // Image validation
@@ -90,7 +90,7 @@ class ProductController extends BaseController
             $input['vat'] = $request->vat; // Assume this is 0, 5, or 10 as per your formula
 
             // Calculate final price with VAT
-            $input['total_price'] = $request->price + ($request->price * $request->vat / 100);
+            $input['total_price'] = $request->price + ($request->price * $request->vat);
 
 
             if ($product) {
