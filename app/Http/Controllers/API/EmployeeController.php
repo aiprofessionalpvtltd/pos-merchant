@@ -194,6 +194,9 @@ class EmployeeController extends BaseController
             return $this->sendError('Merchant not found for the authenticated user.');
         }
 
+        if ($authUser->user_type == 'employee') {
+            $authUser->merchant = $authUser->employee->merchant;
+        }
         // Get the merchant
         $merchant = $authUser->merchant;
 
@@ -317,6 +320,10 @@ class EmployeeController extends BaseController
         // Check if the authenticated user has an associated merchant
         if (!$authUser || !$authUser->merchant) {
             return response()->json(['error' => 'Merchant not found for the authenticated user.'], 404);
+        }
+
+        if ($authUser->user_type == 'employee') {
+            $authUser->merchant = $authUser->employee->merchant;
         }
 
         try {
