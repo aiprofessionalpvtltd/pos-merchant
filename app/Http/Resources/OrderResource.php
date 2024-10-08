@@ -18,6 +18,7 @@ class OrderResource extends JsonResource
         return [
             'id' => $this->id,
             'merchant_id' => $this->merchant_id,
+            'user_id' => $this->user_id,
             'name' => $this->name,
             'mobile_number' => $this->mobile_number,
             'signature' => Storage::url($this->signature),

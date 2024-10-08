@@ -61,7 +61,7 @@ class OrderController extends BaseController
 
             // Find or create a cart for the user
             $cart = Cart::firstOrCreate(
-                ['merchant_id' => $merchantID, 'user_id' => $authUser->id, 'cart_type' =>$request->cart_type]
+                ['merchant_id' => $merchantID, 'user_id' => $authUser->id, 'cart_type' => $request->cart_type]
             );
 
 
@@ -114,7 +114,7 @@ class OrderController extends BaseController
             // Fetch the user's cart for the given type
             $cart = Cart::where('merchant_id', $merchantID)
                 ->where('user_id', $authUser->id)
-                ->where('cart_type',$request->cart_type)
+                ->where('cart_type', $request->cart_type)
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
@@ -177,7 +177,7 @@ class OrderController extends BaseController
             // Fetch the user's cart for the given type
             $cart = Cart::where('merchant_id', $merchantID)
                 ->where('user_id', $authUser->id)
-                ->where('cart_type', $validator['cart_type'])
+                ->where('cart_type', $request->cart_type)
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
@@ -216,7 +216,7 @@ class OrderController extends BaseController
             });
 
             return $this->sendResponse([
-                'cart_type' => $validator['cart_type'],
+                'cart_type' => $request->cart_type,
                 'items' => $cartItems,
                 'total' => $cartItems->sum('total'),
             ], 'Cart item updated successfully.');
@@ -254,7 +254,7 @@ class OrderController extends BaseController
             // Fetch the user's cart for the given type
             $cart = Cart::where('merchant_id', $merchantID)
                 ->where('user_id', $authUser->id)
-                ->where('cart_type', $validator['cart_type'])
+                ->where('cart_type', $request->cart_type)
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
@@ -318,7 +318,7 @@ class OrderController extends BaseController
             // Fetch the user's cart for the given type
             $cart = Cart::where('merchant_id', $merchantID)
                 ->where('user_id', $authUser->id)
-                ->where('cart_type', $validator['cart_type'])
+                ->where('cart_type', $request->cart_type)
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
@@ -406,7 +406,7 @@ class OrderController extends BaseController
             // Fetch the user's cart for the given type
             $cart = Cart::where('merchant_id', $merchantID)
                 ->where('user_id', $authUser->id)
-                ->where('cart_type', $validator['cart_type'])
+                ->where('cart_type', $request->cart_type)
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
@@ -434,7 +434,7 @@ class OrderController extends BaseController
 
                 // Fetch the product's inventory based on the cart type (shop/stock)
                 $inventory = ProductInventory::where('product_id', $product->id)
-                    ->where('type', $validator['cart_type'])
+                    ->where('type', $request->cart_type)
                     ->first();
 
                 if (!$inventory || $inventory->quantity < $item->quantity) {
@@ -465,7 +465,7 @@ class OrderController extends BaseController
                 'vat' => round($vat),
                 'exelo_amount' => round($exeloAmount),
                 'total_price' => round($totalPriceWithVAT),
-                'order_type' => $validator['cart_type'],
+                'order_type' => $request->cart_type,
                 'order_status' => 'Paid',
             ]);
 
@@ -483,7 +483,7 @@ class OrderController extends BaseController
 
                 // Decrement the inventory quantity for the specific cart type
                 $inventory = ProductInventory::where('product_id', $product->id)
-                    ->where('type', $validator['cart_type'])
+                    ->where('type', $request->cart_type)
                     ->first();
 
                 if ($inventory) {
@@ -520,6 +520,7 @@ class OrderController extends BaseController
             'order_id' => 'required|exists:orders,id',
             'invoice_id' => 'required|exists:invoices,id',
         ]);
+
         if ($validator->fails()) {
             return $this->sendError('Validation Error.', $validator->errors());
         }
@@ -527,20 +528,53 @@ class OrderController extends BaseController
         DB::beginTransaction();
 
         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
+
             // Fetch the order by order_id
-            $order = Order::findOrFail($validator['order_id']);
+            $order = Order::where('merchant_id', $merchantID)->where('user_id', $authUser->id)
+                ->find($request->order_id);
+
+            if (!$order) {
+                return $this->sendError('Order not found.');
+            }
+
             $order->order_status = "Paid";
             $order->save();
 
-            // Fetch the invoice by invoice_id
-            $invoice = Invoice::findOrFail($validator['invoice_id']);
 
+            $invoice = Invoice::where('type', 'POS')->find($request->invoice_id);
+            if (!$invoice) {
+                DB::rollBack();
+                return $this->sendError('Invoice not found.');
+            }
             // Update the invoice with the order_id and merchant_id from the order
             $invoice->order_id = $order->id;
             $invoice->merchant_id = $order->merchant_id;
+            $invoice->user_id = $order->user_id;
             $invoice->save();
 
-            $transaction = Transaction::where('merchant_id', $order->merchant_id)->first();
+
+            $transaction = Transaction::where('merchant_id', $merchantID)->whereNull('order_id')->latest()->first();
+            if (!$transaction) {
+                DB::rollBack();
+                return $this->sendError('transaction not found.');
+            }
+
+
             $transaction->order_id = $order->id;
             $transaction->save();
 
@@ -555,7 +589,6 @@ class OrderController extends BaseController
 
     public function placePendingOrder(Request $request)
     {
-        $user = auth()->user();
 
         // Validate the input fields
         $validator = $this->validateRequest($request, [
@@ -572,9 +605,25 @@ class OrderController extends BaseController
 
         try {
 
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
             // Fetch the user's cart for the given type
-            $cart = Cart::where('merchant_id', $user->merchant->id)
-                ->where('cart_type', $validator['cart_type'])
+            $cart = Cart::where('merchant_id', $merchantID)
+                ->where('user_id', $authUser->id)
+                ->where('cart_type', $request->cart_type)
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
@@ -591,7 +640,7 @@ class OrderController extends BaseController
 
                 // Fetch the product's inventory based on the cart type (shop/stock)
                 $inventory = ProductInventory::where('product_id', $product->id)
-                    ->where('type', $validator['cart_type'])
+                    ->where('type', $request->cart_type)
                     ->first();
 
                 if (!$inventory || $inventory->quantity < $item->quantity) {
@@ -621,8 +670,8 @@ class OrderController extends BaseController
 
             // Create the order
             $order = Order::create([
-                'merchant_id' => $user->merchant->id,
-                'user_id' => $user->id,
+                'merchant_id' => $merchantID,
+                'user_id' => $authUser->id,
                 'name' => $request->input('name') ?? null,
                 'mobile_number' => $request->input('mobile_number') ?? null,
                 'signature' => $signaturePath,
@@ -630,7 +679,7 @@ class OrderController extends BaseController
                 'vat' => round($vat),
                 'exelo_amount' => round($exeloAmount),
                 'total_price' => round($totalPriceWithVAT),
-                'order_type' => $validator['cart_type'],
+                'order_type' => $request->cart_type,
                 'order_status' => 'Pending',
             ]);
 
@@ -648,7 +697,7 @@ class OrderController extends BaseController
 
                 // Decrement inventory for the specific cart type
                 $inventory = ProductInventory::where('product_id', $product->id)
-                    ->where('type', $validator['cart_type'])
+                    ->where('type', $request->cart_type)
                     ->first();
 
                 if ($inventory) {
@@ -685,9 +734,23 @@ class OrderController extends BaseController
 
         try {
 
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
 
             // Retrieve the order by the provided order_id
-            $order = Order::find($validator['order_id']);
+            $order = Order::where('merchant_id', $merchantID)->where('user_id', $authUser->id)->where('order_status', 'Pending')->find($request->order_id);
 
 
             if (!$order) {
@@ -723,8 +786,23 @@ class OrderController extends BaseController
         try {
 
 
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
             // Retrieve the order by the provided order_id
-            $order = Order::find($validator['order_id']);
+            $order = Order::where('merchant_id', $merchantID)->where('user_id', $authUser->id)->where('order_status', 'Complete')->find($request->order_id);
 
 
             if (!$order) {
@@ -802,14 +880,13 @@ class OrderController extends BaseController
 
     public function getOrdersByStatus(Request $request)
     {
-
         $validator = $this->validateRequest($request, [
             'order_status' => 'required|in:Pending,Paid,Complete',
         ]);
+
         if ($validator->fails()) {
             return $this->sendError('Validation Error.', $validator->errors());
         }
-
 
         try {
 
@@ -822,9 +899,10 @@ class OrderController extends BaseController
 
             $merchantID = $authUser->merchant->id;
 
-            // Fetch orders by the given type
+             // Fetch orders by the given type
             $orders = Order::where('order_status', $request->order_status)
                 ->where('merchant_id', $merchantID)
+                ->where('user_id', $authUser->id)
                 ->orderBy('id', 'DESC')
                 ->with('items.product') // Load related order items and products
                 ->get();
@@ -870,8 +948,24 @@ class OrderController extends BaseController
     {
 
         try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
             // Retrieve the order by order_id
-            $order = Order::with('items.product')->find($request->order_id);
+            $order = Order::with('items.product')->where('merchant_id', $merchantID)
+                ->where('user_id', $authUser->id)->find($request->order_id);
 
             if (!$order || $order->items->isEmpty()) {
                 return $this->sendError('Order not found or has no items.');
@@ -903,6 +997,7 @@ class OrderController extends BaseController
                 'mobile_number' => $order->mobile_number,
                 'signature' => Storage::url($order->signature),
                 'merchant_id' => $order->merchant_id,
+                'user_id' => $order->user_id,
                 'sub_total' => convertShillingToUSD($subtotal),
                 'vat' => convertShillingToUSD($vat),
                 'exelo_amount' => convertShillingToUSD($exeloAmount),
