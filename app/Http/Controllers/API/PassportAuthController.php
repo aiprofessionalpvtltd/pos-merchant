@@ -53,6 +53,7 @@ class PassportAuthController extends BaseController
         return $this->sendResponse([
             'user' => new UserResource($user),
             'merchant' => new MerchantResource($merchant),
+            'phone_number' => $merchant->phone_number,
             'user_type' => $user->user_type,
             'is_pin' => $isPin,
             'short_name' => $this->getInitials($user->name)
@@ -103,6 +104,7 @@ class PassportAuthController extends BaseController
                 'user' => new UserResource($user),
                 'merchant' => new MerchantResource($merchant),
                 'token' => $token,
+                'phone_number' => $merchant->phone_number,
                 'user_type' => $user->user_type,
                 'short_name' => $this->getInitials($user->name)
             ], 'Merchant Login successful.');
@@ -138,7 +140,7 @@ class PassportAuthController extends BaseController
             return $this->sendResponse([
                 'user' => new UserResource($user),
                 'merchant' => new MerchantResource($merchant),
-
+                'phone_number' => $merchant->phone_number,
                 'user_type' => $user->user_type,
                 'short_name' => $this->getInitials($user->name)
             ], 'Merchant Pin Verified successful.');
@@ -182,6 +184,7 @@ class PassportAuthController extends BaseController
                     'user' => new UserResource($employee->user),
                     'employee' => new EmployeeResource($employee),
                     'merchant' => new MerchantResource($employee->merchant),
+                    'phone_number' => $employee->phone_nmber,
                     'user_type' => $authUser->user_type,
                     'short_name' => $this->getInitials($authUser->name),
                 ], 'Employee Info retrieved successfully.');
@@ -217,6 +220,7 @@ class PassportAuthController extends BaseController
                 'permissions' => MerchantPermissionResource::collection($permissions),
                 'user' => new UserResource($merchant->user),
                 'merchant' => new MerchantResource($merchant),
+                'phone_number' => $merchant->phone_number,
                 'user_type' => $authUser->user_type,
                 'short_name' => $this->getInitials($authUser->name),
             ], 'Merchant Info retrieved successfully.');

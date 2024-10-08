@@ -454,6 +454,7 @@ class EmployeeController extends BaseController
                 'employee' => new EmployeeResource($employee),
                 'merchant' => new MerchantResource($merchant),
                 'token' => $token,
+                'phone_number' => $employee->phone_number,
                 'user_type' => $user->user_type,
                 'short_name' => $this->getInitials($employee->first_name . ' ' . $employee->last_name),
             ], 'Employee login successful.');
