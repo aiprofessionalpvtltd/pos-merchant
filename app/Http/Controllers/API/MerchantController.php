@@ -77,15 +77,30 @@ class MerchantController extends BaseController
             // Remove spaces from phone number
             $phoneNumber = str_replace(' ', '', $request->input('phone_number'));
 
-            $verifiedNumber = getCompanyNameByPhone($phoneNumber);
+            // Verify phone number and get the specific company column
+            $verifiedNumber = $this->verifiedPhoneNumber($phoneNumber);
 
-            // Merge the modified phone number back into the request data
-            $request->merge([
-                'phone_number' => $phoneNumber,
-                $verifiedNumber => $phoneNumber,
-            ]);
+            // If the phone number is invalid or company not recognized, return error
+            if (!$verifiedNumber) {
+                return $this->sendError('Invalid phone number. Company not recognized.');
+            }
 
-            // Create the merchant with the modified request data
+            // If edahab_number is detected, update only edahab_number
+            if ($verifiedNumber == 'edahab_number') {
+                $request->merge([
+                    'phone_number' => $phoneNumber,
+                    'edahab_number' => $phoneNumber,
+                ]);
+            } else {
+                $request->merge([
+                    'phone_number' => $phoneNumber,
+                    'zaad_number' => $phoneNumber,
+                    'golis_number' => $phoneNumber,
+                    'evc_number' => $phoneNumber,
+                ]);
+            }
+
+             // Create the merchant with the modified request data
             $merchant = Merchant::create($request->all());
 
             // Get Merchant Subscription
@@ -319,6 +334,7 @@ class MerchantController extends BaseController
     public function verificationComplete(Request $request)
     {
         try {
+            // Validate the request
             $validator = Validator::make($request->all(), [
                 'phone_number' => 'required|string|max:15',
             ]);
@@ -338,38 +354,37 @@ class MerchantController extends BaseController
             // Get the merchant
             $merchant = $authUser->merchant;
 
-            if (!$merchant) {
-                return $this->sendError('Merchant Not Found', 404);
-            }
+            // Clean up the phone number (remove spaces)
+            $phoneNumber = str_replace(' ', '', $request->input('phone_number'));
 
-            // Verify the phone number to get the company name (column name)
-            $company = $this->verifiedPhoneNumber($request->phone_number);
+            // Verify phone number and get the specific company column (edahab_number, zaad_number, etc.)
+            $verifiedNumber = $this->verifiedPhoneNumber($phoneNumber);
 
-            // If the company is not recognized, return an error
-            if ($company === null) {
+            // If the phone number is invalid or company not recognized, return error
+            if (!$verifiedNumber) {
                 return $this->sendError('Invalid phone number. Company not recognized.');
             }
 
-            // Static column update based on the company
-            if ($company === 'edahab_number') {
-                $merchant->edahab_number = $request->phone_number;
-            } elseif ($company === 'zaad_number') {
-                $merchant->zaad_number = $request->phone_number;
-            } elseif ($company === 'golis_number') {
-                $merchant->golis_number = $request->phone_number;
-            } elseif ($company === 'evc_number') {
-                $merchant->evc_number = $request->phone_number;
+            // Apply logic before saving the merchant
+            if ($verifiedNumber == 'edahab_number') {
+                // Update only edahab_number
+                $merchant->phone_number = $phoneNumber;
+                $merchant->edahab_number = $phoneNumber;
             } else {
-                return $this->sendError('Invalid company type.', 404);
+                // Update other columns if not edahab_number
+                $merchant->phone_number = $phoneNumber;
+                $merchant->zaad_number = $phoneNumber;
+                $merchant->golis_number = $phoneNumber;
+                $merchant->evc_number = $phoneNumber;
             }
 
-            // Save the updated phone number for the specific column
+             // Save the updated phone number in the merchant record
             $merchant->save();
 
             // Return success message
             return $this->sendResponse([
                 'merchant' => new MerchantResource($merchant),
-                'company' => $company
+                'company' => $verifiedNumber,
             ], 'Phone number verification complete and updated successfully.');
 
         } catch (\Exception $e) {

@@ -118,16 +118,19 @@ class BaseController extends Controller
         $localNumber = substr($phoneNumber, 3); // Strip country code (+252)
 
         // Check the company based on the starting digits
-        if (strpos($localNumber, '65') === 0) {
+
+        // Edahab has multiple prefixes: '65', '66', and '62'
+        if (in_array(substr($localNumber, 0, 2), ['65', '66', '62'])) {
             return "edahab_number";
         } elseif (strpos($localNumber, '63') === 0) {
             return "zaad_number";
-        } elseif (strpos($localNumber, '90') === 0) { // Replace XXX with the Golis prefix when remembered
+        } elseif (strpos($localNumber, '90') === 0) {
             return "golis_number";
-        } elseif (strpos($localNumber, '61') === 0) { // Replace YYY with the EVC prefix when remembered
+        } elseif (strpos($localNumber, '61') === 0) {
             return "evc_number";
         } else {
             return null;
         }
     }
+
 }

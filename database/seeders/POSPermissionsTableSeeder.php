@@ -14,12 +14,11 @@ class POSPermissionsTableSeeder extends Seeder
     public function run()
     {
         $permissions = [
-            'inventory',
             'POS',
-            'employee overview',
-            'statistic and reports',
-            'profile',
-            'transaction overview & history',
+            'Inventory',
+            'Transactions',
+            'Reports',
+            'Employee Management',
         ];
 
         foreach ($permissions as $permission) {
