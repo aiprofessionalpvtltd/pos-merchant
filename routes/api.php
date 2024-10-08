@@ -53,7 +53,7 @@ Route::get('employee/getPOSPermission', [EmployeeController::class, 'getPOSPermi
 
 Route::middleware('auth:api')->group(function () {
 
-    Route::post('login/userinfo', [PassportAuthController::class, 'userInfo']);
+    Route::get('login/userinfo', [PassportAuthController::class, 'userInfo']);
 
 
     Route::post('merchants/change-pin', [MerchantVerificationController::class, 'changePin']);
