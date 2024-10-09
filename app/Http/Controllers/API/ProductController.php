@@ -8,6 +8,7 @@ use App\Http\Resources\ProductCatalogResource;
 use App\Http\Resources\ProductResource;
 use App\Http\Resources\TopSellingProductResource;
 use App\Models\Category;
+use App\Models\InventoryHistory;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductInventory;
@@ -107,20 +108,24 @@ class ProductController extends BaseController
                 ->where('type', $request->input('type'))
                 ->first();
 
+            // Create a new inventory record
+            $inventoryData = [
+                'product_id' => $product->id,
+                'quantity' => $request->input('quantity'),
+                'type' => $request->input('type'),
+            ];
+
             if ($existingInventory) {
                 // Update the existing inventory
                 $existingInventory->quantity += $request->input('quantity'); // Increment quantity
                 $existingInventory->save();
             } else {
-                // Create a new inventory record
-                $inventoryData = [
-                    'product_id' => $product->id,
-                    'quantity' => $request->input('quantity'),
-                    'type' => $request->input('type'),
-                ];
 
                 ProductInventory::create($inventoryData);
             }
+
+            // add entry to inventory history
+            InventoryHistory::create($inventoryData);
 
             // Load the relationships
             $product->load(['category', 'inventories', 'merchant']);

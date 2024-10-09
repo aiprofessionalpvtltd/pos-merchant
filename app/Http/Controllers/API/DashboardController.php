@@ -590,7 +590,7 @@ class DashboardController extends BaseController
             $transactionData = $transactions->map(function ($transaction) {
                 return [
                     'invoice_id' => $transaction->id,
-                    'order_id' => $transaction->order->id ?? '', // No order details
+                    'order_id' => $transaction->order->id ?? null, // No order details
                     'name' => $transaction->phone_number, // Assuming mobile number stored in the invoice
                     'order_date' => dateInsert($transaction->created_at), // Use invoice creation date
                     'invoice_amount' => convertShillingToUSD($transaction->transaction_amount), // Use invoice amount
@@ -635,7 +635,7 @@ class DashboardController extends BaseController
                 $order = $invoice->order ?? '';
                 return [
                     'invoice_id' => $invoice->id,
-                    'order_id' => $order->id ?? '',
+                    'order_id' => $order->id ?? null,
                     'name' => $order->name ? $order->name : $invoice->mobile_number,
                     'order_date' => $order ? dateInsert($order->created_at) : 'N/A',
                     'invoice_amount' => convertShillingToUSD($order->total_price),
