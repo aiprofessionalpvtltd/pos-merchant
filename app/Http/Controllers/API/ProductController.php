@@ -87,7 +87,7 @@ class ProductController extends BaseController
 
 
             $input['price'] = $request->price;
-            $input['vat'] = $request->vat; // Assume this is 0, 5, or 10 as per your formula
+            $input['vat'] = $request->vat * 100; // Assume this is 0, 5, or 10 as per your formula
 
             // Calculate final price with VAT
             $input['total_price'] = $request->price + ($request->price * $request->vat);

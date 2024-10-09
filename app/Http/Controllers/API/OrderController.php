@@ -908,6 +908,10 @@ class OrderController extends BaseController
             // Get the authenticated merchant ID
             $authUser = auth()->user();
 
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
@@ -921,6 +925,7 @@ class OrderController extends BaseController
                 ->orderBy('id', 'DESC')
                 ->with('items.product') // Load related order items and products
                 ->get();
+
 
             if ($orders->isEmpty()) {
                 return $this->sendError('No orders found for the specified type.');
