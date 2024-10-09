@@ -565,7 +565,6 @@ class ProductController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
@@ -574,9 +573,15 @@ class ProductController extends BaseController
             // Get merchant ID from authenticated user's merchant relation
             $merchantID = $authUser->merchant->id;
 
-            // Get the date parameter from the request
-            $filterDate = $request->input('date'); // Expected format: YYYY-MM-DD
+            // Get the date range from the request in the format "01.01.2024 - 30.11.2024"
+            $dateRange = $request->input('date'); // Expected format: DD.MM.YYYY - DD.MM.YYYY
 
+            // If date range is provided, convert it to start and end dates
+            if ($dateRange) {
+                [$startDate, $endDate] = $this->convertDateRange($dateRange);
+            }
+
+//            dd($startDate, $endDate);
             // Fetch sold products grouped by product_id and sold date (without time)
             $soldProducts = OrderItem::with(['product' => function ($query) use ($merchantID) {
                 // Load the products along with their inventories
@@ -590,10 +595,8 @@ class ProductController extends BaseController
                 ->groupBy('product_id', DB::raw('DATE(created_at)'))
                 ->orderBy('sold_date', 'desc');
 
-            // If a date filter is provided, apply it to the query
-            if ($filterDate) {
-                $soldProducts->whereDate('created_at', $filterDate);
-            }
+            // Apply date range filter
+            $soldProducts->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate]);
 
             // Execute the query
             $soldProducts = $soldProducts->get();
@@ -632,6 +635,21 @@ class ProductController extends BaseController
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving sold product listings.', [$e->getMessage()]);
         }
+    }
+
+    /**
+     * Helper function to convert date range from "DD.MM.YYYY - DD.MM.YYYY" to "YYYY-MM-DD".
+     */
+    private function convertDateRange($dateRange)
+    {
+        // Split the date range by the hyphen
+        [$startDate, $endDate] = explode(' - ', $dateRange);
+
+        // Convert both dates from DD.MM.YYYY to YYYY-MM-DD
+        $startDate = \Carbon\Carbon::createFromFormat('d.m.Y', trim($startDate))->format('Y-m-d');
+        $endDate = \Carbon\Carbon::createFromFormat('d.m.Y', trim($endDate))->format('Y-m-d');
+
+        return [$startDate, $endDate];
     }
 
 
