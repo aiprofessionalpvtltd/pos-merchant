@@ -24,6 +24,7 @@ class EmployeeResource extends JsonResource
             'location' => $this->location,
             'role' => $this->role,
             'salary' => $this->salary,
+            'salary_in_usd' => convertShillingToUSD($this->salary),
             'permissions' => EmployeePermissionResource::collection($this->whenLoaded('permissions')), // Use 'permissions' relation directly
             'user' => new UserResource($this->whenLoaded('user')), // Assuming you have a CategoryResource
 

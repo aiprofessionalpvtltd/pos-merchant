@@ -179,7 +179,7 @@ class EmployeeController extends BaseController
             'location' => 'required|string|max:100',
             'role' => 'required|string|max:50',
             'salary' => 'required|numeric|min:0',
-            'permissions' => 'required|array', // Expecting an array of permission IDs
+            'permissions' => 'sometimes|array', // Expecting an array of permission IDs
         ]);
 
         if ($validator->fails()) {
@@ -226,20 +226,24 @@ class EmployeeController extends BaseController
                 'salary' => $request->salary,
             ]);
 
-            // Sync permissions: remove old and add new permissions
-            EmployeePermission::where('employee_id', $employee->id)->delete();
 
-            foreach ($request->permissions as $permissionId) {
-                // Find the permission by ID
-                $permission = POSPermission::find($permissionId);
 
-                if ($permission) {
-                    EmployeePermission::create([
-                        'employee_id' => $employee->id,
-                        'pos_permission_id' => $permissionId,
-                    ]);
+            if($request->permissions){
+                // Sync permissions: remove old and add new permissions
+                EmployeePermission::where('employee_id', $employee->id)->delete();
+                foreach ($request->permissions as $permissionId) {
+                    // Find the permission by ID
+                    $permission = POSPermission::find($permissionId);
+
+                    if ($permission) {
+                        EmployeePermission::create([
+                            'employee_id' => $employee->id,
+                            'pos_permission_id' => $permissionId,
+                        ]);
+                    }
                 }
             }
+
 
             // Update the associated user account
             $user = $employee->user;

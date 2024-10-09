@@ -406,7 +406,11 @@ class ProductController extends BaseController
                 return [
                     'id' => $product->id,
                     'product_name' => $product->product_name,
-                    'price' => convertShillingToUSD($product->price),
+                    'price' => $product->price,
+                    'price_in_usd' => convertShillingToUSD($product->price),
+                    'vat' => convertVATPercentagetoDecimal($product->vat),
+                    'total_price' => $product->total_price,
+                    'total_price_in_usd' => convertShillingToUSD($product->total_price),
                     'in_stock_quantity' => $inStockQuantity,
                     'in_shop_quantity' => $inShopQuantity,
                     'in_transportation_quantity' => $inTransportationQuantity,
@@ -615,7 +619,7 @@ class ProductController extends BaseController
                     'product_name' => $product->product_name,
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
-                    'price' => convertShillingToUSD($product->price * $soldProduct->total_sold), // Multiply price by total sold
+                    'price' => convertShillingToUSD($product->total_price * $soldProduct->total_sold), // Multiply price by total sold
                     'in_shop_quantity' => $inShopQuantity,
                     'in_stock_quantity' => $inStockQuantity,
                     'total_sold' => $soldProduct->total_sold,
@@ -668,7 +672,11 @@ class ProductController extends BaseController
                     'product_name' => $product->product_name,
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
-                    'price' => convertShillingToUSD($product->price),
+                    'price' => $product->price,
+                    'price_in_usd' => convertShillingToUSD($product->price),
+                    'vat' => convertVATPercentagetoDecimal($product->vat),
+                    'total_price' => $product->total_price,
+                    'total_price_in_usd' => convertShillingToUSD($product->total_price),
                     'in_shop_quantity' => $inShopQuantity,
                 ];
             });
@@ -717,7 +725,11 @@ class ProductController extends BaseController
                     'product_name' => $product->product_name,
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
-                    'price' => convertShillingToUSD($product->price),
+                    'price' => $product->price,
+                    'price_in_usd' => convertShillingToUSD($product->price),
+                    'vat' => convertVATPercentagetoDecimal($product->vat),
+                    'total_price' => $product->total_price,
+                    'total_price_in_usd' => convertShillingToUSD($product->total_price),
                     'in_stock_quantity' => $inStockQuantity,
 
                 ];
@@ -771,7 +783,11 @@ class ProductController extends BaseController
                     'product_name' => $product->product_name,
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
-                    'price' => convertShillingToUSD($product->price),
+                    'price' => $product->price,
+                    'price_in_usd' => convertShillingToUSD($product->price),
+                    'vat' => convertVATPercentagetoDecimal($product->vat),
+                    'total_price' => $product->total_price,
+                    'total_price_in_usd' => convertShillingToUSD($product->total_price),
                     'in_shop_quantity' => $inventory->total_quantity,
                 ];
             });
@@ -823,7 +839,11 @@ class ProductController extends BaseController
                     'product_name' => $product->product_name,
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
-                    'price' => convertShillingToUSD($product->price),
+                    'price' => $product->price,
+                    'price_in_usd' => convertShillingToUSD($product->price),
+                    'vat' => convertVATPercentagetoDecimal($product->vat),
+                    'total_price' => $product->total_price,
+                    'total_price_in_usd' => convertShillingToUSD($product->total_price),
                     'in_stock_quantity' => $inventory->total_quantity,
                 ];
             });

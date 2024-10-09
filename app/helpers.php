@@ -281,6 +281,14 @@ function convertUSDToShilling($usd)
 }
 
 
+function convertVATPercentagetoDecimal($vat){
+    return $vat / 100;
+}
+
+function convertVATDecimaloPercentage($vat){
+    return $vat * 100;
+}
+
 
 
 
