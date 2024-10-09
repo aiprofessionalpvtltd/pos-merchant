@@ -176,10 +176,10 @@ class EmployeeController extends BaseController
             'first_name' => 'required|string|max:50',
             'last_name' => 'required|string|max:50',
             'dob' => 'required|date',
-            'location' => 'required|string|max:100',
-            'role' => 'required|string|max:50',
+//            'location' => 'required|string|max:100',
+//            'role' => 'required|string|max:50',
             'salary' => 'required|numeric|min:0',
-            'permissions' => 'sometimes|array', // Expecting an array of permission IDs
+//            'permissions' => 'sometimes|array', // Expecting an array of permission IDs
         ]);
 
         if ($validator->fails()) {
@@ -221,8 +221,8 @@ class EmployeeController extends BaseController
                 'first_name' => $request->first_name,
                 'last_name' => $request->last_name,
                 'dob' => $request->dob,
-                'location' => $request->location,
-                'role' => $request->role,
+//                'location' => $request->location,
+//                'role' => $request->role,
                 'salary' => $request->salary,
             ]);
 
