@@ -1053,6 +1053,10 @@ class OrderController extends BaseController
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
             // Get merchant ID from authenticated user's merchant relation
             $merchantID = $authUser->merchant->id;
 
@@ -1098,7 +1102,7 @@ class OrderController extends BaseController
                 'merchant' => [
                     'business_name' => $order->merchant->business_name,
                     'merchant_code' => $order->merchant->merchant_code,
-                    'cashier_name' => $order->user->merchant->first_name . ' ' . $order->user->merchant->last_name,
+                    'cashier_name' => $order->user->name,
                     'phone_number' => $order->merchant->phone_number,
                     'zaad_number' => $order->merchant->phone_number,
                 ],

@@ -312,7 +312,7 @@ class PaymentController extends BaseController
         $currency = $request->input('currency');
         $type = $request->input('type');
 
-        if($type === 'POS' || $type == 'Subscription'){
+        if ($type === 'POS' || $type == 'Subscription') {
             $merchantID = $request->input('merchant_id');
         }
 
@@ -372,7 +372,6 @@ class PaymentController extends BaseController
                     'e_transaction_id' => $transactionId,
                     'type' => $type,
                 ]);
-
 
 
                 // Commit the transaction if everything is successful
@@ -516,6 +515,11 @@ class PaymentController extends BaseController
 
             $apiKey = env('EXELO_API_KEY'); // From .env
             $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
             $phoneNumber = $authUser->merchant->phone_number;
             $merchant = Merchant::where('phone_number', $phoneNumber)->first();
         }
@@ -534,10 +538,10 @@ class PaymentController extends BaseController
             "currency" => $currency
         ];
 
-//        return response()->json($payload,200);
 
         $bodyStr = json_encode($payload);
-        $secret = 'kgBnW9Paa7ZErxB4GFo81FaASDFTQKhiOLxryw';
+        $secret = env('SECRET_KEY');
+
         $hashValue = $this->generateHash($bodyStr, $secret);
         $url = "https://edahab.net/api/api/agentPayment?hash=$hashValue";
 
@@ -548,7 +552,6 @@ class PaymentController extends BaseController
 
             if ($responseData['TransactionId'] == null) {
                 return $this->sendError($responseData['TransactionMesage'], '', 500);
-//                return response()->json(['error' => $responseData['TransactionMesage']], 500);
             }
 
             // Save the response data to the database
@@ -592,7 +595,8 @@ class PaymentController extends BaseController
         $currency = $request->input('currency', 'SLSH');  // Currency
         $type = $request->input('type');  // Type of invoice
         $merchantID = NULL;
-        if($type === 'POS' || $type == 'Subscription'){
+
+        if ($type === 'POS' || $type == 'Subscription') {
             $merchantID = $request->input('merchant_id');
         }
 
