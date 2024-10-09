@@ -459,6 +459,16 @@ class EmployeeController extends BaseController
                 'phone_number' => $employee->phone_number,
                 'user_type' => $user->user_type,
                 'short_name' => $this->getInitials($employee->first_name . ' ' . $employee->last_name),
+                'profile' => [
+                    'first_name' => $employee->first_name,
+                    'last_name' => $employee->last_name,
+                    'business_name' => $employee->merchant->business_name,
+                    'merchant_code' => $employee->merchant->merchant_code,
+                    'location' => $employee->location,
+                    'role' => $employee->role,
+                    'salary' => $employee->salary,
+                    'salary_in_usd' => convertShillingToUSD($employee->salary),
+                ]
             ], 'Employee login successful.');
 
         } catch (\Exception $e) {
