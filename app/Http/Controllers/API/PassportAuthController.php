@@ -187,6 +187,17 @@ class PassportAuthController extends BaseController
                     'phone_number' => $employee->phone_nmber,
                     'user_type' => $authUser->user_type,
                     'short_name' => $this->getInitials($authUser->name),
+                    'profile' => [
+                        'first_name' => $employee->first_name,
+                        'last_name' => $employee->last_name,
+                        'business_name' => $employee->merchant->business_name,
+                        'merchant_code' => $employee->merchant->merchant_code,
+                        'location' => $employee->location,
+                        'role' => $employee->role,
+                        'salary' => $employee->salary,
+                        'salary_in_usd' => convertShillingToUSD($employee->salary),
+                    ]
+
                 ], 'Employee Info retrieved successfully.');
             }
 
@@ -223,6 +234,14 @@ class PassportAuthController extends BaseController
                 'phone_number' => $merchant->phone_number,
                 'user_type' => $authUser->user_type,
                 'short_name' => $this->getInitials($authUser->name),
+                'profile' => [
+                    'first_name' => $merchant->first_name,
+                    'last_name' => $merchant->last_name,
+                    'phone_number' => $merchant->phone_number,
+                    'business_name' => $merchant->business_name,
+                    'merchant_code' => $merchant->merchant_code,
+                    'location' => $merchant->location,
+                ]
             ], 'Merchant Info retrieved successfully.');
 
         } catch (\Exception $e) {
