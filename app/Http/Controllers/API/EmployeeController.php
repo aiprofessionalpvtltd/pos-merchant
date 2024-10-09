@@ -221,9 +221,7 @@ class EmployeeController extends BaseController
                 'first_name' => $request->first_name,
                 'last_name' => $request->last_name,
                 'dob' => $request->dob,
-//                'location' => $request->location,
-//                'role' => $request->role,
-                'salary' => $request->salary,
+                 'salary' => $request->salary,
             ]);
 
 
