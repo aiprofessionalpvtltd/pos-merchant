@@ -186,18 +186,19 @@ class PassportAuthController extends BaseController
                 // Load employee permissions
                 $employee->load('permissions.permission');
 
-                // Return response with employee-specific data
+                 // Return response with employee-specific data
                 return $this->sendResponse([
                     'permissions' => EmployeePermissionResource::collection($employee->permissions),
                     'user' => new UserResource($employee->user),
                     'employee' => new EmployeeResource($employee),
                     'merchant' => new MerchantResource($employee->merchant),
-                    'phone_number' => $employee->phone_nmber,
+                    'phone_number' => $employee->phone_number,
                     'user_type' => $authUser->user_type,
                     'short_name' => $this->getInitials($authUser->name),
                     'profile' => [
                         'first_name' => $employee->first_name,
                         'last_name' => $employee->last_name,
+                        'phone_number' => $employee->phone_number,
                         'business_name' => $employee->merchant->business_name,
                         'merchant_code' => $employee->merchant->merchant_code,
                         'location' => $employee->location,
@@ -206,7 +207,7 @@ class PassportAuthController extends BaseController
                         'salary_in_usd' => convertShillingToUSD($employee->salary),
                     ]
 
-                ], 'Employee Info retrieved successfully.');
+                ], 'User Info retrieved successfully.');
             }
 
             // If the user is not an employee, assume they are a merchant
