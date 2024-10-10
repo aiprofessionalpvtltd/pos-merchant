@@ -1022,4 +1022,129 @@ class ProductController extends BaseController
         }
     }
 
+    public function getInventorySummary(Request $request)
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Check if the user is an employee and fetch the associated merchant
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
+            // Get start and end dates from the request query parameters (optional)
+            $startDate = $request->query('start_date');
+            $endDate = $request->query('end_date');
+
+            // Validate the date format using Carbon
+            if ($startDate) {
+                $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
+            }
+
+            if ($endDate) {
+                $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+            }
+
+            // Fetch inventory history for the merchant based on product's merchant_id
+            $inventorySummary = InventoryHistory::with(['product' => function ($query) use ($merchantID) {
+                $query->where('merchant_id', $merchantID);
+            }])
+                ->when($startDate, function ($query) use ($startDate) {
+                    return $query->where('created_at', '>=', $startDate);
+                })
+                ->when($endDate, function ($query) use ($endDate) {
+                    return $query->where('created_at', '<=', $endDate);
+                })
+                ->get();
+
+            // Prepare the summary report
+            $summaryData = $inventorySummary->groupBy('type')->map(function ($items, $type) use ($startDate, $endDate) {
+                return $items->map(function ($inventory) use ($startDate, $endDate) {
+                    // Calculate total sold within the specified date range
+                    $totalSold = $inventory->product->orderItems()
+                        ->where('created_at', '>=', $startDate)
+                        ->where('created_at', '<=', $endDate)
+                        ->sum('quantity');
+
+                    return [
+                        'product_name' => $inventory->product->product_name ?? 'Unknown Product',
+                        'inshop_quantity' => $inventory->type == 'shop' ? $inventory->quantity : 0,
+                        'instock_quantity' => $inventory->type == 'stock' ? $inventory->quantity : 0,
+                        'in_transportation' => $inventory->type == 'transportation' ? $inventory->quantity : 0,
+                        'total_sold' => $totalSold, // Total sold within the specified date range
+                    ];
+                });
+            });
+
+            // Flatten the summary data for response
+            $flattenedSummary = [];
+            foreach ($summaryData as $type => $items) {
+                foreach ($items as $item) {
+                    $flattenedSummary[] = [
+                        'type' => $type,
+                        'product_name' => $item['product_name'],
+                        'inshop_quantity' => $item['inshop_quantity'],
+                        'instock_quantity' => $item['instock_quantity'],
+                        'in_transportation' => $item['in_transportation'],
+                        'total_sold' => $item['total_sold'],
+                    ];
+                }
+            }
+
+            // Return success response with the summary data
+            return $this->sendResponse($flattenedSummary, 'Inventory summary retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error retrieving inventory summary.', [$e->getMessage()]);
+        }
+    }
+
+    public function getCombinedInventoryReportAndSummary(Request $request)
+    {
+        try {
+            $startDate = $request->query('start_date');
+            $endDate = $request->query('end_date');
+
+
+            // Call the existing inventory report function
+            $inventoryReport = $this->getInventoryReport($request)->getData(true);
+            $inventoryReport = $inventoryReport['data'];
+
+            // Call the existing inventory summary function
+            $inventorySummary = $this->getInventorySummary($request)->getData(true);
+            $inventorySummary = $inventorySummary['data'];
+
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->user_type = $authUser->employee->role;
+            }
+
+            $downloadedBy = strtoupper($authUser->name . ' (' .  $authUser->user_type .')');
+
+            // Prepare the combined response
+            $combinedResponse = [
+                'downloaded_by' => $downloadedBy, // Get the response data
+                'date_range' => $startDate . ' - ' . $endDate, // Get the response data
+                'inventory_report' => $inventoryReport, // Get the response data
+                'inventory_summary' => $inventorySummary // Get the response data
+            ];
+
+            // Return the combined response
+            return $this->sendResponse($combinedResponse, 'Combined inventory report and summary retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error retrieving combined inventory report and summary.', [$e->getMessage()]);
+        }
+    }
+
+
+
 }

@@ -118,6 +118,8 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/getNewShopProductsListing', [ProductController::class, 'getNewShopProductsListing']); // Get product statistics
     Route::get('/getNewStockProductsListing', [ProductController::class, 'getNewStockProductsListing']); // Get product statistics
     Route::get('/getInventoryReport', [ProductController::class, 'getInventoryReport']); // Get product statistics
+    Route::get('/getInventorySummary', [ProductController::class, 'getInventorySummary']); // Get product statistics
+    Route::get('/getCombinedInventoryReportAndSummary', [ProductController::class, 'getCombinedInventoryReportAndSummary']); // Get product statistics
 
     // Dashboard Routes
     Route::get('/main-dashboard', [DashboardController::class, 'mainDashboard']);
