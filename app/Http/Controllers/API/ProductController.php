@@ -34,8 +34,7 @@ class ProductController extends BaseController
         // Return the response with the ProductResource collection, including the extra data
         return $this->sendResponse(ProductResource::collection($products), 'Products retrieved successfully.');
     }
-
-
+    
     public function store(Request $request)
     {
         // Validation for both Product and Inventory fields
@@ -373,7 +372,6 @@ class ProductController extends BaseController
         }
     }
 
-
     public function getByMerchant()
     {
         try {
@@ -578,15 +576,25 @@ class ProductController extends BaseController
             // Get merchant ID from authenticated user's merchant relation
             $merchantID = $authUser->merchant->id;
 
-            // Get the date range from the request in the format "01.01.2024 - 30.11.2024"
-            $dateRange = $request->input('date'); // Expected format: DD.MM.YYYY - DD.MM.YYYY
+            // Get start and end dates from the request query parameters (optional)
+            $startDate = $request->query('start_date');
+            $endDate = $request->query('end_date');
 
-            // If date range is provided, convert it to start and end dates
-            if ($dateRange) {
-                [$startDate, $endDate] = $this->convertDateRange($dateRange);
+            // If only start date is provided, set end date to today's date
+            if ($startDate && !$endDate) {
+                $endDate = \Carbon\Carbon::now()->endOfDay();
             }
 
-//            dd($startDate, $endDate);
+
+            // If both start and end dates are provided, validate the format using Carbon
+            if ($startDate) {
+                $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
+            }
+
+            if ($endDate) {
+                $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+            }
+
             // Fetch sold products grouped by product_id and sold date (without time)
             $soldProducts = OrderItem::with(['product' => function ($query) use ($merchantID) {
                 // Load the products along with their inventories
@@ -600,8 +608,10 @@ class ProductController extends BaseController
                 ->groupBy('product_id', DB::raw('DATE(created_at)'))
                 ->orderBy('sold_date', 'desc');
 
-            // Apply date range filter
-            $soldProducts->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate]);
+            // Apply date range filter only if both dates are present
+            if ($startDate && $endDate) {
+                $soldProducts->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate]);
+            }
 
             // Execute the query
             $soldProducts = $soldProducts->get();
@@ -642,23 +652,7 @@ class ProductController extends BaseController
         }
     }
 
-    /**
-     * Helper function to convert date range from "DD.MM.YYYY - DD.MM.YYYY" to "YYYY-MM-DD".
-     */
-    private function convertDateRange($dateRange)
-    {
-        // Split the date range by the hyphen
-        [$startDate, $endDate] = explode(' - ', $dateRange);
-
-        // Convert both dates from DD.MM.YYYY to YYYY-MM-DD
-        $startDate = \Carbon\Carbon::createFromFormat('d.m.Y', trim($startDate))->format('Y-m-d');
-        $endDate = \Carbon\Carbon::createFromFormat('d.m.Y', trim($endDate))->format('Y-m-d');
-
-        return [$startDate, $endDate];
-    }
-
-
-    public function getTotalProductsInShop()
+    public function getTotalProductsInShop(Request $request)
     {
         try {
             // Get authenticated user
@@ -668,7 +662,6 @@ class ProductController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
@@ -677,19 +670,40 @@ class ProductController extends BaseController
             // Get merchant ID from authenticated user's merchant relation
             $merchantID = $authUser->merchant->id;
 
-            // Fetch products available in shop for the merchant
-            $productsInShop = Product::with(['category', 'inventories' => function ($inventoryQuery) {
-                // Filter inventories for 'shop' type
+            // Get start and end dates from the request query parameters (optional)
+            $startDate = $request->query('start_date');
+            $endDate = $request->query('end_date');
+
+            // If both start and end dates are provided, validate the format using Carbon
+            if ($startDate && $endDate) {
+                $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
+                $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+            } else {
+                $startDate = null;
+                $endDate = null;
+            }
+
+            // Fetch products available in shop for the merchant, filtering by history created_at date
+            $productsInShop = Product::with(['category', 'history' => function ($inventoryQuery) use ($startDate, $endDate) {
+                // Filter inventories for 'shop' type and apply date range filter on 'created_at'
                 $inventoryQuery->where('type', 'shop');
+                // Apply date range filter if both dates are provided
+                if ($startDate && $endDate) {
+                    $inventoryQuery->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate]);
+                }
             }])
                 ->where('merchant_id', $merchantID)
                 ->get();
 
-            // Prepare the result set
-            $data = $productsInShop->map(function ($product) {
-                // Find in-shop and in-stock quantities
-                $inShopQuantity = $product->inventories->sum('quantity'); // Sum of all shop quantities
-
+            // Prepare the result set, filtering out products with zero in-shop quantities if needed
+            $data = $productsInShop->filter(function ($product) {
+                // Check in-shop quantities
+                $inShopQuantity = $product->history->sum('quantity');
+                // Filter out products with zero shop quantities
+                return $inShopQuantity > 0;
+            })->map(function ($product) {
+                // Calculate in-shop quantities
+                $inShopQuantity = $product->history->sum('quantity');
 
                 return [
                     'product_name' => $product->product_name,
@@ -705,13 +719,13 @@ class ProductController extends BaseController
             });
 
             // Return success response with the data
-            return $this->sendResponse($data, 'Total products in shop retrieved successfully.');
+            return $this->sendResponse($data->values(), 'Total products in shop retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving total products in shop.', [$e->getMessage()]);
         }
     }
 
-    public function getTotalProductsInStock()
+    public function getTotalProductsInStock(Request $request)
     {
         try {
             // Get authenticated user
@@ -721,7 +735,6 @@ class ProductController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
@@ -730,19 +743,42 @@ class ProductController extends BaseController
             // Get merchant ID from authenticated user's merchant relation
             $merchantID = $authUser->merchant->id;
 
+            // Get start and end dates from the request query parameters (optional)
+            $startDate = $request->query('start_date');
+            $endDate = $request->query('end_date');
+
+            // Initialize date filtering logic
+            if ($startDate && $endDate) {
+                // If both start and end dates are provided, validate and use them
+                $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
+                $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+            } else {
+                // If no dates are provided, skip date filtering
+                $startDate = null;
+                $endDate = null;
+            }
+
             // Fetch products available in stock for the merchant
-            $productsInStock = Product::with(['category', 'inventories' => function ($inventoryQuery) {
+            $productsInStock = Product::with(['category', 'history' => function ($inventoryQuery) use ($startDate, $endDate) {
                 // Filter inventories for 'stock' type
                 $inventoryQuery->where('type', 'stock');
+                // Apply date range filter if both dates are provided
+                if ($startDate && $endDate) {
+                    $inventoryQuery->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate]);
+                }
             }])
                 ->where('merchant_id', $merchantID)
                 ->get();
 
-            // Prepare the result set
-            $data = $productsInStock->map(function ($product) {
-                // Find in-stock quantities
-                $inStockQuantity = $product->inventories->sum('quantity'); // Sum of all stock quantities
-
+            // Prepare the result set, filtering out products with zero stock
+            $data = $productsInStock->filter(function ($product) {
+                // Check in-stock quantities
+                $inStockQuantity = $product->history->sum('quantity');
+                // Filter out products with zero stock
+                return $inStockQuantity > 0;
+            })->map(function ($product) {
+                // Calculate in-stock quantities
+                $inStockQuantity = $product->history->sum('quantity');
 
                 return [
                     'product_name' => $product->product_name,
@@ -754,18 +790,17 @@ class ProductController extends BaseController
                     'total_price' => $product->total_price,
                     'total_price_in_usd' => convertShillingToUSD($product->total_price),
                     'in_stock_quantity' => $inStockQuantity,
-
                 ];
             });
 
             // Return success response with the data
-            return $this->sendResponse($data, 'Total products in stock retrieved successfully.');
+            return $this->sendResponse($data->values(), 'Total products in stock retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving total products in stock.', [$e->getMessage()]);
         }
     }
 
-    public function getNewShopProductsListing()
+    public function getNewShopProductsListing(Request $request)
     {
         try {
             // Get authenticated user
@@ -775,7 +810,6 @@ class ProductController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
@@ -784,14 +818,27 @@ class ProductController extends BaseController
             // Get merchant ID from authenticated user's merchant relation
             $merchantID = $authUser->merchant->id;
 
-            // Calculate the date 7 days ago
-            $sevenDaysAgo = now()->subDays(7);
+            // Get start and end dates from the request query parameters (optional)
+            $startDate = $request->query('start_date');
+            $endDate = $request->query('end_date');
 
-            // Fetch new products added in the last 7 days, grouped by product
-            $newProducts = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
+            // Initialize date filtering logic
+            if ($startDate && $endDate) {
+                // If both start and end dates are provided, validate and use them
+                $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
+                $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+            } else {
+                // Calculate the date 7 days ago if no specific date range is provided
+                $sevenDaysAgo = now()->subDays(7);
+                $startDate = $sevenDaysAgo->startOfDay(); // Start 7 days ago
+                $endDate = now()->endOfDay(); // Up until today
+            }
+
+            // Fetch new products added within the specified date range, grouped by product
+            $newProducts = InventoryHistory::whereHas('product', function ($query) use ($merchantID) {
                 $query->where('merchant_id', $merchantID);
             })
-                ->where('created_at', '>=', $sevenDaysAgo)
+                ->whereBetween('created_at', [$startDate, $endDate]) // Apply date range filter
                 ->where('type', 'shop')
                 ->select('product_id', DB::raw('SUM(quantity) as total_quantity'))
                 ->groupBy('product_id')
@@ -822,15 +869,15 @@ class ProductController extends BaseController
         }
     }
 
-    public function getNewStockProductsListing()
+    public function getNewStockProductsListing(Request $request)
     {
         try {
             // Get authenticated user
             $authUser = auth()->user();
+
             if ($authUser->user_type == 'employee') {
                 $authUser->merchant = $authUser->employee->merchant;
             }
-
 
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
@@ -840,14 +887,27 @@ class ProductController extends BaseController
             // Get merchant ID from authenticated user's merchant relation
             $merchantID = $authUser->merchant->id;
 
-            // Calculate the date 7 days ago
-            $sevenDaysAgo = now()->subDays(7);
+            // Get start and end dates from the request query parameters (optional)
+            $startDate = $request->query('start_date');
+            $endDate = $request->query('end_date');
 
-            // Fetch new products added in the last 7 days, grouped by product
-            $newProducts = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
+            // Initialize date filtering logic
+            if ($startDate && $endDate) {
+                // If both start and end dates are provided, validate and use them
+                $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
+                $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+            } else {
+                // Calculate the date 7 days ago if no specific date range is provided
+                $sevenDaysAgo = now()->subDays(7);
+                $startDate = $sevenDaysAgo->startOfDay(); // Start 7 days ago
+                $endDate = now()->endOfDay(); // Up until today
+            }
+
+            // Fetch new products added within the specified date range, grouped by product
+            $newProducts = InventoryHistory::whereHas('product', function ($query) use ($merchantID) {
                 $query->where('merchant_id', $merchantID);
             })
-                ->where('created_at', '>=', $sevenDaysAgo)
+                ->whereBetween('created_at', [$startDate, $endDate]) // Apply date range filter
                 ->where('type', 'stock')
                 ->select('product_id', DB::raw('SUM(quantity) as total_quantity'))
                 ->groupBy('product_id')
@@ -867,7 +927,7 @@ class ProductController extends BaseController
                     'vat' => convertVATPercentagetoDecimal($product->vat),
                     'total_price' => $product->total_price,
                     'total_price_in_usd' => convertShillingToUSD($product->total_price),
-                    'in_stock_quantity' => $inventory->total_quantity,
+                    'in_shop_quantity' => $inventory->total_quantity,
                 ];
             });
 
@@ -877,6 +937,4 @@ class ProductController extends BaseController
             return $this->sendError('Error retrieving new products listing.', [$e->getMessage()]);
         }
     }
-
-
 }
