@@ -34,7 +34,7 @@ class ProductController extends BaseController
         // Return the response with the ProductResource collection, including the extra data
         return $this->sendResponse(ProductResource::collection($products), 'Products retrieved successfully.');
     }
-    
+
     public function store(Request $request)
     {
         // Validation for both Product and Inventory fields
@@ -527,7 +527,7 @@ class ProductController extends BaseController
         }
     }
 
-    public function getAllProductsWithCategories()
+    public function getAllProductsWithCategories(Request $request)
     {
         try {
             // Get authenticated user
@@ -537,7 +537,6 @@ class ProductController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-
             // Ensure the authenticated user exists and has a merchant
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
@@ -546,13 +545,33 @@ class ProductController extends BaseController
             // Get merchant ID from authenticated user's merchant relation
             $merchantID = $authUser->merchant->id;
 
-            // Get all products with their categories, images, and order items
-            $products = Product::with(['category', 'orderItems', 'inventories'])
-                ->where('merchant_id', $merchantID)->get();
+            // Get start and end dates from the request query parameters (optional)
+            $startDate = $request->query('start_date');
+            $endDate = $request->query('end_date');
+
+            // Validate the date format using Carbon
+            if ($startDate) {
+                $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
+            }
+
+            if ($endDate) {
+                $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+            }
+
+             // Get all products with their categories, images, and order items
+            $products = Product::with(['category', 'orderItems', 'history' => function ($inventoryQuery) use ($startDate, $endDate) {
+                // Filter inventories for 'history' type
+                // Apply date range filter if both dates are provided
+                if ($startDate && $endDate) {
+                    $inventoryQuery->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate]);
+                }
+            }])
+                ->where('merchant_id', $merchantID)
+                ->get();
+
 
             // Use the resource collection to transform the products
             return $this->sendResponse(ProductCatalogResource::collection($products), 'All products with categories retrieved successfully.');
-
         } catch (\Exception $e) {
             return $this->sendError('Error fetching products with categories.', [$e->getMessage()]);
         }
