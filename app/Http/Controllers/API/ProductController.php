@@ -946,7 +946,7 @@ class ProductController extends BaseController
                     'vat' => convertVATPercentagetoDecimal($product->vat),
                     'total_price' => $product->total_price,
                     'total_price_in_usd' => convertShillingToUSD($product->total_price),
-                    'in_shop_quantity' => $inventory->total_quantity,
+                    'in_stock_quantity' => $inventory->total_quantity,
                 ];
             });
 
@@ -956,4 +956,70 @@ class ProductController extends BaseController
             return $this->sendError('Error retrieving new products listing.', [$e->getMessage()]);
         }
     }
+
+    public function getInventoryReport(Request $request)
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Check if the user is an employee and fetch the associated merchant
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
+            // Get start and end dates from the request query parameters (optional)
+            $startDate = $request->query('start_date');
+            $endDate = $request->query('end_date');
+
+            // Validate the date format using Carbon
+            if ($startDate) {
+                $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
+            }
+
+            if ($endDate) {
+                $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+            }
+
+            // Fetch inventory history for the merchant based on the product's merchant_id
+            $inventoryReport = InventoryHistory::with(['product' => function ($query) use ($merchantID) {
+                $query->where('merchant_id', $merchantID);
+            }])
+                ->when($startDate, function ($query) use ($startDate) {
+                    return $query->where('created_at', '>=', $startDate);
+                })
+                ->when($endDate, function ($query) use ($endDate) {
+                    return $query->where('created_at', '<=', $endDate);
+                })
+                ->get()
+                ->filter(function ($inventory) {
+                    return $inventory->product; // Keep only inventories that have associated products
+                });
+
+            // Prepare the result set
+            $reportData = $inventoryReport->map(function ($inventory) {
+                return [
+                    'date' => $inventory->created_at->format('Y-m-d'),
+                    'product_name' => $inventory->product->product_name ?? 'Unknown Product',
+                    'quantity' => $inventory->quantity,
+                    'instock' => $inventory->type == 'stock' ? $inventory->quantity : 0,
+                    'inshop' => $inventory->type == 'shop' ? $inventory->quantity : 0,
+                ];
+            });
+
+            // Return success response with the report data
+            return $this->sendResponse($reportData, 'Inventory report retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error retrieving inventory report.', [$e->getMessage()]);
+        }
+    }
+
 }
