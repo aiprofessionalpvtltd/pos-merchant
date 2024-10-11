@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\API\BaseController;
 use App\Http\Resources\CartItemResource;
 use App\Http\Resources\OrderResource;
+use App\Http\Resources\TransactionResource;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Invoice;
@@ -1139,5 +1140,151 @@ class OrderController extends BaseController
             return $this->sendError('Error retrieving order details.', $e->getMessage());
         }
     }
+
+    public function transactionByCash(Request $request)
+    {
+        // Validate the input fields
+        $validator = $this->validateRequest($request, [
+            'cart_type' => 'required|in:shop,stock',
+            'amount' => 'required',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors());
+        }
+
+        DB::beginTransaction();
+
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // If user is an employee, load the associated merchant
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure merchant is available for the authenticated user
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            $merchantID = $authUser->merchant->id;
+            $amount = $request->amount;
+            $paymentMethod = $request->payment_method;
+            $cartType = $request->cart_type;
+            $phoneNumber = $authUser->merchant->phone_number;
+
+            // Fetch user's cart based on cart type
+            $cart = Cart::where('merchant_id', $merchantID)
+                ->where('user_id', $authUser->id)
+                ->where('cart_type', $cartType)
+                ->with('items.product') // Load products in the cart items
+                ->first();
+
+            // Check if cart exists and is not empty
+            if ($cart && $cart->items->isNotEmpty()) {
+                $totalPrice = 0;
+
+                // Calculate total price and validate inventory
+                foreach ($cart->items as $item) {
+                    $product = $item->product;
+                    $inventory = ProductInventory::where('product_id', $product->id)
+                        ->where('type', $cartType)
+                        ->first();
+
+                    if (!$inventory || $inventory->quantity < $item->quantity) {
+                        DB::rollBack();
+                        return $this->sendError("Insufficient stock for product: {$product->product_name}.");
+                    }
+
+                    $totalPrice += $product->total_price * $item->quantity;
+                }
+
+                // Calculate VAT and Exelo charges
+                $vatCharge = env('VAT_CHARGE', 0.10); // Set a default value in case VAT_CHARGE is not defined
+                $vat = $totalPrice * $vatCharge;
+
+                $exeloCharge = env('EXELO_CHARGE', 0.02); // Set a default value for Exelo charge
+                $exeloAmount = $totalPrice * $exeloCharge;
+
+                $exeloFee = $totalPrice * 0.0285; // Exelo fee for merchants: 2.85%
+                $amountSentToMerchant = $totalPrice - $exeloFee;
+
+//                dd($totalPrice,$exeloAmount , $amountSentToMerchant);
+                // Total price including VAT
+                $totalPriceWithVAT = $totalPrice + $vat;
+
+
+                // Create the order
+                $order = Order::create([
+                    'merchant_id' => $merchantID,
+                    'user_id' => $authUser->id,
+                    'name' => $request->input('name'),
+                    'mobile_number' => $request->input('mobile_number'),
+                    'sub_total' => round($totalPrice),
+                    'vat' => round($vat),
+                    'exelo_amount' => round($exeloAmount),
+                    'total_price' => round($totalPriceWithVAT),
+                    'order_type' => $cartType,
+                    'order_status' => 'Paid',
+                ]);
+
+                // Add order items and update inventory
+                foreach ($cart->items as $item) {
+                    $product = $item->product;
+
+                    // Create order item
+                    OrderItem::create([
+                        'order_id' => $order->id,
+                        'product_id' => $product->id,
+                        'quantity' => $item->quantity,
+                        'price' => $product->total_price,
+                    ]);
+
+                    // Decrease product inventory
+                    $inventory->decrement('quantity', $item->quantity);
+                }
+
+                // Clear the cart after processing the order
+                $cart->items()->delete();
+                $cart->delete();
+
+                // Save the transaction details
+                $transaction = Transaction::create([
+                    'order_id' => $order->id,
+                    'transaction_amount' => $amountSentToMerchant,
+                    'transaction_status' => 'Approved',
+                    'transaction_message' => $amountSentToMerchant . ' amount received by cash with the deduction of exelo fee ' . $exeloFee,
+                    'phone_number' => $phoneNumber,
+                    'transaction_id' => 'N/A',
+                    'merchant_id' => $merchantID,
+                    'payment_method' => $paymentMethod ?? 'number',
+                ]);
+
+            } else {
+
+                // Save the transaction details
+                $transaction = Transaction::create([
+                    'transaction_amount' => $amount,
+                    'transaction_status' => 'Approved',
+                    'transaction_message' => 'Amount received by cash',
+                    'phone_number' => $phoneNumber,
+                    'transaction_id' => 'N/A',
+                    'merchant_id' => $merchantID,
+                    'payment_method' => $paymentMethod ?? 'number',
+                ]);
+            }
+
+
+            DB::commit();
+
+            return $this->sendResponse(new TransactionResource($transaction), 'Transaction by Cash successfully completed.');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->sendError('Error processing Transaction by Cash.', $e->getMessage());
+        }
+    }
+
 
 }

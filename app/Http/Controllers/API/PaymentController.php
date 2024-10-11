@@ -523,10 +523,17 @@ class PaymentController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-            $phoneNumber = $authUser->merchant->phone_number;
-            $merchant = Merchant::where('phone_number', $phoneNumber)->first();
-        }
 
+            $phoneNumber = $authUser->merchant->edahab_number;
+
+            if (!$phoneNumber) {
+                return $this->sendError('Merchant e-dahab mobile number is not Verified', '');
+            }
+
+            $merchant = Merchant::where('edahab_number', $phoneNumber)->first();
+
+
+        }
 
         if (!$merchant) {
             return $this->sendError('Merchant mobile number is not registered', '');
@@ -595,6 +602,14 @@ class PaymentController extends BaseController
 
         $accountNo = $request->input('edahab_number'); // Phone number
         $accountNo = str_replace('+', '', $accountNo);
+
+        // Verify phone number and get the specific company column
+        $verifiedNumber = $this->verifiedPhoneNumber($accountNo);
+
+        // If the phone number is invalid or company not recognized, return error
+        if ($verifiedNumber != 'zaad_number') {
+            return $this->sendError('Zaad phone number. Zaad not recognized.');
+        }
 
         $amount = $request->input('total_customer_charge');  // Amount to be paid
         $currency = $request->input('currency', 'SLSH');  // Currency
