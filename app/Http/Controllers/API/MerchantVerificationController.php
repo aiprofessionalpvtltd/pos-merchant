@@ -157,6 +157,14 @@ class MerchantVerificationController extends BaseController
                 'token' => $token,
                 'user_type' => $user->user_type,
                 'short_name' => $this->getInitials($user->name),
+                'profile' => [
+                    'first_name' => $merchant->first_name,
+                    'last_name' => $merchant->last_name,
+                    'phone_number' => $merchant->phone_number,
+                    'business_name' => $merchant->business_name,
+                    'merchant_code' => $merchant->merchant_code,
+                    'location' => $merchant->location,
+                ]
             ], 'Merchant Login successful.');
 
         } catch (\Exception $e) {

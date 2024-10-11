@@ -16,6 +16,7 @@ class Transaction extends Model
         'transaction_id',
         'merchant_id',
         'order_id',
+        'payment_method',
     ];
 
     public function merchant()

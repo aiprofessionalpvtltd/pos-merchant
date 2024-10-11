@@ -1058,11 +1058,9 @@ class ProductController extends BaseController
             $inventorySummary = InventoryHistory::with(['product' => function ($query) use ($merchantID) {
                 $query->where('merchant_id', $merchantID);
             }])
-                ->when($startDate, function ($query) use ($startDate) {
-                    return $query->where('created_at', '>=', $startDate);
-                })
-                ->when($endDate, function ($query) use ($endDate) {
-                    return $query->where('created_at', '<=', $endDate);
+                ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
+                    return $query->where('created_at', '>=', $startDate)
+                        ->where('created_at', '<=', $endDate);
                 })
                 ->get();
 
@@ -1071,8 +1069,10 @@ class ProductController extends BaseController
                 return $items->map(function ($inventory) use ($startDate, $endDate) {
                     // Calculate total sold within the specified date range
                     $totalSold = $inventory->product->orderItems()
-                        ->where('created_at', '>=', $startDate)
-                        ->where('created_at', '<=', $endDate)
+                        ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
+                            return $query->where('created_at', '>=', $startDate)
+                                ->where('created_at', '<=', $endDate);
+                        })
                         ->sum('quantity');
 
                     return [

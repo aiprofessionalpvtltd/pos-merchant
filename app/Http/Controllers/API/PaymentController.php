@@ -311,6 +311,7 @@ class PaymentController extends BaseController
         $totalCustomerCharge = $request->input('total_customer_charge');
         $currency = $request->input('currency');
         $type = $request->input('type');
+        $paymentMethod = $request->input('payment_method');
 
         if ($type === 'POS' || $type == 'Subscription') {
             $merchantID = $request->input('merchant_id');
@@ -371,6 +372,7 @@ class PaymentController extends BaseController
                     'status' => 'Pending',
                     'e_transaction_id' => $transactionId,
                     'type' => $type,
+                    'payment_method' => $paymentMethod ?? 'number',
                 ]);
 
 
@@ -503,6 +505,7 @@ class PaymentController extends BaseController
         $amountSentToMerchant = $request->input('amount_sent_to_merchant');
         $currency = $request->input('currency');
         $transactionId = 'mp_' . round(microtime(true) * 1000);
+        $paymentMethod = $request->input('payment_method');
 
 
         if ($request->phone_number) {
@@ -562,6 +565,8 @@ class PaymentController extends BaseController
                 'phone_number' => $responseData['PhoneNumber'],
                 'transaction_id' => $responseData['TransactionId'],
                 'merchant_id' => $merchant->id,
+                'payment_method' => $paymentMethod ?? 'number',
+
             ]);
 
 
@@ -595,6 +600,7 @@ class PaymentController extends BaseController
         $currency = $request->input('currency', 'SLSH');  // Currency
         $type = $request->input('type');  // Type of invoice
         $merchantID = NULL;
+        $paymentMethod = $request->input('payment_method');
 
         if ($type === 'POS' || $type == 'Subscription') {
             $merchantID = $request->input('merchant_id');
@@ -653,6 +659,8 @@ class PaymentController extends BaseController
                         'currency' => $currency,
                         'status' => 'Pending',
                         'type' => $type,
+                        'payment_method' => $paymentMethod ?? 'number',
+
                     ]);
 
                     return [

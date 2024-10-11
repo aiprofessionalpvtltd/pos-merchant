@@ -32,6 +32,7 @@ class Invoice extends Model
         'status',
         'e_transaction_id',
         'type',
+        'payment_method',
     ];
 
     public function order()
