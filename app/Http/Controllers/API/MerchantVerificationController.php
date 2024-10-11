@@ -157,6 +157,7 @@ class MerchantVerificationController extends BaseController
                 'token' => $token,
                 'user_type' => $user->user_type,
                 'short_name' => $this->getInitials($user->name),
+                'phone_number' => $merchant->phone_number,
                 'profile' => [
                     'first_name' => $merchant->first_name,
                     'last_name' => $merchant->last_name,
