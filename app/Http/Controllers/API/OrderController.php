@@ -1112,7 +1112,7 @@ class OrderController extends BaseController
 
             // Dahab and Zaad prefixes
             $dahabPrefixes = ['65', '66', '62'];
-            $mobileNO = ($order->mobile_number ?? $order->invoice->mobile_number);
+            $mobileNO = $order->mobile_number ?? $order->invoice->mobile_number ?? 'N/A';
             $phoneNo = str_replace('+252', '', $mobileNO);
             $mobileNumberPrefix = substr($phoneNo, 0, 2);
 
