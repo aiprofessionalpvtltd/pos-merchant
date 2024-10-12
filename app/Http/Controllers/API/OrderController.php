@@ -1161,6 +1161,8 @@ class OrderController extends BaseController
         $validator = $this->validateRequest($request, [
             'cart_type' => 'sometimes',
             'amount' => 'required',
+            'order_id' => 'sometimes',
+            'payment_method' => 'sometimes',
         ]);
 
         if ($validator->fails()) {
@@ -1187,11 +1189,12 @@ class OrderController extends BaseController
             $amount = $request->amount;
             $paymentMethod = $request->payment_method;
             $cartType = $request->cart_type;
+            $orderID = $request->order_id;
             $phoneNumber = $authUser->merchant->phone_number;
 
 
             // Check if cart exists and is not empty
-            if ($cartType != null) {
+            if ($cartType != null && $orderID == null) {
                 // Fetch user's cart based on cart type
                 $cart = Cart::where('merchant_id', $merchantID)
                     ->where('user_id', $authUser->id)
@@ -1282,6 +1285,33 @@ class OrderController extends BaseController
                     return $this->sendError('Cart is Empty. Add product to register');
 
                 }
+            } elseif ($orderID != null) {
+                // Fetch the order by order_id
+                $order = Order::where('merchant_id', $merchantID)
+                    ->find($orderID);
+
+                if (!$order) {
+                    return $this->sendError('Order not found.');
+                }
+
+                $order->order_status = "Paid";
+                $order->save();
+
+                $exeloFee =  $order->sub_total * 0.0285; // Exelo fee for merchants: 2.85%
+                $amountSentToMerchant =  $order->sub_total - $exeloFee;
+
+                 // Save the transaction details
+                $transaction = Transaction::create([
+                    'order_id' => $order->id,
+                    'transaction_amount' => $amountSentToMerchant,
+                    'transaction_status' => 'Approved',
+                    'transaction_message' => $amountSentToMerchant . ' amount received from  by cash with the deduction of exelo fee ' . $exeloFee,
+                    'phone_number' => $phoneNumber,
+                    'transaction_id' => 'N/A',
+                    'merchant_id' => $merchantID,
+                    'payment_method' => $paymentMethod ?? 'number',
+                ]);
+
             } else {
 
                 // Save the transaction details
