@@ -5,7 +5,6 @@ namespace App\Http\Controllers\API;
 use App\Http\Controllers\API\BaseController;
 use App\Http\Resources\ProductInventoryResource;
 use App\Http\Resources\ProductResource;
-use App\Models\InventoryHistory;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductInventory;
@@ -249,7 +248,7 @@ class ProductInventoryController extends BaseController
             // Get stock inventory for the product (create if not exists)
             $stockInventory = ProductInventory::firstOrCreate(
                 ['product_id' => $productId, 'type' => 'stock'],
-                ['quantity' => 0]
+                ['quantity' => 0] // Default quantity if stock entry doesn't exist
             );
 
             // Perform the transfer
@@ -262,13 +261,6 @@ class ProductInventoryController extends BaseController
                 // Add quantity to stock
                 $stockInventory->quantity += $quantity;
                 $stockInventory->save();
-
-                // Add entry to inventory history (for stock addition)
-                InventoryHistory::create([
-                    'product_id' => $productId,
-                    'quantity' => $quantity, // Added quantity to stock
-                    'type' => 'stock',
-                ]);
 
                 DB::commit();
 
@@ -334,7 +326,7 @@ class ProductInventoryController extends BaseController
             // Get shop inventory for the product (create if not exists)
             $shopInventory = ProductInventory::firstOrCreate(
                 ['product_id' => $productId, 'type' => 'shop'],
-                ['quantity' => 0]
+                ['quantity' => 0] // Default quantity if shop entry doesn't exist
             );
 
             // Perform the transfer
@@ -347,13 +339,6 @@ class ProductInventoryController extends BaseController
                 // Add quantity to shop
                 $shopInventory->quantity += $quantity;
                 $shopInventory->save();
-
-                // Add entry to inventory history (for shop addition)
-                InventoryHistory::create([
-                    'product_id' => $productId,
-                    'quantity' => $quantity, // Added quantity to shop
-                    'type' => 'shop',
-                ]);
 
                 DB::commit();
 
@@ -428,15 +413,6 @@ class ProductInventoryController extends BaseController
                 // Add to shop
                 $shopInventory->quantity += $quantity;
                 $shopInventory->save();
-
-
-                // Add entry to inventory history (for shop addition)
-                InventoryHistory::create([
-                    'product_id' => $productId,
-                    'quantity' => $quantity, // Added quantity to shop
-                    'type' => 'shop',
-                ]);
-
 
                 DB::commit();
 
@@ -513,15 +489,6 @@ class ProductInventoryController extends BaseController
                 $stockInventory->quantity += $quantity;
                 $stockInventory->save();
 
-                // Add entry to inventory history (for shop addition)
-                InventoryHistory::create([
-                    'product_id' => $productId,
-                    'quantity' => $quantity, // Added quantity to shop
-                    'type' => 'stock',
-                ]);
-
-
-
                 DB::commit();
 
                 return $this->sendResponse([], 'Transfer from transportation to stock successful.');
@@ -597,15 +564,6 @@ class ProductInventoryController extends BaseController
                 $transportationInventory->quantity += $quantity;
                 $transportationInventory->save();
 
-
-                // Add entry to inventory history (for shop addition)
-                InventoryHistory::create([
-                    'product_id' => $productId,
-                    'quantity' => $quantity, // Added quantity to shop
-                    'type' => 'transportation',
-                ]);
-
-
                 DB::commit();
 
                 return $this->sendResponse([], 'Transfer from shop to transportation successful.');
@@ -680,13 +638,6 @@ class ProductInventoryController extends BaseController
                 // Add to transportation
                 $transportationInventory->quantity += $quantity;
                 $transportationInventory->save();
-
-                // Add entry to inventory history (for shop addition)
-                InventoryHistory::create([
-                    'product_id' => $productId,
-                    'quantity' => $quantity, // Added quantity to shop
-                    'type' => 'transportation',
-                ]);
 
                 DB::commit();
 

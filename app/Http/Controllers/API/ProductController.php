@@ -559,8 +559,8 @@ class ProductController extends BaseController
             }
 
              // Get all products with their categories, images, and order items
-            $products = Product::with(['category', 'orderItems', 'history' => function ($inventoryQuery) use ($startDate, $endDate) {
-                // Filter inventories for 'history' type
+            $products = Product::with(['category', 'orderItems', 'inventories' => function ($inventoryQuery) use ($startDate, $endDate) {
+                // Filter inventories for 'inventories' type
                 // Apply date range filter if both dates are provided
                 if ($startDate && $endDate) {
                     $inventoryQuery->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate]);
@@ -699,8 +699,8 @@ class ProductController extends BaseController
                 $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
             }
 
-            // Fetch products available in shop for the merchant, filtering by history created_at date
-            $productsInShop = Product::with(['category', 'inventory' => function ($inventoryQuery) use ($startDate, $endDate) {
+            // Fetch products available in shop for the merchant, filtering by inventories created_at date
+            $productsInShop = Product::with(['category', 'inventories' => function ($inventoryQuery) use ($startDate, $endDate) {
                 // Filter inventories for 'shop' type and apply date range filter on 'created_at'
                 $inventoryQuery->where('type', 'shop');
                 // Apply date range filter if both dates are provided
@@ -714,12 +714,12 @@ class ProductController extends BaseController
             // Prepare the result set, filtering out products with zero in-shop quantities if needed
             $data = $productsInShop->filter(function ($product) {
                 // Check in-shop quantities
-                $inShopQuantity = $product->history->sum('quantity');
+                $inShopQuantity = $product->inventories->sum('quantity');
                 // Filter out products with zero shop quantities
                 return $inShopQuantity > 0;
             })->map(function ($product) {
                 // Calculate in-shop quantities
-                $inShopQuantity = $product->history->sum('quantity');
+                $inShopQuantity = $product->inventories->sum('quantity');
 
                 return [
                     'product_name' => $product->product_name,
@@ -771,7 +771,7 @@ class ProductController extends BaseController
             }
 
             // Fetch products available in stock for the merchant
-            $productsInStock = Product::with(['category', 'history' => function ($inventoryQuery) use ($startDate, $endDate) {
+            $productsInStock = Product::with(['category', 'inventories' => function ($inventoryQuery) use ($startDate, $endDate) {
                 // Filter inventories for 'stock' type
                 $inventoryQuery->where('type', 'stock');
                 // Apply date range filter if both dates are provided
@@ -785,12 +785,12 @@ class ProductController extends BaseController
             // Prepare the result set, filtering out products with zero stock
             $data = $productsInStock->filter(function ($product) {
                 // Check in-stock quantities
-                $inStockQuantity = $product->history->sum('quantity');
+                $inStockQuantity = $product->inventories->sum('quantity');
                 // Filter out products with zero stock
                 return $inStockQuantity > 0;
             })->map(function ($product) {
                 // Calculate in-stock quantities
-                $inStockQuantity = $product->history->sum('quantity');
+                $inStockQuantity = $product->inventories->sum('quantity');
 
                 return [
                     'product_name' => $product->product_name,
@@ -982,7 +982,7 @@ class ProductController extends BaseController
                 $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
             }
 
-            // Fetch inventory history for the merchant based on the product's merchant_id
+            // Fetch inventory inventories for the merchant based on the product's merchant_id
             $inventoryReport = InventoryHistory::with(['product' => function ($query) use ($merchantID) {
                 $query->where('merchant_id', $merchantID);
             }])
@@ -1047,7 +1047,7 @@ class ProductController extends BaseController
                 $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
             }
 
-            // Fetch inventory history for the merchant based on product's merchant_id
+            // Fetch inventory inventories for the merchant based on product's merchant_id
             $inventorySummary = InventoryHistory::with(['product' => function ($query) use ($merchantID) {
                 $query->where('merchant_id', $merchantID);
             }])
