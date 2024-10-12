@@ -358,8 +358,11 @@ class DashboardController extends BaseController
             // Find sales for the day
             $salesForDay = optional($salesData->firstWhere('date', $dayString))->total_sales ?? 0;
 
-            // Find total products sold for the day
-            $totalProductsForDay = optional($productData->firstWhere('sold_date', $dayString))->total_products ?? 0;
+            if($productData){
+                // Find total products sold for the day
+                $totalProductsForDay = optional($productData->firstWhere('sold_date', $dayString))->total_products ?? 0;
+
+            }
 
             // Format data for each day of the week
             $data[] = [
@@ -367,7 +370,7 @@ class DashboardController extends BaseController
                 'date' => $formattedDate,
                 'total_sales' => $salesForDay,
                 'total_sales_in_usd' => convertShillingToUSD($salesForDay),
-                'total_products_sold' => $totalProductsForDay,
+                'total_products_sold' => $totalProductsForDay ?? 0,
             ];
         }
 
