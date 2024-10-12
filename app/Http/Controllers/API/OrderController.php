@@ -215,7 +215,7 @@ class OrderController extends BaseController
                     'product_name' => $item->product->product_name,
                     'quantity' => $item->quantity,
                     'price' => $item->price,
-                    'price_in_usd' =>convertShillingToUSD( $item->price),
+                    'price_in_usd' => convertShillingToUSD($item->price),
                     'total' => $item->quantity * $item->price,
                     'total_in_usd' => convertShillingToUSD($item->quantity * $item->price),
                 ];
@@ -1150,7 +1150,7 @@ class OrderController extends BaseController
     {
         // Validate the input fields
         $validator = $this->validateRequest($request, [
-            'cart_type' => 'required|in:shop,stock',
+            'cart_type' => 'sometimes',
             'amount' => 'required',
         ]);
 
@@ -1180,93 +1180,96 @@ class OrderController extends BaseController
             $cartType = $request->cart_type;
             $phoneNumber = $authUser->merchant->phone_number;
 
-            // Fetch user's cart based on cart type
-            $cart = Cart::where('merchant_id', $merchantID)
-                ->where('user_id', $authUser->id)
-                ->where('cart_type', $cartType)
-                ->with('items.product') // Load products in the cart items
-                ->first();
+
 
             // Check if cart exists and is not empty
-            if ($cart && $cart->items->isNotEmpty()) {
-                $totalPrice = 0;
+            if ($cartType != null) {
+                // Fetch user's cart based on cart type
+                $cart = Cart::where('merchant_id', $merchantID)
+                    ->where('user_id', $authUser->id)
+                    ->where('cart_type', $cartType)
+                    ->with('items.product') // Load products in the cart items
+                    ->first();
+                if ($cart && $cart->items->isNotEmpty()) {
+                    $totalPrice = 0;
 
-                // Calculate total price and validate inventory
-                foreach ($cart->items as $item) {
-                    $product = $item->product;
-                    $inventory = ProductInventory::where('product_id', $product->id)
-                        ->where('type', $cartType)
-                        ->first();
+                    // Calculate total price and validate inventory
+                    foreach ($cart->items as $item) {
+                        $product = $item->product;
+                        $inventory = ProductInventory::where('product_id', $product->id)
+                            ->where('type', $cartType)
+                            ->first();
 
-                    if (!$inventory || $inventory->quantity < $item->quantity) {
-                        DB::rollBack();
-                        return $this->sendError("Insufficient stock for product: {$product->product_name}.");
+                        if (!$inventory || $inventory->quantity < $item->quantity) {
+                            DB::rollBack();
+                            return $this->sendError("Insufficient stock for product: {$product->product_name}.");
+                        }
+
+                        $totalPrice += $product->total_price * $item->quantity;
                     }
 
-                    $totalPrice += $product->total_price * $item->quantity;
-                }
+                    // Calculate VAT and Exelo charges
+                    $vatCharge = env('VAT_CHARGE', 0.10); // Set a default value in case VAT_CHARGE is not defined
+                    $vat = $totalPrice * $vatCharge;
 
-                // Calculate VAT and Exelo charges
-                $vatCharge = env('VAT_CHARGE', 0.10); // Set a default value in case VAT_CHARGE is not defined
-                $vat = $totalPrice * $vatCharge;
+                    $exeloCharge = env('EXELO_CHARGE', 0.02); // Set a default value for Exelo charge
+                    $exeloAmount = $totalPrice * $exeloCharge;
 
-                $exeloCharge = env('EXELO_CHARGE', 0.02); // Set a default value for Exelo charge
-                $exeloAmount = $totalPrice * $exeloCharge;
-
-                $exeloFee = $totalPrice * 0.0285; // Exelo fee for merchants: 2.85%
-                $amountSentToMerchant = $totalPrice - $exeloFee;
+                    $exeloFee = $totalPrice * 0.0285; // Exelo fee for merchants: 2.85%
+                    $amountSentToMerchant = $totalPrice - $exeloFee;
 
 //                dd($totalPrice,$exeloAmount , $amountSentToMerchant);
-                // Total price including VAT
-                $totalPriceWithVAT = $totalPrice + $vat;
+                    // Total price including VAT
+                    $totalPriceWithVAT = $totalPrice + $vat;
 
 
-                // Create the order
-                $order = Order::create([
-                    'merchant_id' => $merchantID,
-                    'user_id' => $authUser->id,
-                    'name' => $request->input('name'),
-                    'mobile_number' => $request->input('mobile_number'),
-                    'sub_total' => round($totalPrice),
-                    'vat' => round($vat),
-                    'exelo_amount' => round($exeloAmount),
-                    'total_price' => round($totalPriceWithVAT),
-                    'order_type' => $cartType,
-                    'order_status' => 'Paid',
-                ]);
-
-                // Add order items and update inventory
-                foreach ($cart->items as $item) {
-                    $product = $item->product;
-
-                    // Create order item
-                    OrderItem::create([
-                        'order_id' => $order->id,
-                        'product_id' => $product->id,
-                        'quantity' => $item->quantity,
-                        'price' => $product->total_price,
+                    // Create the order
+                    $order = Order::create([
+                        'merchant_id' => $merchantID,
+                        'user_id' => $authUser->id,
+                        'name' => $request->input('name'),
+                        'mobile_number' => $request->input('mobile_number'),
+                        'sub_total' => round($totalPrice),
+                        'vat' => round($vat),
+                        'exelo_amount' => round($exeloAmount),
+                        'total_price' => round($totalPriceWithVAT),
+                        'order_type' => $cartType,
+                        'order_status' => 'Paid',
                     ]);
 
-                    // Decrease product inventory
-                    $inventory->decrement('quantity', $item->quantity);
+                    // Add order items and update inventory
+                    foreach ($cart->items as $item) {
+                        $product = $item->product;
+
+                        // Create order item
+                        OrderItem::create([
+                            'order_id' => $order->id,
+                            'product_id' => $product->id,
+                            'quantity' => $item->quantity,
+                            'price' => $product->total_price,
+                        ]);
+
+                        // Decrease product inventory
+                        $inventory->decrement('quantity', $item->quantity);
+                    }
+
+                    // Clear the cart after processing the order
+                    $cart->items()->delete();
+                    $cart->delete();
+
+                    // Save the transaction details
+                    $transaction = Transaction::create([
+                        'order_id' => $order->id,
+                        'transaction_amount' => $amountSentToMerchant,
+                        'transaction_status' => 'Approved',
+                        'transaction_message' => $amountSentToMerchant . ' amount received by cash with the deduction of exelo fee ' . $exeloFee,
+                        'phone_number' => $phoneNumber,
+                        'transaction_id' => 'N/A',
+                        'merchant_id' => $merchantID,
+                        'payment_method' => $paymentMethod ?? 'number',
+                    ]);
+
                 }
-
-                // Clear the cart after processing the order
-                $cart->items()->delete();
-                $cart->delete();
-
-                // Save the transaction details
-                $transaction = Transaction::create([
-                    'order_id' => $order->id,
-                    'transaction_amount' => $amountSentToMerchant,
-                    'transaction_status' => 'Approved',
-                    'transaction_message' => $amountSentToMerchant . ' amount received by cash with the deduction of exelo fee ' . $exeloFee,
-                    'phone_number' => $phoneNumber,
-                    'transaction_id' => 'N/A',
-                    'merchant_id' => $merchantID,
-                    'payment_method' => $paymentMethod ?? 'number',
-                ]);
-
             } else {
 
                 // Save the transaction details
