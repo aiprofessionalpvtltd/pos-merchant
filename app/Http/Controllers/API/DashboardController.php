@@ -762,7 +762,7 @@ class DashboardController extends BaseController
             // Format the response
             $clientData = $latestClients->map(function ($order) {
                 return [
-                    'name' => $order->name ?? $order->invoice->mobile_number,
+                    'name' => $order->name ?? $order->invoice->mobile_number ?? 'N/A',
                     'name_initial' => $this->getInitials($order->name ?? 'Not Available')
                 ];
             });
