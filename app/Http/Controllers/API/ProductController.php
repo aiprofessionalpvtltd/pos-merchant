@@ -697,6 +697,10 @@ class ProductController extends BaseController
             if ($startDate && $endDate) {
                 $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
                 $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+            }else {
+                // Set start and end dates to the current month's start and end
+                $startDate = \Carbon\Carbon::now()->startOfMonth()->startOfDay();
+                $endDate = \Carbon\Carbon::now()->endOfMonth()->endOfDay();
             }
 
             // Fetch products available in shop for the merchant, filtering by inventories created_at date
@@ -768,6 +772,10 @@ class ProductController extends BaseController
                 // If both start and end dates are provided, validate and use them
                 $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
                 $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+            }else {
+                // Set start and end dates to the current month's start and end
+                $startDate = \Carbon\Carbon::now()->startOfMonth()->startOfDay();
+                $endDate = \Carbon\Carbon::now()->endOfMonth()->endOfDay();
             }
 
             // Fetch products available in stock for the merchant
@@ -847,7 +855,7 @@ class ProductController extends BaseController
             }
 
             // Fetch new products added within the specified date range, grouped by product
-            $newProducts = InventoryHistory::whereHas('product', function ($query) use ($merchantID) {
+            $newProducts = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
                 $query->where('merchant_id', $merchantID);
             })
                 ->whereBetween('created_at', [$startDate, $endDate]) // Apply date range filter
@@ -916,7 +924,7 @@ class ProductController extends BaseController
             }
 
             // Fetch new products added within the specified date range, grouped by product
-            $newProducts = InventoryHistory::whereHas('product', function ($query) use ($merchantID) {
+            $newProducts = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
                 $query->where('merchant_id', $merchantID);
             })
                 ->whereBetween('created_at', [$startDate, $endDate]) // Apply date range filter
