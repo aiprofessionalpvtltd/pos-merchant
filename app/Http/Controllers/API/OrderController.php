@@ -1119,7 +1119,7 @@ class OrderController extends BaseController
             // Determine if it's edahab_number or zaad_number
             $mobileNumberType = in_array($mobileNumberPrefix, $dahabPrefixes) ? 'E-Dahab' : 'Zaad';
 
-//            dd($mobileNumberType);
+
             // Prepare the response data
             $data = [
                 'order_id' => $order->id,
@@ -1130,16 +1130,20 @@ class OrderController extends BaseController
                     'phone_number' => $order->merchant->phone_number,
                     'zaad_number' => $order->merchant->phone_number,
                 ],
-                'invoice' => [
+                'invoice' => $order->invoice ? [
                     'invoice_no' => $order->invoice->id,
                     'invoice_date' => showDate($order->invoice->created_at),
                     'payment_status' => $order->order_status,
+                ] : [
+                    'invoice_no' => 'N/A',
+                    'invoice_date' => showDate($order->created_at),
+                    'payment_status' => 'Paid By Cash',
                 ],
                 'customer' => [
                     'name' => $order->name ?? 'N/A',
                     'mobile_number' => $mobileNO,
                     'account' => $mobileNumberType,
-                    'initial_name' => $this->getInitials($order->name ?? 'Not Avaibale'),
+                    'initial_name' => $this->getInitials($order->name ?? 'Not Available'),
                 ],
                 'order_items' => $order->items->map(function ($item) {
                     return [
@@ -1154,9 +1158,10 @@ class OrderController extends BaseController
                 'vat_charge' => env('VAT_CHARGE') * 100 . '%',
                 'exelo_amount' => convertShillingToUSD($exeloAmount),
                 'total' => convertShillingToUSD($totalPriceWithVAT)
-
-
             ];
+
+            return $data;
+
 
             return $this->sendResponse($data, 'Order details retrieved successfully.');
         } catch (\Exception $e) {
