@@ -412,7 +412,7 @@ class PaymentController extends BaseController
         $apiKey = env('EXELO_API_KEY'); // From .env
         $secret = env('SECRET_KEY'); // Secret from .env
         $invoiceId = $request->input('invoice_id');
-        $maxAttempts = 8; // 8 attempts * 5 seconds = 40 seconds
+        $maxAttempts = 8; // Max attempts (8 attempts * 5 seconds = 40 seconds)
         $attempts = 0; // Initialize attempt counter
 
         $payload = [
@@ -471,8 +471,7 @@ class PaymentController extends BaseController
 
                         // If the status is still 'Pending', just sleep for 5 seconds and try again
                         if ($invoiceStatus == 'Pending') {
-                            DB::rollBack();  // No need to commit, since no changes were made
-                            sleep(5); // Wait for 5 seconds before checking again
+                             sleep(5); // Wait for 5 seconds before checking again
                             $attempts++;
                             continue; // Repeat the loop
                         }
@@ -489,7 +488,7 @@ class PaymentController extends BaseController
             }
 
             // If max attempts are reached and the status is not 'Paid'
-            return $this->sendError('error', 'Failed to get invoice status as "Paid" within the timeout', 500);
+            return $this->sendError('error', 'Failed to retrieve the invoice status as  Paid  within the timeout period. Please try again later', 500);
 
         } catch (\Exception $e) {
             DB::rollBack();
