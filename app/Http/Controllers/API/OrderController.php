@@ -1143,7 +1143,7 @@ class OrderController extends BaseController
                     'name' => $order->name ?? 'N/A',
                     'mobile_number' => $mobileNO,
                     'account' => $mobileNumberType,
-                    'initial_name' => $this->getInitials($order->name ?? 'Not Available'),
+                    'initial_name' => $this->getInitials($order->name ?? 'Not Avaibale'),
                 ],
                 'order_items' => $order->items->map(function ($item) {
                     return [
@@ -1158,10 +1158,9 @@ class OrderController extends BaseController
                 'vat_charge' => env('VAT_CHARGE') * 100 . '%',
                 'exelo_amount' => convertShillingToUSD($exeloAmount),
                 'total' => convertShillingToUSD($totalPriceWithVAT)
+
+
             ];
-
-            return $data;
-
 
             return $this->sendResponse($data, 'Order details retrieved successfully.');
         } catch (\Exception $e) {
