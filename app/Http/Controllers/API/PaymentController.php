@@ -412,7 +412,7 @@ class PaymentController extends BaseController
         $apiKey = env('EXELO_API_KEY'); // From .env
         $secret = env('SECRET_KEY'); // Secret from .env
         $invoiceId = $request->input('invoice_id');
-        $maxAttempts = 5; // Max attempts (5 attempts * 5 seconds = 25 seconds)
+        $maxAttempts = 8; // 8 attempts * 5 seconds = 40 seconds
         $attempts = 0; // Initialize attempt counter
 
         $payload = [
