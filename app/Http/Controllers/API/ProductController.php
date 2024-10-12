@@ -700,7 +700,7 @@ class ProductController extends BaseController
             }
 
             // Fetch products available in shop for the merchant, filtering by history created_at date
-            $productsInShop = Product::with(['category', 'history' => function ($inventoryQuery) use ($startDate, $endDate) {
+            $productsInShop = Product::with(['category', 'inventory' => function ($inventoryQuery) use ($startDate, $endDate) {
                 // Filter inventories for 'shop' type and apply date range filter on 'created_at'
                 $inventoryQuery->where('type', 'shop');
                 // Apply date range filter if both dates are provided
