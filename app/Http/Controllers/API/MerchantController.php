@@ -399,6 +399,10 @@ class MerchantController extends BaseController
             // Get authenticated user
             $authUser = auth()->user();
 
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+            
             // Check if the authenticated user has an associated merchant
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
