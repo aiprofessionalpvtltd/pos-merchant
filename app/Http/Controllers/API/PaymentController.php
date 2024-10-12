@@ -634,7 +634,7 @@ class PaymentController extends BaseController
                 "apiKey" => env('WAAFI_API_KEY', 'API-1901083745AHX'),
                 "paymentMethod" => "MWALLET_ACCOUNT",
                 "payerInfo" => [
-                    "accountNo" => $accountNo
+                    "accountNo" =>  str_replace('+', '', $accountNo),
                 ],
                 "transactionInfo" => [
                     "referenceId" => $referenceId,
@@ -667,7 +667,7 @@ class PaymentController extends BaseController
                     $invoice = Invoice::create([
                         'merchant_id' => $merchantID,
                         'invoice_id' => $invoiceData['params']['referenceId'],
-                        'mobile_number' => str_replace('252', '', $accountNo),
+                        'mobile_number' => $accountNo,
                         'transaction_id' => $invoiceData['params']['transactionId'],
                         'hash' => 0,
                         'amount' => $invoiceData['params']['txAmount'],
@@ -690,7 +690,7 @@ class PaymentController extends BaseController
                             'currency' => $currency,
                             'status' => $invoiceData['params']['state'],
                             'invoice_id' => $invoice->invoice_id,
-                            'mobile_number' => str_replace('252', '', $accountNo),
+                            'mobile_number' =>  $accountNo,
                         ]
                     ];
 
