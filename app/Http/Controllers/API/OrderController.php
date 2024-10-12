@@ -204,7 +204,8 @@ class OrderController extends BaseController
 
             // Update the quantity for the cart item
             $cartItem->quantity = $request->quantity;
-            $cartItem->price = $product->total_price + ($product->total_price * $product->vat / 100);
+            $cartItem->price = $request->price + ($request->price * $product->vat / 100);
+
             $cartItem->save();
 
             // Prepare the updated cart items data
@@ -214,7 +215,9 @@ class OrderController extends BaseController
                     'product_name' => $item->product->product_name,
                     'quantity' => $item->quantity,
                     'price' => $item->price,
+                    'price_in_usd' =>convertShillingToUSD( $item->price),
                     'total' => $item->quantity * $item->price,
+                    'total_in_usd' => convertShillingToUSD($item->quantity * $item->price),
                 ];
             });
 
@@ -363,8 +366,10 @@ class OrderController extends BaseController
                         'product_id' => $item->product->id,
                         'product_name' => $item->product->product_name,
                         'quantity' => $item->quantity,
-                        'price' => convertShillingToUSD($item->price),
-                        'total_price' => convertShillingToUSD($item->quantity * $item->price),
+                        'price' => ($item->price),
+                        'price_in_usd' => convertShillingToUSD($item->price),
+                        'total_price' => ($item->quantity * $item->price),
+                        'total_price_in_usd' => convertShillingToUSD($item->quantity * $item->price),
                     ];
                 })
             ];
