@@ -204,7 +204,13 @@ class OrderController extends BaseController
 
             // Update the quantity for the cart item
             $cartItem->quantity = $request->quantity;
-            $cartItem->price = $request->price + ($request->price * $product->vat / 100);
+
+            // Update the price only if the new price is different from the current price
+            $calculatedPrice = $request->price + ($request->price * $product->vat / 100);
+
+            if ($cartItem->price !== $calculatedPrice) {
+                $cartItem->price = $calculatedPrice;
+            }
 
             $cartItem->save();
 
