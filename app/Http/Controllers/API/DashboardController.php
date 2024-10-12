@@ -48,14 +48,10 @@ class DashboardController extends BaseController
             $completeCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Complete')->count();
 
 
-            $weeklyStatistics = $this->getWeeklySalesAndStatistics()->getData(true);
-            $weeklyStatistics = $weeklyStatistics['data'];
-
             // Prepare response data
             $data = [
                 'pending_order_count' => $pendingCount,
                 'complete_order_count' => $completeCount,
-                'weekly_summary' => $weeklyStatistics,
 
 
             ];
@@ -153,7 +149,7 @@ class DashboardController extends BaseController
                 $currentSubscriptionID = $authUser->employee->merchant->currentSubscription->subscription_plan_id;
             }
 
-             if ($currentSubscriptionID == 2) {
+              if ($currentSubscriptionID == 2) {
                 $transactionHistories = $this->getTransactionForSilver()->getData(true);
                 $transactionHistories = $transactionHistories['data'];
 
@@ -211,7 +207,7 @@ class DashboardController extends BaseController
 
     public function getWeeklySalesAndStatistics()
     {
-        try {
+         try {
             // Get authenticated user
             $authUser = auth()->user();
 
@@ -249,16 +245,25 @@ class DashboardController extends BaseController
                 : 0;
 
             // Get invoices for the week (no order associated)
-            $weeklyInvoiceData = Transaction::where('merchant_id', $merchantID)
+            $weeklyInvoiceData = Transaction::with('order')->where('merchant_id', $merchantID)
                 ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
                 ->selectRaw('DATE(created_at) as date, SUM(transaction_amount) as total_sales')
                 ->groupBy('date')
                 ->orderBy('date')
                 ->get();
 
+            $soldProductsData = OrderItem::whereHas('order', function ($query) use ($merchantID) {
+                $query->where('merchant_id', $merchantID);
+            })
+                ->select(DB::raw('DATE(created_at) as sold_date'),
+                    DB::raw('SUM(quantity) as total_products'))
+                ->groupBy(DB::raw('DATE(created_at)'))
+                ->whereBetween(DB::raw('DATE(created_at)'), [$startOfWeek, $endOfWeek])
+                ->get();
+
 
             // Prepare response data for the week
-            $data = $this->prepareWeeklySalesData($startOfWeek, $endOfWeek, $weeklyInvoiceData, null);
+            $data = $this->prepareWeeklySalesData($startOfWeek, $endOfWeek, $weeklyInvoiceData, $soldProductsData);
 
             // Response data including transaction details
             $response = [
@@ -350,11 +355,13 @@ class DashboardController extends BaseController
             $formattedDay = date('D', strtotime($dayString));
             $formattedDate = date('j.m', strtotime($dayString));
 
+            // Find sales for the day
             $salesForDay = optional($salesData->firstWhere('date', $dayString))->total_sales ?? 0;
-            $totalProductsForDay = $productData
-                ? optional($productData->firstWhere('date', $dayString))->total_products ?? 0
-                : 0;
 
+            // Find total products sold for the day
+            $totalProductsForDay = optional($productData->firstWhere('sold_date', $dayString))->total_products ?? 0;
+
+            // Format data for each day of the week
             $data[] = [
                 'day' => $formattedDay,
                 'date' => $formattedDate,
@@ -366,6 +373,7 @@ class DashboardController extends BaseController
 
         return $data;
     }
+
 
     public function getTopSellingProducts()
     {
