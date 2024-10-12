@@ -606,13 +606,15 @@ class ProductController extends BaseController
 
 
             // If both start and end dates are provided, validate the format using Carbon
-            if ($startDate) {
+            if ($startDate && $endDate) {
                 $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
+                $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+            }else {
+                // Set start and end dates to the current month's start and end
+                $startDate = \Carbon\Carbon::now()->startOfMonth()->startOfDay();
+                $endDate = \Carbon\Carbon::now()->endOfMonth()->endOfDay();
             }
 
-            if ($endDate) {
-                $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
-            }
 
             // Fetch sold products grouped by product_id and sold date (without time)
             $soldProducts = OrderItem::with(['product' => function ($query) use ($merchantID) {
@@ -665,7 +667,7 @@ class ProductController extends BaseController
             }
 
             // Return success response with the data
-            return $this->sendResponse($data, 'Sold product listings retrieved successfully.');
+            return $this->sendResponse(['start_date' => $startDate  ,'end_date' => $endDate , 'result' =>$data], 'Sold product listings retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving sold product listings.', [$e->getMessage()]);
         }
@@ -739,7 +741,7 @@ class ProductController extends BaseController
             });
 
             // Return success response with the data
-            return $this->sendResponse($data->values(), 'Total products in shop retrieved successfully.');
+            return $this->sendResponse(['start_date' => $startDate  ,'end_date' => $endDate , 'result' =>$data->values()], 'Total products in shop retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving total products in shop.', [$e->getMessage()]);
         }
@@ -814,7 +816,7 @@ class ProductController extends BaseController
             });
 
             // Return success response with the data
-            return $this->sendResponse($data->values(), 'Total products in stock retrieved successfully.');
+            return $this->sendResponse(['start_date' => $startDate  ,'end_date' => $endDate , 'result' =>$data->values()], 'Total products in stock retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving total products in stock.', [$e->getMessage()]);
         }
@@ -883,7 +885,7 @@ class ProductController extends BaseController
             });
 
             // Return success response with the data
-            return $this->sendResponse($data, 'New products listing retrieved successfully.');
+            return $this->sendResponse(['start_date' => $startDate  ,'end_date' => $endDate , 'result' =>$data], 'New products listing retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving new products listing.', [$e->getMessage()]);
         }
@@ -952,7 +954,7 @@ class ProductController extends BaseController
             });
 
             // Return success response with the data
-            return $this->sendResponse($data, 'New products listing retrieved successfully.');
+            return $this->sendResponse(['start_date' => $startDate  ,'end_date' => $endDate , 'result' =>$data], 'New products listing retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving new products listing.', [$e->getMessage()]);
         }
