@@ -267,7 +267,7 @@ class DashboardController extends BaseController
 
             // Response data including transaction details
             $response = [
-                'total_amount_from_transactions_slsh' => $totalAmountFromTransactions,
+                'total_amount_from_transactions_slsh' => round($totalAmountFromTransactions,2),
                 'total_amount_from_transactions_usd' => convertShillingToUSD($totalAmountFromTransactions),
                 'total_amount_from_transactions_percentage' => round($totalAmountPercentage, 2),
                 'weekly_sales_statistics' => $data,
@@ -333,7 +333,7 @@ class DashboardController extends BaseController
 
             // Response data including transaction details
             $response = [
-                'total_amount_from_transactions_slsh' => $totalAmountFromTransactions,
+                'total_amount_from_transactions_slsh' => round($totalAmountFromTransactions,2),
                 'total_amount_from_transactions_usd' => convertShillingToUSD($totalAmountFromTransactions),
                 'total_amount_from_transactions_percentage' => round($totalAmountPercentage, 2),
                 'weekly_sales_statistics' => $data,
