@@ -697,9 +697,6 @@ class ProductController extends BaseController
             if ($startDate && $endDate) {
                 $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
                 $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
-            } else {
-                $startDate = null;
-                $endDate = null;
             }
 
             // Fetch products available in shop for the merchant, filtering by history created_at date
@@ -771,10 +768,6 @@ class ProductController extends BaseController
                 // If both start and end dates are provided, validate and use them
                 $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
                 $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
-            } else {
-                // If no dates are provided, skip date filtering
-                $startDate = null;
-                $endDate = null;
             }
 
             // Fetch products available in stock for the merchant
