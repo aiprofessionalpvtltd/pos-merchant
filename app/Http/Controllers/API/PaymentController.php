@@ -488,7 +488,7 @@ class PaymentController extends BaseController
             }
 
             // If max attempts are reached and the status is not 'Paid'
-            return $this->sendError('error', 'Failed to retrieve the invoice status as  Paid  within the timeout period. Please try again later', 500);
+            return $this->sendError('error', 'Invoice status not updated to Paid. Please try again later.', 500);
 
         } catch (\Exception $e) {
             DB::rollBack();
