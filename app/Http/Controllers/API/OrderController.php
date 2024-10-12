@@ -199,16 +199,19 @@ class OrderController extends BaseController
                 return $this->sendError('Product not found in the cart.');
             }
 
+            // Store old values for comparison
+            $oldQuantity = $cartItem->quantity;
+            $oldPrice = $cartItem->price;
 
-            // Calculate final price with VAT
 
             // Update the quantity for the cart item
             $cartItem->quantity = $request->quantity;
 
-            // Update the price only if the new price is different from the current price
+            // Calculate the new price
             $calculatedPrice = $request->price + ($request->price * $product->vat / 100);
-
-            if ($cartItem->price !== $calculatedPrice) {
+            
+            // Update the price only if the new price is different from the current price
+            if ($oldPrice !== $calculatedPrice) {
                 $cartItem->price = $calculatedPrice;
             }
 
