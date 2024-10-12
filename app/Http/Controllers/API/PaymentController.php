@@ -601,12 +601,12 @@ class PaymentController extends BaseController
         $invoiceId = rand(100000, 999999);   // 6-digit random number
 
         $accountNo = $request->input('edahab_number'); // Phone number
-        $accountNo = str_replace('+', '', $accountNo);
+        $accountNo = '+252'. $accountNo;
 
         // Verify phone number and get the specific company column
         $verifiedNumber = $this->verifiedPhoneNumber($accountNo);
 
-        // If the phone number is invalid or company not recognized, return error
+         // If the phone number is invalid or company not recognized, return error
         if ($verifiedNumber != 'zaad_number') {
             return $this->sendError('Zaad phone number. Zaad not recognized.');
         }
