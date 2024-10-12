@@ -1128,7 +1128,7 @@ class OrderController extends BaseController
                     'merchant_code' => $order->merchant->merchant_code,
                     'cashier_name' => $order->user->name,
                     'edahab_number' => $order->merchant->edahab_number ?? 'N/A',
-                    'zaad_number' => $order->merchant->zaad_number,
+                    'zaad_number' => $order->merchant->zaad_number ?? 'N/A',
                 ],
                 'invoice' => $order->invoice ? [
                     'invoice_no' => $order->invoice->id,
