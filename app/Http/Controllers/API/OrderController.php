@@ -924,13 +924,22 @@ class OrderController extends BaseController
 
             $merchantID = $authUser->merchant->id;
 
-            // Fetch orders by the given type
-            $orders = Order::where('order_status', $request->order_status)
-                ->where('merchant_id', $merchantID)
-                ->where('user_id', $authUser->id)
-                ->orderBy('id', 'DESC')
-                ->with('items.product') // Load related order items and products
-                ->get();
+            if ($authUser->user_type == 'employee') {
+                // Fetch orders by the given type
+                $orders = Order::where('order_status', $request->order_status)
+                    ->where('merchant_id', $merchantID)
+                    ->where('user_id', $authUser->id)
+                    ->orderBy('id', 'DESC')
+                    ->with('items.product') // Load related order items and products
+                    ->get();
+            } else {
+                // Fetch orders by the given type
+                $orders = Order::where('order_status', $request->order_status)
+                    ->where('merchant_id', $merchantID)
+                    ->orderBy('id', 'DESC')
+                    ->with('items.product') // Load related order items and products
+                    ->get();
+            }
 
 
             if ($orders->isEmpty()) {
@@ -1181,7 +1190,6 @@ class OrderController extends BaseController
             $phoneNumber = $authUser->merchant->phone_number;
 
 
-
             // Check if cart exists and is not empty
             if ($cartType != null) {
                 // Fetch user's cart based on cart type
@@ -1190,6 +1198,7 @@ class OrderController extends BaseController
                     ->where('cart_type', $cartType)
                     ->with('items.product') // Load products in the cart items
                     ->first();
+//                dd($cart && $cart->items->isNotEmpty());
                 if ($cart && $cart->items->isNotEmpty()) {
                     $totalPrice = 0;
 
@@ -1268,6 +1277,9 @@ class OrderController extends BaseController
                         'merchant_id' => $merchantID,
                         'payment_method' => $paymentMethod ?? 'number',
                     ]);
+
+                } else {
+                    return $this->sendError('Cart is Empty. Add product to register');
 
                 }
             } else {
