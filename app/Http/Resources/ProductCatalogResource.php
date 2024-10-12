@@ -16,32 +16,38 @@ class ProductCatalogResource extends JsonResource
     public function toArray(Request $request): array
     {
         // Calculate total shop quantity from inventories
-        $totalShopQuantity = $this->history
+        $totalShopQuantity = $this->inventories
             ->where('type', 'shop')
             ->sum('quantity');
 
-        $totalStockQuantity = $this->history
+        $totalStockQuantity = $this->inventories
             ->where('type', 'stock')
             ->sum('quantity');
 
         // Check total sold based on order items
         $totalSold = $this->orderItems->sum('quantity');
 
-        // If both total shop and stock quantities are zero, calculate total sold
+        // Handle the case when total shop and stock quantities are both zero
         if ($totalShopQuantity == 0 && $totalStockQuantity == 0) {
-            // Add your logic here to fetch the total sold within a specific date range if needed
-            // Example: Assuming you are passing start_date and end_date as query parameters
+            // Fetch the start_date and end_date from the request
             $startDate = request()->query('start_date');
             $endDate = request()->query('end_date');
 
             // Validate and format the date
             if ($startDate && $endDate) {
-                $totalSold = $this->orderItems()
-                    ->whereBetween('created_at', [
-                        \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay(),
-                        \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay(),
-                    ])
-                    ->sum('quantity');
+                try {
+                    $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
+                    $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+
+                    // Calculate total sold within the given date range
+                    $totalSold = $this->orderItems()
+                        ->whereBetween('created_at', [$startDate, $endDate])
+                        ->sum('quantity');
+                } catch (\Exception $e) {
+                    dd('kk');
+                    // Handle any date parsing or query errors
+                    $totalSold = $this->orderItems->sum('quantity'); // Default to total sold without date filter
+                }
             }
         }
 

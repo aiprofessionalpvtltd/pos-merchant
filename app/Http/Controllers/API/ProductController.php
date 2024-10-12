@@ -549,33 +549,41 @@ class ProductController extends BaseController
             $startDate = $request->query('start_date');
             $endDate = $request->query('end_date');
 
-            // Validate the date format using Carbon
-            if ($startDate) {
+            // If both start and end dates are provided, validate the format using Carbon
+            if ($startDate && $endDate) {
                 $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
-            }
-
-            if ($endDate) {
                 $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+            } else {
+                // Set start and end dates to the current month's start and end
+                $startDate = \Carbon\Carbon::now()->startOfMonth()->startOfDay();
+                $endDate = \Carbon\Carbon::now()->endOfMonth()->endOfDay();
             }
 
-             // Get all products with their categories, images, and order items
-            $products = Product::with(['category', 'orderItems', 'inventories' => function ($inventoryQuery) use ($startDate, $endDate) {
-                // Filter inventories for 'inventories' type
-                // Apply date range filter if both dates are provided
-                if ($startDate && $endDate) {
-                    $inventoryQuery->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate]);
+            // Get all products with their categories, images, and order items
+            $products = Product::with([
+                'category',
+                'orderItems',
+                'inventories' => function ($inventoryQuery) use ($startDate, $endDate) {
+                    // Apply date range filter on `created_at`
+                    $inventoryQuery->whereBetween('created_at', [$startDate, $endDate]);
                 }
-            }])
+            ])
                 ->where('merchant_id', $merchantID)
                 ->get();
 
-
+//            dd($products);
             // Use the resource collection to transform the products
-            return $this->sendResponse(ProductCatalogResource::collection($products), 'All products with categories retrieved successfully.');
+            return $this->sendResponse([
+                'start_date' => $startDate,
+                'end_date' => $endDate,
+                'result' => ProductCatalogResource::collection($products)
+            ], 'All products with categories retrieved successfully.');
+
         } catch (\Exception $e) {
             return $this->sendError('Error fetching products with categories.', [$e->getMessage()]);
         }
     }
+
 
     public function getSoldProducts(Request $request)
     {
