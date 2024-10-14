@@ -54,10 +54,22 @@ class OrderController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Find the product by ID
-            $product = Product::where('merchant_id', $merchantID)->find($request->product_id);
+            $product = Product::with('inventories')->where('merchant_id', $merchantID)->find($request->product_id);
 
             if (!$product) {
                 return $this->sendError('Product not found.', ['Product not found with ID ' . $request->product_id]);
+            }
+
+            // Check if the product has an inventory with the requested cart_type
+            $inventory = $product->inventories->where('type', $request->cart_type)->first();
+
+             if (!$inventory) {
+                return $this->sendError('No inventory found for the specified cart type.');
+            }
+
+            // Check if the inventory has available quantity
+            if ($inventory->quantity == 0) {  // If quantity is on the pivot table
+                return $this->sendError('This product is out of stock and cannot be added to the cart.');
             }
 
             // Find or create a cart for the user
@@ -212,7 +224,12 @@ class OrderController extends BaseController
 
             // Update the price only if the new price is different from the current price
             if ($oldPrice !== $calculatedPrice) {
-                $cartItem->price = $calculatedPrice;
+
+                // Calculate Exelo amount (on item price)
+                $exeloCharge = env('EXELO_CHARGE');
+                $exeloAmount = ($calculatedPrice) * $exeloCharge;
+
+                 $cartItem->price = $calculatedPrice + $exeloAmount;
             }
 
             $cartItem->save();
@@ -363,7 +380,7 @@ class OrderController extends BaseController
             // Calculate total price including VAT
             $totalPriceWithVAT = $subtotal + $vat;
 
-            // Prepare the response data
+             // Prepare the response data
             $data = [
                 'subtotal' => convertShillingToUSD($subtotal),
 //                'vat' => convertShillingToUSD($vat),
