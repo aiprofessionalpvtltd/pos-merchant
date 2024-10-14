@@ -63,7 +63,7 @@ class OrderController extends BaseController
             // Check if the product has an inventory with the requested cart_type
             $inventory = $product->inventories->where('type', $request->cart_type)->first();
 
-             if (!$inventory) {
+            if (!$inventory) {
                 return $this->sendError('No inventory found for the specified cart type.');
             }
 
@@ -87,7 +87,7 @@ class OrderController extends BaseController
 
             // Add the product to the cart
             $cartItem = CartItem::updateOrCreate(
-                ['cart_id' => $cart->id, 'price' => round($cartItemPrice,2), 'product_id' => $request->product_id],
+                ['cart_id' => $cart->id, 'price' => round($cartItemPrice, 2), 'product_id' => $request->product_id],
                 ['quantity' => DB::raw("quantity + {$request->quantity}")]
             );
 
@@ -236,7 +236,7 @@ class OrderController extends BaseController
                 $exeloCharge = env('EXELO_CHARGE');
                 $exeloAmount = ($calculatedPrice) * $exeloCharge;
 
-                 $cartItem->price = round($calculatedPrice + $exeloAmount,2);
+                $cartItem->price = round($calculatedPrice + $exeloAmount, 2);
             }
 
             $cartItem->save();
@@ -378,7 +378,7 @@ class OrderController extends BaseController
 
             $vatCharge = env('VAT_CHARGE');
 //            $vat = $subtotal * $vatCharge;
- 
+
             // Calculate Exelo amount (on sub total)
             $exeloCharge = env('EXELO_CHARGE');
             $exeloAmount = ($subtotal) * $exeloCharge;
@@ -386,7 +386,7 @@ class OrderController extends BaseController
             // Calculate total price including VAT
             $totalPriceWithVAT = $subtotal;
 
-             // Prepare the response data
+            // Prepare the response data
             $data = [
                 'subtotal' => convertShillingToUSD($subtotal),
 //                'vat' => convertShillingToUSD($vat),
@@ -400,7 +400,7 @@ class OrderController extends BaseController
                         'quantity' => $item->quantity,
                         'price' => ($item->price),
                         'price_in_usd' => convertShillingToUSD($item->price),
-                        'total_price' => round($item->quantity * $item->price , 2),
+                        'total_price' => round($item->quantity * $item->price, 2),
                         'total_price_in_usd' => convertShillingToUSD($item->quantity * $item->price),
                     ];
                 })
@@ -702,20 +702,21 @@ class OrderController extends BaseController
                 }
 
                 // Update the total price
-                $totalPrice += $product->total_price * $item->quantity;
+                $totalPrice += $item->price * $item->quantity;
             }
 
 
             // Calculate VAT (10%)
-            $vatCharge = env('VAT_CHARGE');
-            $vat = $totalPrice * $vatCharge;
+//            $vatCharge = env('VAT_CHARGE');
+//            $vat = $totalPrice * $vatCharge;
+            $vat = 0;
 
             // Calculate Exelo amount (on sub total)
             $exeloCharge = env('EXELO_CHARGE');
             $exeloAmount = ($totalPrice) * $exeloCharge;
 
             // Calculate total price including VAT and Exelo amount
-            $totalPriceWithVAT = $totalPrice + $vat;
+            $totalPriceWithVAT = $totalPrice;
 
             // Handle signature as base64 image upload
             $signaturePath = $this->saveBase64Image($request->signature, 'signatures');
@@ -745,7 +746,7 @@ class OrderController extends BaseController
                     'order_id' => $order->id,
                     'product_id' => $product->id,
                     'quantity' => $item->quantity,
-                    'price' => $product->total_price,
+                    'price' => $item->price,
                 ]);
 
                 // Decrement inventory for the specific cart type
@@ -1047,7 +1048,8 @@ class OrderController extends BaseController
 
             // Calculate VAT (10%)
             $vatCharge = env('VAT_CHARGE');
-            $vat = $subtotal * $vatCharge;
+//            $vat = $subtotal * $vatCharge;
+            $vat = 0;
 
             // Calculate Exelo amount (on sub total)
             $exeloCharge = env('EXELO_CHARGE');
@@ -1333,10 +1335,10 @@ class OrderController extends BaseController
                 $order->order_status = "Paid";
                 $order->save();
 
-                $exeloFee =  $order->sub_total * 0.0285; // Exelo fee for merchants: 2.85%
-                $amountSentToMerchant =  $order->sub_total - $exeloFee;
+                $exeloFee = $order->sub_total * 0.0285; // Exelo fee for merchants: 2.85%
+                $amountSentToMerchant = $order->sub_total - $exeloFee;
 
-                 // Save the transaction details
+                // Save the transaction details
                 $transaction = Transaction::create([
                     'order_id' => $order->id,
                     'transaction_amount' => $amountSentToMerchant,
