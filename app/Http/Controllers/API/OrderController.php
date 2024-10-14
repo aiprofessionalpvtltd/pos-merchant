@@ -378,8 +378,7 @@ class OrderController extends BaseController
 
             $vatCharge = env('VAT_CHARGE');
 //            $vat = $subtotal * $vatCharge;
-            $vat = 0;
-
+ 
             // Calculate Exelo amount (on sub total)
             $exeloCharge = env('EXELO_CHARGE');
             $exeloAmount = ($subtotal) * $exeloCharge;
@@ -401,7 +400,7 @@ class OrderController extends BaseController
                         'quantity' => $item->quantity,
                         'price' => ($item->price),
                         'price_in_usd' => convertShillingToUSD($item->price),
-                        'total_price' => ($item->quantity * $item->price),
+                        'total_price' => round($item->quantity * $item->price , 2),
                         'total_price_in_usd' => convertShillingToUSD($item->quantity * $item->price),
                     ];
                 })
