@@ -78,9 +78,16 @@ class OrderController extends BaseController
             );
 
 
+            // Calculate Exelo amount (on item price)
+            $exeloCharge = env('EXELO_CHARGE');
+            $exeloAmount = ($product->total_price) * $exeloCharge;
+
+            $cartItemPrice = $product->total_price + $exeloAmount;
+
+
             // Add the product to the cart
             $cartItem = CartItem::updateOrCreate(
-                ['cart_id' => $cart->id, 'price' => $product->total_price, 'product_id' => $request->product_id],
+                ['cart_id' => $cart->id, 'price' => $cartItemPrice, 'product_id' => $request->product_id],
                 ['quantity' => DB::raw("quantity + {$request->quantity}")]
             );
 
