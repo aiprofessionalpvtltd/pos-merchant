@@ -133,4 +133,20 @@ class BaseController extends Controller
         }
     }
 
+
+    public function logApiResponse($url, $payload, $response)
+    {
+        // Assuming $response is an object or array containing status and body
+        $statusCode = $response->status();
+        $responseBody = $response->body();
+
+        // Save log to the database
+        ApiLog::create([
+            'url' => $url,
+            'payload' => json_encode($payload), // Convert payload array to JSON
+            'status_code' => $statusCode,
+            'response_body' => json_decode($responseBody, true), // Decode response body to array
+        ]);
+    }
+
 }

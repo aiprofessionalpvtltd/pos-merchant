@@ -1,0 +1,31 @@
+<?php
+
+use Illuminate\Database\Migrations\Migration;
+use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Support\Facades\Schema;
+
+return new class extends Migration
+{
+    /**
+     * Run the migrations.
+     */
+    public function up(): void
+    {
+        Schema::create('api_logs', function (Blueprint $table) {
+            $table->id();
+            $table->string('url'); // API endpoint URL
+            $table->json('payload'); // Request payload (stored as JSON)
+            $table->integer('status_code'); // HTTP status code of the response
+            $table->json('response_body'); // Response body (stored as JSON)
+            $table->timestamps(); // Created and updated timestamps
+        });
+    }
+
+    /**
+     * Reverse the migrations.
+     */
+    public function down(): void
+    {
+        Schema::dropIfExists('api_logs');
+    }
+};

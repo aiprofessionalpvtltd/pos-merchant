@@ -354,6 +354,9 @@ class PaymentController extends BaseController
             // Make API request to issue invoice
             $response = Http::timeout(env('API_TIMEOUT'))->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
 
+            // Log the API response
+            $this->logApiResponse($url, $payload, $response);
+
             if ($response->status() === 200) {
                 $invoiceData = $response->json();
 
@@ -431,6 +434,9 @@ class PaymentController extends BaseController
             while ($attempts < $maxAttempts) {
                 // Send the API request
                 $response = Http::timeout(env('API_TIMEOUT'))->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
+
+                // Log the API response
+                $this->logApiResponse($url, $payload, $response);
 
                 if ($response->status() === 200) {
                     $responseData = $response->json();
@@ -556,6 +562,10 @@ class PaymentController extends BaseController
 
         $response = Http::timeout(env('API_TIMEOUT'))->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
 
+
+        // Log the API response
+        $this->logApiResponse($url, $payload, $response);
+
         if ($response->status() === 200) {
             $responseData = $response->json();
 
@@ -646,6 +656,7 @@ class PaymentController extends BaseController
             ]
         ];
 
+        $url = 'https://api.waafipay.net/asm';
 //        dd($payload);
         try {
             // Send the API request using Guzzle (Http facade)
@@ -653,7 +664,10 @@ class PaymentController extends BaseController
                 ->withHeaders([
                     'Content-Type' => 'application/json',
                 ])
-                ->post('https://api.waafipay.net/asm', $payload);
+                ->post($url, $payload);
+
+            // Log the API response
+            $this->logApiResponse($url, $payload, $response);
 
             // Return the response body as JSON
             if ($response->successful()) {
@@ -767,13 +781,17 @@ class PaymentController extends BaseController
         try {
             // Begin database transaction
             DB::beginTransaction();
-
+            $url = 'https://api.waafipay.net/asm';
             // Keep checking the transaction status until it's approved or max attempts are reached
             while ($attempts < $maxAttempts) {
                 // Make the API request
                 $response = Http::timeout(env('API_TIMEOUT'))
                     ->withHeaders(['Content-Type' => 'application/json'])
-                    ->post('https://api.waafipay.net/asm', $payload);
+                    ->post($url, $payload);
+
+
+                // Log the API response
+                $this->logApiResponse($url, $payload, $response);
 
                 // If the API call was successful
                 if ($response->successful()) {

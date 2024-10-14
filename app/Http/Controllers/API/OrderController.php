@@ -385,7 +385,7 @@ class OrderController extends BaseController
             $exeloAmount = ($subtotal) * $exeloCharge;
 
             // Calculate total price including VAT
-            $totalPriceWithVAT = $subtotal + $vat;
+            $totalPriceWithVAT = $subtotal;
 
              // Prepare the response data
             $data = [
