@@ -189,7 +189,8 @@ class OrderController extends BaseController
                 ->first();
 
             if (!$cart) {
-                return $this->sendError('Cart not found.');
+                 return $this->sendResponse(['items' => false],'Cart not found.');
+
             }
 
             // Check if any cart item was created more than 3 minutes ago
