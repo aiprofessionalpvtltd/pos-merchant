@@ -762,10 +762,12 @@ class DashboardController extends BaseController
                 ->limit(5) // Limit to 5 latest clients
                 ->get();
 
+//            dd($latestClients);
             // Format the response
             $clientData = $latestClients->map(function ($order) {
                 return [
                     'name' => $order->name ?? $order->invoice->mobile_number ?? 'N/A',
+                    'order_id' => $order->id ??  null,
                     'name_initial' => $this->getInitials($order->name ?? 'Not Available')
                 ];
             });
@@ -805,6 +807,7 @@ class DashboardController extends BaseController
 
                 return [
                     'name' => $name,
+                    'order_id' => null,
                     'name_initial' => $this->getInitials($name ?? 'Not Available')
                 ];
             });
