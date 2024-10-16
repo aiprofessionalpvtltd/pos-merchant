@@ -149,7 +149,7 @@ class DashboardController extends BaseController
                 $currentSubscriptionID = $authUser->employee->merchant->currentSubscription->subscription_plan_id;
             }
 
-              if ($currentSubscriptionID == 2) {
+            if ($currentSubscriptionID == 2) {
                 $transactionHistories = $this->getTransactionForSilver()->getData(true);
                 $transactionHistories = $transactionHistories['data'];
 
@@ -207,7 +207,7 @@ class DashboardController extends BaseController
 
     public function getWeeklySalesAndStatistics()
     {
-         try {
+        try {
             // Get authenticated user
             $authUser = auth()->user();
 
@@ -267,7 +267,7 @@ class DashboardController extends BaseController
 
             // Response data including transaction details
             $response = [
-                'total_amount_from_transactions_slsh' => round($totalAmountFromTransactions,2),
+                'total_amount_from_transactions_slsh' => round($totalAmountFromTransactions, 2),
                 'total_amount_from_transactions_usd' => convertShillingToUSD($totalAmountFromTransactions),
                 'total_amount_from_transactions_percentage' => round($totalAmountPercentage, 2),
                 'weekly_sales_statistics' => $data,
@@ -333,7 +333,7 @@ class DashboardController extends BaseController
 
             // Response data including transaction details
             $response = [
-                'total_amount_from_transactions_slsh' => round($totalAmountFromTransactions,2),
+                'total_amount_from_transactions_slsh' => round($totalAmountFromTransactions, 2),
                 'total_amount_from_transactions_usd' => convertShillingToUSD($totalAmountFromTransactions),
                 'total_amount_from_transactions_percentage' => round($totalAmountPercentage, 2),
                 'weekly_sales_statistics' => $data,
@@ -358,7 +358,7 @@ class DashboardController extends BaseController
             // Find sales for the day
             $salesForDay = optional($salesData->firstWhere('date', $dayString))->total_sales ?? 0;
 
-            if($productData){
+            if ($productData) {
                 // Find total products sold for the day
                 $totalProductsForDay = optional($productData->firstWhere('sold_date', $dayString))->total_products ?? 0;
 
@@ -609,7 +609,7 @@ class DashboardController extends BaseController
                 ];
             });
 
-             return $this->sendResponse($transactionData, 'transaction without orders fetched successfully.');
+            return $this->sendResponse($transactionData, 'transaction without orders fetched successfully.');
         } catch (\Exception $e) {
             return $this->sendError('An error occurred while fetching transaction.', ['error' => $e->getMessage()]);
         }
@@ -753,8 +753,11 @@ class DashboardController extends BaseController
 
             $merchantID = $authUser->merchant->id;
 
-            // Fetch the latest clients based on orders for the authenticated merchant
-            $latestClients = Order::with('invoice')->where('merchant_id', $merchantID)
+            // Fetch the latest clients based on invoices having an order_id for the authenticated merchant
+            $latestClients = Order::whereHas('invoice', function ($query) {
+                $query->whereNotNull('order_id');
+            })
+                ->where('merchant_id', $merchantID)
                 ->orderBy('id', 'desc') // Order by creation date descending
                 ->limit(5) // Limit to 5 latest clients
                 ->get();

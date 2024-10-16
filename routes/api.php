@@ -153,6 +153,7 @@ Route::middleware('auth:api')->group(function () {
     // Cart and Order routes
     Route::post('/cart/add', [OrderController::class, 'addToCart']);
     Route::get('/cart/cart-items', [OrderController::class, 'getCartItems']);
+    Route::get('/cart/cart-valid', [OrderController::class, 'checkCartItemValidity']);
     Route::post('/cart/update-cart-items', [OrderController::class, 'updateCartItem']);
     Route::delete('/cart/delete-cart-items', [OrderController::class, 'deleteCartItem']);
 
@@ -167,6 +168,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/cart/updateOrderStatusToPending', [OrderController::class, 'updateOrderStatusToPending']); // Place an order
     Route::post('/cart/getOrderDetails', [OrderController::class, 'getOrderDetails']); // Place an order
     Route::get('/order/getOrderDetailsForInvoice/{orderID}', [OrderController::class, 'getOrderDetailsForInvoice']); // Show checkout details
+    Route::delete('/order/delete/{orderID}', [OrderController::class, 'deleteOrder']); // Show checkout details
 
 
     // Category Routes

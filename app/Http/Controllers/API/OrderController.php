@@ -14,6 +14,7 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductInventory;
 use App\Models\Transaction;
+use Carbon\Carbon;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
@@ -159,6 +160,56 @@ class OrderController extends BaseController
             ], 'Cart items retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving cart items.', $e->getMessage());
+        }
+    }
+
+    public function checkCartItemValidity(Request $request)
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
+            // Fetch the user's cart for the given type
+            $cart = Cart::where('merchant_id', $merchantID)
+                ->where('user_id', $authUser->id)
+                ->where('cart_type', 'shop')
+                ->with('items.product') // Load products in the cart items
+                ->first();
+
+            if (!$cart) {
+                return $this->sendError('Cart not found.');
+            }
+
+            // Check if any cart item was created more than 3 minutes ago
+            $now = Carbon::now();
+            $expiredItems = $cart->items->filter(function ($item) use ($now) {
+                return $item->created_at->diffInMinutes($now) > 3;
+            });
+
+            // If there are expired items, delete the cart and its items
+            if ($expiredItems->count() > 0) {
+                $cart->items()->delete();  // Delete all items from the cart
+                $cart->delete();  // Delete the cart itself
+                return $this->sendResponse(['items' => false],'Cart and items deleted due to expiration.');
+            }
+
+            // If no items are expired, return a success message
+            return $this->sendResponse(['items' => true] ,'Cart items are still valid and have not expired.');
+
+        } catch (\Exception $e) {
+            return $this->sendError('Error retrieving cart checked.', $e->getMessage());
         }
     }
 
@@ -324,7 +375,6 @@ class OrderController extends BaseController
             return $this->sendError('Error deleting cart item.', $e->getMessage());
         }
     }
-
 
     public function checkout(Request $request)
     {
@@ -875,9 +925,9 @@ class OrderController extends BaseController
         }
     }
 
-
     public function getOrdersByType(Request $request)
     {
+        // Validate request for order type
         $validator = $this->validateRequest($request, [
             'order_type' => 'required|in:shop,stock',
         ]);
@@ -886,26 +936,38 @@ class OrderController extends BaseController
         }
 
         try {
-            // Get the authenticated merchant ID
+            // Get authenticated user
             $authUser = auth()->user();
 
+            // Ensure user has a merchant relation
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
+            // Set merchant ID based on user type
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
             $merchantID = $authUser->merchant->id;
 
-            // Fetch orders by the given type
-            $orders = Order::where('order_type', $validator['order_type'])
+            // Fetch orders by the given type and conditions
+            $ordersQuery = Order::where('order_type', $request->order_type)
                 ->where('merchant_id', $merchantID)
-                ->with('items.product') // Load related order items and products
-                ->get();
+                ->with('items.product'); // Load related order items and products
 
+            // For employees, filter orders by the authenticated user's ID
+            if ($authUser->user_type == 'employee') {
+                $ordersQuery->where('user_id', $authUser->id);
+            }
+
+            $orders = $ordersQuery->get();
+
+            // Check if orders exist
             if ($orders->isEmpty()) {
                 return $this->sendError('No orders found for the specified type.');
             }
 
-            // Prepare the response data
+            // Prepare response data
             $data = $orders->map(function ($order) {
                 return [
                     'order_id' => $order->id,
@@ -957,22 +1019,18 @@ class OrderController extends BaseController
 
             $merchantID = $authUser->merchant->id;
 
+            // Fetch orders by the given type and conditions
+            $ordersQuery = Order::where('order_status', $request->order_status)
+                ->where('merchant_id', $merchantID)
+                ->with('items.product'); // Load related order items and products
+
+            // For employees, filter orders by the authenticated user's ID
             if ($authUser->user_type == 'employee') {
-                // Fetch orders by the given type
-                $orders = Order::where('order_status', $request->order_status)
-                    ->where('merchant_id', $merchantID)
-                    ->where('user_id', $authUser->id)
-                    ->orderBy('id', 'DESC')
-                    ->with('items.product') // Load related order items and products
-                    ->get();
-            } else {
-                // Fetch orders by the given type
-                $orders = Order::where('order_status', $request->order_status)
-                    ->where('merchant_id', $merchantID)
-                    ->orderBy('id', 'DESC')
-                    ->with('items.product') // Load related order items and products
-                    ->get();
+                $ordersQuery->where('user_id', $authUser->id);
             }
+
+            $orders = $ordersQuery->get();
+
 
 
             if ($orders->isEmpty()) {
@@ -1371,6 +1429,44 @@ class OrderController extends BaseController
         } catch (\Exception $e) {
             DB::rollBack();
             return $this->sendError('Error processing Transaction by Cash.', $e->getMessage());
+        }
+    }
+
+    public function deleteOrder($orderID)
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
+            // Retrieve the order with its items
+            $order = Order::with('items')->where('merchant_id', $merchantID)->find($orderID);
+
+            // If the order doesn't exist, return an error
+            if (!$order || $order->items->isEmpty()) {
+                return $this->sendError('Order not found or has no items.');
+            }
+
+            // Delete the order items first
+            $order->items()->delete();
+
+            // Delete the order itself
+            $order->delete();
+
+            return $this->sendResponse([],'Order and its items deleted successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error deleting the order.', $e->getMessage());
         }
     }
 
