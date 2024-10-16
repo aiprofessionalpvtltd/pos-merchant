@@ -100,10 +100,11 @@ class DashboardController extends BaseController
             // Overall total quantity (sum of both stock and shop)
             $overallTotal = $totalProductsInShop + $totalProductsInStock;
 
-            // Total sold products count (based on CartItem and related products of this merchant)
             $totalProductsSold = OrderItem::whereHas('product', function ($query) use ($merchantID) {
                 $query->where('merchant_id', $merchantID);
-            })->sum('quantity');
+            })
+                ->whereBetween('created_at', [Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()])
+                ->sum('quantity');
 
             // New products added to the shop in the last 7 days
             $newProductsInShop = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
