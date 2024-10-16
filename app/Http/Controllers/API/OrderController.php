@@ -964,7 +964,7 @@ class OrderController extends BaseController
 
             // Check if orders exist
             if ($orders->isEmpty()) {
-                return $this->sendError('No orders found for the specified type.');
+                return $this->sendResponse([],'No orders found for the specified type.');
             }
 
             // Prepare response data
@@ -1034,7 +1034,7 @@ class OrderController extends BaseController
 
 
             if ($orders->isEmpty()) {
-                return $this->sendError('No orders found for the specified type.');
+                return $this->sendResponse([],'No orders found for the specified type.');
             }
 
             // Prepare the response data
