@@ -416,7 +416,7 @@ class OrderController extends BaseController
 
             if (!$cart || $cart->items->isEmpty()) {
                 DB::rollBack();
-                return $this->sendError('Cart is empty.');
+                return $this->sendResponse([] , 'Cart is empty.');
             }
 
             // Initialize subtotal
