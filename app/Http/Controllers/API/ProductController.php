@@ -622,7 +622,7 @@ class ProductController extends BaseController
                 $endDate = \Carbon\Carbon::now()->endOfMonth()->endOfDay();
             }
 
-            // Fetch sold products grouped by product_id and sold date (without time)
+            // Fetch sold products grouped by product_id and sold date (with time)
             $soldProducts = OrderItem::with(['product' => function ($query) use ($merchantID) {
                 // Load the products along with their inventories
                 $query->where('merchant_id', $merchantID)
@@ -631,15 +631,14 @@ class ProductController extends BaseController
                         $inventoryQuery->whereIn('type', ['shop', 'stock']);
                     }]);
             }])
-                ->select('product_id', DB::raw('DATE(created_at) as sold_date'), DB::raw('SUM(quantity) as total_sold'))
-                ->groupBy('product_id', DB::raw('DATE(created_at)'))
+                ->select('product_id', 'created_at', DB::raw('SUM(quantity) as total_sold'))
+                ->groupBy('product_id', 'created_at') // Group by product_id and full created_at
                 // Order by product_id descending
-                ->orderBy('product_id', 'desc')
-                ->orderBy('sold_date', 'desc');
+                ->orderBy('created_at', 'desc');
 
             // Apply date range filter only if both dates are present
             if ($startDate && $endDate) {
-                $soldProducts->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate]);
+                $soldProducts->whereBetween('created_at', [$startDate, $endDate]);
             }
 
             // Execute the query
@@ -670,7 +669,8 @@ class ProductController extends BaseController
                     'in_shop_quantity' => $inShopQuantity,
                     'in_stock_quantity' => $inStockQuantity,
                     'total_sold' => $soldProduct->total_sold,
-                    'sold_date' => $soldProduct->sold_date, // Grouped sold date
+//                    'sold_date' => $soldProduct->created_at->format('Y-m-d'), // Date only
+                    'sold_date' => showDateTime($soldProduct->created_at), // Full date and time
                 ];
             }
 
