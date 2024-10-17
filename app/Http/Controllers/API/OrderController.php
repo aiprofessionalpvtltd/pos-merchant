@@ -415,7 +415,7 @@ class OrderController extends BaseController
                 ->first();
 
             if (!$cart || $cart->items->isEmpty()) {
-                DB::rollBack();
+//                DB::rollBack();
                 return $this->sendResponse([] , 'Cart is empty.');
             }
 
