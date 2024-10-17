@@ -737,6 +737,9 @@ class ProductController extends BaseController
                 // Calculate in-shop quantities
                 $inShopQuantity = $product->inventories->sum('quantity');
 
+                // Fetch the first inventory updated_at date (if exists)
+                $inventoryUpdatedAt = $product->inventories->isNotEmpty() ? $product->inventories->first()->updated_at->format('Y-m-d H:i:s') : null;
+
                 return [
                     'product_name' => $product->product_name,
                     'category_name' => $product->category->name ?? 'Uncategorized',
@@ -747,6 +750,7 @@ class ProductController extends BaseController
                     'total_price' => $product->total_price,
                     'total_price_in_usd' => convertShillingToUSD($product->total_price),
                     'in_shop_quantity' => $inShopQuantity,
+                    'date' => $inventoryUpdatedAt, // Add inventory updated_at to response
                 ];
             });
 
@@ -813,6 +817,9 @@ class ProductController extends BaseController
                 // Calculate in-stock quantities
                 $inStockQuantity = $product->inventories->sum('quantity');
 
+                // Fetch the first inventory's updated_at date (if exists)
+                $inventoryUpdatedAt = $product->inventories->isNotEmpty() ? $product->inventories->first()->updated_at->format('Y-m-d H:i:s') : null;
+
                 return [
                     'product_name' => $product->product_name,
                     'category_name' => $product->category->name ?? 'Uncategorized',
@@ -823,6 +830,7 @@ class ProductController extends BaseController
                     'total_price' => $product->total_price,
                     'total_price_in_usd' => convertShillingToUSD($product->total_price),
                     'in_stock_quantity' => $inStockQuantity,
+                    'date' => $inventoryUpdatedAt, // Add inventory updated_at to response
                 ];
             });
 
@@ -871,10 +879,10 @@ class ProductController extends BaseController
             $newProducts = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
                 $query->where('merchant_id', $merchantID);
             })
-                ->whereBetween('created_at', [$startDate, $endDate]) // Apply date range filter
+                ->whereBetween('updated_at', [$startDate, $endDate]) // Apply date range filter
                 ->where('type', 'shop')
-                ->select('product_id', DB::raw('SUM(quantity) as total_quantity'))
-                ->groupBy('product_id')
+                ->select('product_id', DB::raw('SUM(quantity) as total_quantity'), 'updated_at') // Fetch updated_at for each inventory
+                ->groupBy('product_id', 'updated_at') // Group by product_id and updated_at
                 ->with(['product.category']) // Eager load category
                 ->orderBy('product_id', 'desc') // Order by product_id in descending order
                 ->get();
@@ -893,6 +901,7 @@ class ProductController extends BaseController
                     'total_price' => $product->total_price,
                     'total_price_in_usd' => convertShillingToUSD($product->total_price),
                     'in_shop_quantity' => $inventory->total_quantity,
+                    'date' => $inventory->updated_at->format('Y-m-d H:i:s'), // Add inventory updated_at date
                 ];
             });
 
@@ -941,10 +950,10 @@ class ProductController extends BaseController
             $newProducts = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
                 $query->where('merchant_id', $merchantID)->orderBy('id', 'desc');
             })
-                ->whereBetween('created_at', [$startDate, $endDate]) // Apply date range filter
+                ->whereBetween('updated_at', [$startDate, $endDate]) // Apply date range filter
                 ->where('type', 'stock')
-                ->select('product_id', DB::raw('SUM(quantity) as total_quantity'))
-                ->groupBy('product_id')
+                ->select('product_id', DB::raw('SUM(quantity) as total_quantity'), 'updated_at') // Fetch updated_at for each inventory
+                ->groupBy('product_id', 'updated_at') // Group by product_id and updated_at
                 ->with(['product.category']) // Eager load category
                 ->orderBy('product_id', 'desc') // Order by product_id in descending order
                 ->get();
@@ -963,6 +972,7 @@ class ProductController extends BaseController
                     'total_price' => $product->total_price,
                     'total_price_in_usd' => convertShillingToUSD($product->total_price),
                     'in_stock_quantity' => $inventory->total_quantity,
+                    'date' => $inventory->updated_at->format('Y-m-d H:i:s'), // Add inventory updated_at date
                 ];
             });
 
