@@ -720,7 +720,7 @@ class ProductController extends BaseController
                 $inventoryQuery->where('type', 'shop');
                 // Apply date range filter if both dates are provided
                 if ($startDate && $endDate) {
-                    $inventoryQuery->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate]);
+                    $inventoryQuery->whereBetween(DB::raw('DATE(updated_at)'), [$startDate, $endDate]);
                 }
             }])
                 ->where('merchant_id', $merchantID)
@@ -800,7 +800,7 @@ class ProductController extends BaseController
                 $inventoryQuery->where('type', 'stock');
                 // Apply date range filter if both dates are provided
                 if ($startDate && $endDate) {
-                    $inventoryQuery->whereBetween(DB::raw('DATE(created_at)'), [$startDate, $endDate]);
+                    $inventoryQuery->whereBetween(DB::raw('DATE(updated_at)'), [$startDate, $endDate]);
                 }
             }])
                 ->where('merchant_id', $merchantID)
