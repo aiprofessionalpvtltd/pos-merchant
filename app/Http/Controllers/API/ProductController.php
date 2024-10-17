@@ -612,17 +612,15 @@ class ProductController extends BaseController
                 $endDate = \Carbon\Carbon::now()->endOfDay();
             }
 
-
             // If both start and end dates are provided, validate the format using Carbon
             if ($startDate && $endDate) {
                 $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
                 $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
-            }else {
+            } else {
                 // Set start and end dates to the current month's start and end
                 $startDate = \Carbon\Carbon::now()->startOfMonth()->startOfDay();
                 $endDate = \Carbon\Carbon::now()->endOfMonth()->endOfDay();
             }
-
 
             // Fetch sold products grouped by product_id and sold date (without time)
             $soldProducts = OrderItem::with(['product' => function ($query) use ($merchantID) {
@@ -635,6 +633,8 @@ class ProductController extends BaseController
             }])
                 ->select('product_id', DB::raw('DATE(created_at) as sold_date'), DB::raw('SUM(quantity) as total_sold'))
                 ->groupBy('product_id', DB::raw('DATE(created_at)'))
+                // Order by product_id descending
+                ->orderBy('product_id', 'desc')
                 ->orderBy('sold_date', 'desc');
 
             // Apply date range filter only if both dates are present
@@ -675,11 +675,12 @@ class ProductController extends BaseController
             }
 
             // Return success response with the data
-            return $this->sendResponse(['start_date' => $startDate  ,'end_date' => $endDate , 'result' =>$data], 'Sold product listings retrieved successfully.');
+            return $this->sendResponse(['start_date' => $startDate, 'end_date' => $endDate, 'result' => $data], 'Sold product listings retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving sold product listings.', [$e->getMessage()]);
         }
     }
+
 
     public function getTotalProductsInShop(Request $request)
     {
@@ -707,7 +708,7 @@ class ProductController extends BaseController
             if ($startDate && $endDate) {
                 $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
                 $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
-            }else {
+            } else {
                 // Set start and end dates to the current month's start and end
                 $startDate = \Carbon\Carbon::now()->startOfMonth()->startOfDay();
                 $endDate = \Carbon\Carbon::now()->endOfMonth()->endOfDay();
@@ -723,6 +724,7 @@ class ProductController extends BaseController
                 }
             }])
                 ->where('merchant_id', $merchantID)
+                ->orderBy('id', 'desc')
                 ->get();
 
             // Prepare the result set, filtering out products with zero in-shop quantities if needed
@@ -749,7 +751,7 @@ class ProductController extends BaseController
             });
 
             // Return success response with the data
-            return $this->sendResponse(['start_date' => $startDate  ,'end_date' => $endDate , 'result' =>$data->values()], 'Total products in shop retrieved successfully.');
+            return $this->sendResponse(['start_date' => $startDate, 'end_date' => $endDate, 'result' => $data->values()], 'Total products in shop retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving total products in shop.', [$e->getMessage()]);
         }
@@ -782,7 +784,7 @@ class ProductController extends BaseController
                 // If both start and end dates are provided, validate and use them
                 $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
                 $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
-            }else {
+            } else {
                 // Set start and end dates to the current month's start and end
                 $startDate = \Carbon\Carbon::now()->startOfMonth()->startOfDay();
                 $endDate = \Carbon\Carbon::now()->endOfMonth()->endOfDay();
@@ -798,6 +800,7 @@ class ProductController extends BaseController
                 }
             }])
                 ->where('merchant_id', $merchantID)
+                ->orderBy('id', 'desc')
                 ->get();
 
             // Prepare the result set, filtering out products with zero stock
@@ -824,7 +827,7 @@ class ProductController extends BaseController
             });
 
             // Return success response with the data
-            return $this->sendResponse(['start_date' => $startDate  ,'end_date' => $endDate , 'result' =>$data->values()], 'Total products in stock retrieved successfully.');
+            return $this->sendResponse(['start_date' => $startDate, 'end_date' => $endDate, 'result' => $data->values()], 'Total products in stock retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving total products in stock.', [$e->getMessage()]);
         }
@@ -873,6 +876,7 @@ class ProductController extends BaseController
                 ->select('product_id', DB::raw('SUM(quantity) as total_quantity'))
                 ->groupBy('product_id')
                 ->with(['product.category']) // Eager load category
+                ->orderBy('product_id', 'desc') // Order by product_id in descending order
                 ->get();
 
             // Prepare the result set
@@ -893,7 +897,7 @@ class ProductController extends BaseController
             });
 
             // Return success response with the data
-            return $this->sendResponse(['start_date' => $startDate  ,'end_date' => $endDate , 'result' =>$data], 'New products listing retrieved successfully.');
+            return $this->sendResponse(['start_date' => $startDate, 'end_date' => $endDate, 'result' => $data], 'New products listing retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving new products listing.', [$e->getMessage()]);
         }
@@ -935,13 +939,14 @@ class ProductController extends BaseController
 
             // Fetch new products added within the specified date range, grouped by product
             $newProducts = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
-                $query->where('merchant_id', $merchantID);
+                $query->where('merchant_id', $merchantID)->orderBy('id', 'desc');
             })
                 ->whereBetween('created_at', [$startDate, $endDate]) // Apply date range filter
                 ->where('type', 'stock')
                 ->select('product_id', DB::raw('SUM(quantity) as total_quantity'))
                 ->groupBy('product_id')
                 ->with(['product.category']) // Eager load category
+                ->orderBy('product_id', 'desc') // Order by product_id in descending order
                 ->get();
 
             // Prepare the result set
@@ -962,7 +967,7 @@ class ProductController extends BaseController
             });
 
             // Return success response with the data
-            return $this->sendResponse(['start_date' => $startDate  ,'end_date' => $endDate , 'result' =>$data], 'New products listing retrieved successfully.');
+            return $this->sendResponse(['start_date' => $startDate, 'end_date' => $endDate, 'result' => $data], 'New products listing retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving new products listing.', [$e->getMessage()]);
         }
@@ -1139,7 +1144,7 @@ class ProductController extends BaseController
                 $authUser->user_type = $authUser->employee->role;
             }
 
-            $downloadedBy = strtoupper($authUser->name . ' (' .  $authUser->user_type .')');
+            $downloadedBy = strtoupper($authUser->name . ' (' . $authUser->user_type . ')');
 
             // Prepare the combined response
             $combinedResponse = [
@@ -1155,7 +1160,6 @@ class ProductController extends BaseController
             return $this->sendError('Error retrieving combined inventory report and summary.', [$e->getMessage()]);
         }
     }
-
 
 
 }
