@@ -244,6 +244,11 @@ class DashboardController extends BaseController
 // Calculate the percentage change between the current week and previous week
             if ($previousWeekTransactions > 0) {
                 $totalAmountPercentageChange = (($currentWeekTransactions - $previousWeekTransactions) / $previousWeekTransactions) * 100;
+
+                // Ensure the percentage does not exceed 100%
+                if ($totalAmountPercentageChange > 100) {
+                    $totalAmountPercentageChange = 100;
+                }
             } else {
                 // If no transactions in the previous week, we can't calculate a percentage change
                 $totalAmountPercentageChange = $currentWeekTransactions > 0 ? 100 : 0;
