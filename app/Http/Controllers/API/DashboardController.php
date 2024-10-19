@@ -223,27 +223,31 @@ class DashboardController extends BaseController
 
             $merchantID = $authUser->merchant->id;
 
-            // Set start and end of the week
+            // Set start and end of the current week
             $startOfWeek = now()->startOfWeek();
             $endOfWeek = now()->endOfWeek();
 
+// Set start and end of the previous week
+            $startOfPreviousWeek = now()->subWeek()->startOfWeek();
+            $endOfPreviousWeek = now()->subWeek()->endOfWeek();
 
-            // Get total transaction amount for the current week for invoices (no order_id)
-            $weeklyTransactions = Transaction::where('merchant_id', $merchantID)
+// Get total transaction amount for the current week (no order_id)
+            $currentWeekTransactions = Transaction::where('merchant_id', $merchantID)
                 ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
-                ->get();
-
-            // Calculate total transaction amount from these transactions
-            $totalAmountFromTransactions = $weeklyTransactions->sum('transaction_amount');
-
-            // Calculate the total transaction amount for all time (only invoices without order_id)
-            $totalAmountAllTime = Transaction::where('merchant_id', $merchantID)
                 ->sum('transaction_amount');
 
-            // Calculate the percentage of weekly transactions from total transactions
-            $totalAmountPercentage = $totalAmountAllTime > 0
-                ? ($totalAmountFromTransactions / $totalAmountAllTime) * 100
-                : 0;
+// Get total transaction amount for the previous week (no order_id)
+            $previousWeekTransactions = Transaction::where('merchant_id', $merchantID)
+                ->whereBetween('created_at', [$startOfPreviousWeek, $endOfPreviousWeek])
+                ->sum('transaction_amount');
+
+// Calculate the percentage change between the current week and previous week
+            if ($previousWeekTransactions > 0) {
+                $totalAmountPercentageChange = (($currentWeekTransactions - $previousWeekTransactions) / $previousWeekTransactions) * 100;
+            } else {
+                // If no transactions in the previous week, we can't calculate a percentage change
+                $totalAmountPercentageChange = $currentWeekTransactions > 0 ? 100 : 0;
+            }
 
             // Get invoices for the week (no order associated)
             $weeklyInvoiceData = Transaction::with('order')->where('merchant_id', $merchantID)
@@ -268,9 +272,9 @@ class DashboardController extends BaseController
 
             // Response data including transaction details
             $response = [
-                'total_amount_from_transactions_slsh' => round($totalAmountFromTransactions, 2),
-                'total_amount_from_transactions_usd' => convertShillingToUSD($totalAmountFromTransactions),
-                'total_amount_from_transactions_percentage' => round($totalAmountPercentage, 2),
+                'total_amount_from_transactions_slsh' => round($currentWeekTransactions, 2),
+                'total_amount_from_transactions_usd' => convertShillingToUSD($currentWeekTransactions),
+                'total_amount_from_transactions_percentage' => round($totalAmountPercentageChange, 2),
                 'weekly_sales_statistics' => $data,
             ];
 
