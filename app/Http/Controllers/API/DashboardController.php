@@ -399,7 +399,7 @@ class DashboardController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Retrieve top-selling products based on the orders placed by the merchant
-            $topSellingProducts = Product::whereHas('orderItems.order', function ($query) use ($merchantID) {
+            $topSellingProducts = Product::with('inventories')->whereHas('orderItems.order', function ($query) use ($merchantID) {
                 $query->where('merchant_id', $merchantID);
             })
                 ->withCount(['orderItems as total_quantity_sold' => function ($query) {
