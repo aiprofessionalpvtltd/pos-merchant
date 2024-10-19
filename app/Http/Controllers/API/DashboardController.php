@@ -603,7 +603,7 @@ class DashboardController extends BaseController
             $transactions = Transaction::with('order')->where('merchant_id', $merchantID)
 //                ->whereNull('order_id') // Only fetch invoices without an order
                 ->orderBy('id', 'desc') // Order by creation date descending
-                ->limit(5) // Limit to 5 latest invoices
+                ->limit(10) // Limit to 5 latest invoices
                 ->get();
 
 //            dd($transactions);
