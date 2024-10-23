@@ -499,6 +499,7 @@ class PaymentController extends BaseController
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Error in checkInvoiceStatus: ' . $e->getMessage());
+
             return $this->sendError('error', 'An error occurred while checking the invoice status ' . $e->getMessage(), 500);
         }
     }

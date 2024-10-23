@@ -406,6 +406,68 @@ class MerchantController extends BaseController
         }
     }
 
+    public function checkForDuplicatePhoneNumber(Request $request)
+    {
+        try {
+            // Validate the request
+            $validator = Validator::make($request->all(), [
+                'phone_number' => 'required|string|max:15',
+            ]);
+
+            if ($validator->fails()) {
+                return $this->sendError('Validation Error.', $validator->errors());
+            }
+
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Check if the authenticated user has an associated merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant
+            $merchant = $authUser->merchant;
+
+            // Clean up the phone number (remove spaces)
+            $phoneNumber = str_replace(' ', '', $request->input('phone_number'));
+
+            // Verify phone number and get the specific company column (edahab_number, zaad_number, etc.)
+            $verifiedNumber = $this->verifiedPhoneNumber($phoneNumber);
+
+            // If the phone number is invalid or company not recognized, return error
+            if (!$verifiedNumber) {
+                return $this->sendError('Invalid phone number. Company not recognized.');
+            }
+
+            // Check for duplicate phone numbers in the database
+            $existingMerchant = Merchant::where(function ($query) use ($phoneNumber) {
+                $query->where('edahab_number', $phoneNumber)
+                    ->orWhere('zaad_number', $phoneNumber)
+                    ->orWhere('golis_number', $phoneNumber)
+                    ->orWhere('evc_number', $phoneNumber);
+            })->where('id', '!=', $merchant->id)->first(); // Exclude the current merchant
+
+            if ($existingMerchant) {
+                // Return specific error message with business_name
+                return $this->sendError(
+                    "{$existingMerchant->business_name} has already used this phone number ({$phoneNumber}). Try another phone number"
+                );
+            }
+
+            // If no duplicate is found, return a success response
+            return response()->json([
+                'success' => true,
+                'message' => "Phone number ({$phoneNumber}) is available for verification."
+            ], 200); // OK response
+
+        } catch (\Exception $e) {
+            // Catch any exception and return an error message
+            return $this->sendError('Something went wrong: ' . $e->getMessage(), 500);
+        }
+    }
+
+
     public function getPhoneNumbersStatus()
     {
         try {
