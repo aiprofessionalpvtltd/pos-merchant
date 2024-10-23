@@ -74,6 +74,15 @@ class MerchantController extends BaseController
                 return $this->sendError('Merchant mobile number is already registered', '');
             }
 
+            // Check if a merchant with the provided merchant_code already exists
+            $merchantCodeCount = Merchant::where('merchant_code', $request->input('merchant_code'))->count();
+
+            if ($merchantCodeCount > 0) {
+                return $this->sendError('Merchant code is already registered.', '');
+            }
+
+            
+
             // Remove spaces from phone number
             $phoneNumber = str_replace(' ', '', $request->input('phone_number'));
 
