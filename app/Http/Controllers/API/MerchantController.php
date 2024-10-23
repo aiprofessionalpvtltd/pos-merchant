@@ -100,7 +100,7 @@ class MerchantController extends BaseController
                 ]);
             }
 
-             // Create the merchant with the modified request data
+            // Create the merchant with the modified request data
             $merchant = Merchant::create($request->all());
 
             // Get Merchant Subscription
@@ -365,20 +365,33 @@ class MerchantController extends BaseController
                 return $this->sendError('Invalid phone number. Company not recognized.');
             }
 
+            // Check for duplicate phone numbers in the database
+            $existingMerchant = Merchant::where(function ($query) use ($phoneNumber) {
+                $query->where('edahab_number', $phoneNumber)
+                    ->orWhere('zaad_number', $phoneNumber)
+                    ->orWhere('golis_number', $phoneNumber)
+                    ->orWhere('evc_number', $phoneNumber);
+            })->where('id', '!=', $merchant->id)->first(); // Exclude the current merchant
+
+            if ($existingMerchant) {
+                // Return specific error message with business_name
+                return $this->sendError(
+                    "{$existingMerchant->business_name} has already used this phone number ({$phoneNumber})."
+                );
+            }
+
             // Apply logic before saving the merchant
             if ($verifiedNumber == 'edahab_number') {
                 // Update only edahab_number
-                $merchant->phone_number = $phoneNumber;
                 $merchant->edahab_number = $phoneNumber;
             } else {
                 // Update other columns if not edahab_number
-                $merchant->phone_number = $phoneNumber;
                 $merchant->zaad_number = $phoneNumber;
                 $merchant->golis_number = $phoneNumber;
                 $merchant->evc_number = $phoneNumber;
             }
 
-             // Save the updated phone number in the merchant record
+            // Save the updated phone number in the merchant record
             $merchant->save();
 
             // Return success message
@@ -402,7 +415,7 @@ class MerchantController extends BaseController
             if ($authUser->user_type == 'employee') {
                 $authUser->merchant = $authUser->employee->merchant;
             }
-            
+
             // Check if the authenticated user has an associated merchant
             if (!$authUser || !$authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
