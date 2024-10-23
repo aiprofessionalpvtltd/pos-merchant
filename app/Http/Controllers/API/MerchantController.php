@@ -418,16 +418,6 @@ class MerchantController extends BaseController
                 return $this->sendError('Validation Error.', $validator->errors());
             }
 
-            // Get authenticated user
-            $authUser = auth()->user();
-
-            // Check if the authenticated user has an associated merchant
-            if (!$authUser || !$authUser->merchant) {
-                return $this->sendError('Merchant not found for the authenticated user.');
-            }
-
-            // Get the merchant
-            $merchant = $authUser->merchant;
 
             // Clean up the phone number (remove spaces)
             $phoneNumber = str_replace(' ', '', $request->input('phone_number'));
@@ -446,7 +436,7 @@ class MerchantController extends BaseController
                     ->orWhere('zaad_number', $phoneNumber)
                     ->orWhere('golis_number', $phoneNumber)
                     ->orWhere('evc_number', $phoneNumber);
-            })->where('id', '!=', $merchant->id)->first(); // Exclude the current merchant
+            })->first(); // Exclude the current merchant
 
             if ($existingMerchant) {
                 // Return specific error message with business_name

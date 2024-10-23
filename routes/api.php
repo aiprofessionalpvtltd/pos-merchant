@@ -51,6 +51,10 @@ Route::post('/employee/verifyEmployee', [EmployeeController::class, 'verifyEmplo
 Route::post('employee/store-pin', [EmployeeController::class, 'storePin']);
 Route::get('employee/getPOSPermission', [EmployeeController::class, 'getPOSPermission']);
 
+
+Route::post('merchants/checkForDuplicatePhoneNumber', [MerchantController::class, 'checkForDuplicatePhoneNumber']);
+
+
 Route::middleware('auth:api')->group(function () {
 
     Route::get('login/userinfo', [PassportAuthController::class, 'userInfo']);
@@ -59,7 +63,6 @@ Route::middleware('auth:api')->group(function () {
     Route::post('merchants/change-pin', [MerchantVerificationController::class, 'changePin']);
     Route::post('merchants/verifyPhoneNumberByCompany', [MerchantController::class, 'verifyPhoneNumberByCompany']);
     Route::post('merchants/verificationComplete', [MerchantController::class, 'verificationComplete']);
-    Route::post('merchants/checkForDuplicatePhoneNumber', [MerchantController::class, 'checkForDuplicatePhoneNumber']);
     Route::get('merchants/getPhoneNumbersStatus', [MerchantController::class, 'getPhoneNumbersStatus']);
 
 
