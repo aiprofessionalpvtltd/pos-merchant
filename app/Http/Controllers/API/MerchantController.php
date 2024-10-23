@@ -376,7 +376,7 @@ class MerchantController extends BaseController
             if ($existingMerchant) {
                 // Return specific error message with business_name
                 return $this->sendError(
-                    "{$existingMerchant->business_name} has already used this phone number ({$phoneNumber})."
+                    "{$existingMerchant->first_name} {$existingMerchant->last_name} has already used this phone number ({$phoneNumber}). Try another phone number"
                 );
             }
 
@@ -441,7 +441,7 @@ class MerchantController extends BaseController
             if ($existingMerchant) {
                 // Return specific error message with business_name
                 return $this->sendError(
-                    "{$existingMerchant->business_name} has already used this phone number ({$phoneNumber}). Try another phone number"
+                    "{$existingMerchant->first_name} {$existingMerchant->last_name} has already used this phone number ({$phoneNumber}). Try another phone number"
                 );
             }
 
