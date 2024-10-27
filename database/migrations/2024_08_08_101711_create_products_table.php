@@ -20,7 +20,7 @@ return new class extends Migration
             $table->integer('stock_limit');
             $table->integer('alarm_limit');
             $table->string('image')->nullable();
-            $table->string('bar_code');
+            $table->string('bar_code')->nullable();
             $table->timestamps();
             $table->softDeletes();
         });

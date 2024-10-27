@@ -79,11 +79,15 @@ class ProductController extends BaseController
                 $input['image'] = $request->file('image')->store('products', 'public');
             }
 
+            $product = NULL;
 
-            // Check if the product already exists by product_name and category_id
-            $product = Product::where('bar_code', $request->input('bar_code'))
-                ->where('category_id', $request->input('category_id'))
-                ->first();
+            if($request->input('bar_code')){
+                // Check if the product already exists by product_name and category_id
+                $product = Product::where('bar_code', $request->input('bar_code'))
+                    ->where('category_id', $request->input('category_id'))
+                    ->first();
+            }
+
 
 
             $input['price'] = $request->price;
