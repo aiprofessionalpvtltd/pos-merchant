@@ -249,6 +249,12 @@ class DashboardController extends BaseController
                 if ($totalAmountPercentageChange > 100) {
                     $totalAmountPercentageChange = 100;
                 }
+
+                if ($totalAmountPercentageChange < 0) {
+                    $totalAmountPercentageChange = 0;
+                }
+
+
             } else {
                 // If no transactions in the previous week, we can't calculate a percentage change
                 $totalAmountPercentageChange = $currentWeekTransactions > 0 ? 100 : 0;
