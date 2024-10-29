@@ -779,13 +779,23 @@ class DashboardController extends BaseController
                 ->limit(5) // Limit to 5 latest clients
                 ->get();
 
-//            dd($latestClients);
             // Format the response
             $clientData = $latestClients->map(function ($order) {
+                // Access the associated invoice
+                $invoice = $order->invoice;
+
+                // Check payment method and format the name accordingly
+                if ($invoice && $invoice->payment_method === 'card') {
+                    $name = trim(($invoice->first_name ?? '') . ' ' . ($invoice->last_name ?? ''));
+                } else {
+                    $name = $invoice->mobile_number ?? 'N/A';
+                }
+
                 return [
-                    'name' => $order->name ?? $order->invoice->mobile_number ?? 'N/A',
-                    'order_id' => $order->id ??  null,
-                    'name_initial' => $this->getInitials($order->name ?? 'Not Available')
+                    'name' => $name ?: 'N/A',
+                    'payment_method' => $invoice->payment_method,
+                    'order_id' => $order->id ?? null,
+                    'name_initial' => $this->getInitials($name ?: 'Not Available'),
                 ];
             });
 

@@ -365,8 +365,8 @@ class PaymentController extends BaseController
                 $invoice = Invoice::create([
                     'merchant_id' => $merchantID,
                     'invoice_id' => $invoiceData['InvoiceId'],
-                    'first_name' => $firstName,
-                    'last_name' => $lastName,
+                    'first_name' => $firstName ?? 'N/A',
+                    'last_name' => $lastName ?? 'N/A',
                     'mobile_number' => $phoneNumber,
                     'transaction_id' => $transactionId,
                     'hash' => $hashValue,
@@ -477,7 +477,7 @@ class PaymentController extends BaseController
 
                         // If the status is still 'Pending', just sleep for 5 seconds and try again
                         if ($invoiceStatus == 'Pending') {
-                             sleep(5); // Wait for 5 seconds before checking again
+                            sleep(5); // Wait for 5 seconds before checking again
                             $attempts++;
                             continue; // Repeat the loop
                         }
@@ -611,12 +611,12 @@ class PaymentController extends BaseController
         $invoiceId = rand(100000, 999999);   // 6-digit random number
 
         $accountNo = $request->input('edahab_number'); // Phone number
-        $accountNo = '+252'. $accountNo;
+        $accountNo = '+252' . $accountNo;
 
         // Verify phone number and get the specific company column
         $verifiedNumber = $this->verifiedPhoneNumber($accountNo);
 
-         // If the phone number is invalid or company not recognized, return error
+        // If the phone number is invalid or company not recognized, return error
         if ($verifiedNumber != 'zaad_number') {
             return $this->sendError('Zaad phone number. Zaad not recognized.');
         }
@@ -625,6 +625,8 @@ class PaymentController extends BaseController
         $currency = $request->input('currency', 'SLSH');  // Currency
         $type = $request->input('type');  // Type of invoice
         $merchantID = NULL;
+        $firstName = $request->input('first_name');
+        $lastName = $request->input('last_name');
         $paymentMethod = $request->input('payment_method');
 
         if ($type === 'POS' || $type == 'Subscription') {
@@ -644,7 +646,7 @@ class PaymentController extends BaseController
                 "apiKey" => env('WAAFI_API_KEY', 'API-1901083745AHX'),
                 "paymentMethod" => "MWALLET_ACCOUNT",
                 "payerInfo" => [
-                    "accountNo" =>  str_replace('+', '', $accountNo),
+                    "accountNo" => str_replace('+', '', $accountNo),
                 ],
                 "transactionInfo" => [
                     "referenceId" => $referenceId,
@@ -681,6 +683,8 @@ class PaymentController extends BaseController
                     $invoice = Invoice::create([
                         'merchant_id' => $merchantID,
                         'invoice_id' => $invoiceData['params']['referenceId'],
+                        'first_name' => $firstName ?? 'N/A',
+                        'last_name' => $lastName ?? 'N/A',
                         'mobile_number' => $accountNo,
                         'transaction_id' => $invoiceData['params']['transactionId'],
                         'hash' => 0,
@@ -704,7 +708,7 @@ class PaymentController extends BaseController
                             'currency' => $currency,
                             'status' => $invoiceData['params']['state'],
                             'invoice_id' => $invoice->invoice_id,
-                            'mobile_number' =>  $accountNo,
+                            'mobile_number' => $accountNo,
                         ]
                     ];
 
