@@ -619,6 +619,7 @@ class DashboardController extends BaseController
                     'invoice_id' => $transaction->id,
                     'order_id' => $transaction->order->id ?? null, // No order details
                     'name' => $transaction->phone_number, // Assuming mobile number stored in the invoice
+                    'payment_method' => $transaction->payment_method, // Assuming mobile number stored in the invoice
                     'order_date' => dateInsert($transaction->created_at), // Use invoice creation date
                     'invoice_amount' => convertShillingToUSD($transaction->transaction_amount), // Use invoice amount
                     'name_initial' => 'N/A' // Since no order details exist, initials not applicable
