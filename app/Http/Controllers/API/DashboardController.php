@@ -771,18 +771,45 @@ class DashboardController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Fetch the latest clients based on invoices having an order_id for the authenticated merchant
-            $latestClients = Order::whereHas('invoice', function ($query) {
-                $query->whereNotNull('order_id');
-            })
-                ->where('merchant_id', $merchantID)
+//            $latestClients = Order::whereHas('invoice', function ($query) {
+//                $query->whereNotNull('order_id');
+//            })
+//                ->where('merchant_id', $merchantID)
+//                ->orderBy('id', 'desc') // Order by creation date descending
+//                ->limit(5) // Limit to 5 latest clients
+//                ->get();
+
+            // Fetch the latest clients based on invoices having an order_id for the authenticated merchant
+
+            // Format the response
+//            $clientData = $latestClients->map(function ($order) {
+//                // Access the associated invoice
+//                $invoice = $order->invoice;
+//
+//                // Check payment method and format the name accordingly
+//                if ($invoice && $invoice->payment_method === 'card') {
+//                    $name = trim(($invoice->first_name ?? '') . ' ' . ($invoice->last_name ?? ''));
+//                } else {
+//                    $name = $invoice->mobile_number ?? 'N/A';
+//                }
+//
+//                return [
+//                    'name' => $name ?: 'N/A',
+//                    'payment_method' => $invoice->payment_method,
+//                    'order_id' => $order->id ?? null,
+//                    'name_initial' => $this->getInitials($name ?: 'Not Available'),
+//                ];
+//            });
+
+            $latestClients = Invoice::where('merchant_id', $merchantID)
                 ->orderBy('id', 'desc') // Order by creation date descending
                 ->limit(5) // Limit to 5 latest clients
                 ->get();
 
-            // Format the response
-            $clientData = $latestClients->map(function ($order) {
+
+
+            $clientData = $latestClients->map(function ($invoice) {
                 // Access the associated invoice
-                $invoice = $order->invoice;
 
                 // Check payment method and format the name accordingly
                 if ($invoice && $invoice->payment_method === 'card') {
@@ -794,10 +821,11 @@ class DashboardController extends BaseController
                 return [
                     'name' => $name ?: 'N/A',
                     'payment_method' => $invoice->payment_method,
-                    'order_id' => $order->id ?? null,
+                    'order_id' => null,
                     'name_initial' => $this->getInitials($name ?: 'Not Available'),
                 ];
             });
+
 
             return $this->sendResponse($clientData, 'Latest clients for normal merchants fetched successfully.');
         } catch (\Exception $e) {
