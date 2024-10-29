@@ -25,6 +25,8 @@ class Invoice extends Model
         'merchant_id',
         'invoice_id',
         'mobile_number',
+        'first_name',
+        'last_name',
         'transaction_id',
         'hash',
         'amount',
