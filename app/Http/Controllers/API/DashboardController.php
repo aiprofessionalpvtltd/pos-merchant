@@ -811,6 +811,7 @@ class DashboardController extends BaseController
             $clientData = $latestClients->map(function ($invoice) {
                 // Access the associated invoice
 
+
                 // Check payment method and format the name accordingly
                 if ($invoice && $invoice->payment_method === 'card') {
                     $name = trim(($invoice->first_name ?? '') . ' ' . ($invoice->last_name ?? ''));

@@ -365,8 +365,8 @@ class PaymentController extends BaseController
                 $invoice = Invoice::create([
                     'merchant_id' => $merchantID,
                     'invoice_id' => $invoiceData['InvoiceId'],
-                    'first_name' => $firstName ?? 'N/A',
-                    'last_name' => $lastName ?? 'N/A',
+                    'first_name' => $firstName ?? NULL,
+                    'last_name' => $lastName ?? NULL,
                     'mobile_number' => $phoneNumber,
                     'transaction_id' => $transactionId,
                     'hash' => $hashValue,
@@ -683,8 +683,8 @@ class PaymentController extends BaseController
                     $invoice = Invoice::create([
                         'merchant_id' => $merchantID,
                         'invoice_id' => $invoiceData['params']['referenceId'],
-                        'first_name' => $firstName ?? 'N/A',
-                        'last_name' => $lastName ?? 'N/A',
+                        'first_name' => $firstName ?? NULL,
+                        'last_name' => $lastName ?? NULL,
                         'mobile_number' => $accountNo,
                         'transaction_id' => $invoiceData['params']['transactionId'],
                         'hash' => 0,
