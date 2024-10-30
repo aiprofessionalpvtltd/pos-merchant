@@ -8,16 +8,21 @@ use App\Http\Resources\MerchantPermissionResource;
 use App\Http\Resources\MerchantResource;
 use App\Http\Resources\POSPermissionResource;
 use App\Http\Resources\UserResource;
+use App\Models\Employee;
 use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Models\Order;
+use App\Models\Otp;
 use App\Models\POSPermission;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use App\Http\Controllers\API\BaseController;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 
 class PassportAuthController extends BaseController
 {
@@ -186,7 +191,7 @@ class PassportAuthController extends BaseController
                 // Load employee permissions
                 $employee->load('permissions.permission');
 
-                 // Return response with employee-specific data
+                // Return response with employee-specific data
                 return $this->sendResponse([
                     'permissions' => EmployeePermissionResource::collection($employee->permissions),
                     'user' => new UserResource($employee->user),
@@ -334,6 +339,136 @@ class PassportAuthController extends BaseController
 
         } catch (\Exception $e) {
             return $this->sendError('An error occurred during the registration process.', ['error' => $e->getMessage()]);
+        }
+    }
+
+    public function forgotPassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'phone_number' => 'required|string',
+            'type' => 'required|string',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+            $phoneNumber = str_replace(' ', '', $request->phone_number);
+
+            // Determine if type is merchant or employee and retrieve the profile
+            $userProfile = $request->type === 'merchant'
+                ? Merchant::where('phone_number', $phoneNumber)->first()
+                : Employee::where('phone_number', $phoneNumber)->first();
+
+            if (!$userProfile) {
+                $errorMsg = $request->type === 'merchant' ? 'Merchant Phone number not found.' : 'Employee Phone number not found.';
+                return $this->sendError($errorMsg, 404);
+            }
+
+            // Generate OTP using last 6 digits of phone number
+            $otpCode = substr($phoneNumber, -6);
+
+            // Store OTP
+            Otp::create([
+                'user_id' => $userProfile->user_id,
+                'otp' => $otpCode,
+                'expires_at' => Carbon::now()->addMinutes(10),
+            ]);
+
+            DB::commit();
+
+            return $this->sendResponse(['phone_number' => $request->phone_number, 'otp' => $otpCode], 'OTP sent to your mobile number.', 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->sendError('Failed to send OTP.', ['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function verifyOtpAndResetPassword(Request $request): JsonResponse
+    {
+        $request->validate([
+            'phone_number' => 'required|string|max:15',
+            'otp' => 'required|digits:6',
+            'type' => 'required|string',
+        ]);
+
+        DB::beginTransaction();
+
+        try {
+            $phoneNumber = str_replace(' ', '', $request->phone_number);
+
+            $userProfile = $request->type === 'merchant'
+                ? Merchant::where('phone_number', $phoneNumber)->first()
+                : Employee::where('phone_number', $phoneNumber)->first();
+
+            if (!$userProfile) {
+                $errorMsg = $request->type === 'merchant' ? 'Merchant Phone number not found.' : 'Employee Phone number not found.';
+                return $this->sendError($errorMsg, 404);
+            }
+
+            $user = $userProfile->user;
+
+            // Verify OTP
+            $otpRecord = Otp::where('user_id', $user->id)
+                ->where('otp', $request->otp)
+                ->where('expires_at', '>', Carbon::now())
+                ->first();
+
+            if (!$otpRecord) {
+                return $this->sendError('Invalid or expired OTP.', ['error' => 'Invalid or expired OTP'], 401);
+            }
+
+            // Delete OTP after verification
+            $otpRecord->delete();
+
+            DB::commit();
+
+            return $this->sendResponse(new UserResource($user), 'OTP Verified successfully.', 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->sendError('Failed to verify OTP.', ['error' => $e->getMessage()], 500);
+        }
+    }
+
+    public function resetPassword(Request $request): JsonResponse
+    {
+        $validator = Validator::make($request->all(), [
+            'phone_number' => 'required|string',
+            'new_pin' => 'required|string|min:6',
+            'repeat_pin' => 'required|same:new_pin',
+            'type' => 'required|string',
+        ]);
+
+        if ($validator->fails()) {
+            return $this->sendError('Validation Error.', $validator->errors(), 422);
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $phoneNumber = str_replace(' ', '', $request->phone_number);
+
+            $userProfile = $request->type === 'merchant'
+                ? Merchant::where('phone_number', $phoneNumber)->first()
+                : Employee::where('phone_number', $phoneNumber)->first();
+
+            if (!$userProfile) {
+                $errorMsg = $request->type === 'merchant' ? 'Merchant Phone number not found.' : 'Employee Phone number not found.';
+                return $this->sendError($errorMsg, 404);
+            }
+
+            $user = $userProfile->user;
+
+            // Update the user's password
+            $user->password = ($request->new_pin);
+            $user->pin = $request->new_pin;
+            $user->save();
+
+            DB::commit();
+
+            return $this->sendResponse(new UserResource($user), 'PIN Reset successfully.', 200);
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return $this->sendError('PIN change failed.', ['error' => $e->getMessage()], 500);
         }
     }
 

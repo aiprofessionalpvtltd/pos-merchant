@@ -1,6 +1,6 @@
 <?php
 
- use App\Http\Controllers\API\CategoryController;
+use App\Http\Controllers\API\CategoryController;
 use App\Http\Controllers\API\DashboardController;
 use App\Http\Controllers\API\EmployeeController;
 use App\Http\Controllers\API\MerchantConfirmationController;
@@ -23,6 +23,10 @@ Route::post('login/verifyUser', [PassportAuthController::class, 'verifyUser']);
 Route::post('login/verifyUserPin', [PassportAuthController::class, 'verifyUserPin']);
 Route::post('login/checkInvoice', [PassportAuthController::class, 'checkInvoiceAndRegisterMerchant']);
 
+Route::post('user/forgot-password', [PassportAuthController::class, 'forgotPassword']);
+Route::post('user/verify-otp-reset-password', [PassportAuthController::class, 'verifyOtpAndResetPassword']);
+Route::post('user/reset-password', [PassportAuthController::class, 'resetPassword']);
+
 
 Route::post('merchants', [MerchantController::class, 'store']);
 Route::post('merchants/signup', [MerchantController::class, 'signup']);
@@ -40,8 +44,6 @@ Route::post('merchant/invoice/status', [PaymentController::class, 'checkInvoiceS
 // Zaad Pre Authorize
 Route::post('/zaad/issue', [PaymentController::class, 'callWaafiAPIForPreAuthorize']);
 Route::post('/zaad/commit', [PaymentController::class, 'connectToWaafiCommitAPI']);
-
-
 
 
 //Employee
@@ -71,7 +73,6 @@ Route::middleware('auth:api')->group(function () {
         Route::post('/route', [PaymentController::class, 'routePaymentAPI']);           // Route payment API
         Route::post('/payment', [PaymentController::class, 'makeMerchantPayment']);     // Make merchant payment
     });
-
 
 
     // Merchant Routes
@@ -185,7 +186,6 @@ Route::middleware('auth:api')->group(function () {
         Route::delete('/{id}', [CategoryController::class, 'destroy']); // Delete a category
         Route::post('/search', [CategoryController::class, 'search']); // Delete a category
     });
-
 
 
     // Employee Module Routes
