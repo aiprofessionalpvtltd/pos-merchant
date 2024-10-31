@@ -31,6 +31,7 @@ class OrderController extends BaseController
             'quantity' => 'required|integer|min:1',
             'cart_type' => 'required|in:shop,stock',
         ]);
+
         if ($validator->fails()) {
             return $this->sendError('Validation Error.', $validator->errors());
         }
@@ -263,6 +264,21 @@ class OrderController extends BaseController
                 return $this->sendError('Product not found.', ['Product not found with ID ' . $request->product_id]);
             }
 
+            // Check if the product has an inventory with the requested cart_type
+            $inventory = $product->inventories->where('type', $request->cart_type)->first();
+
+            if (!$inventory) {
+                return $this->sendError('No inventory found for the specified cart type.');
+            }
+
+            // Check if the requested quantity is available in the inventory
+            if ($request->quantity > $inventory->quantity) {
+                return $this->sendError('Insufficient stock.', [
+                    'message' => 'Requested quantity exceeds available stock. Available stock: ' . $inventory->quantity
+                ]);
+            }
+
+            
             // Find the specific cart item by product_id
             $cartItem = $cart->items->where('product_id', $request->product_id)->first();
 
