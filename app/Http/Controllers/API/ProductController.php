@@ -45,7 +45,7 @@ class ProductController extends BaseController
             'vat' => 'required',
             'stock_limit' => 'required|integer',
             'alarm_limit' => 'required|integer',
-            'image' => 'required|image|mimes:jpeg,png,jpg,gif', // Image validation
+            'image' => 'nullable|image|mimes:jpeg,png,jpg,gif', // Image validation
             'bar_code' => 'nullable|string|max:255',
             'quantity' => 'required|integer', // Inventory quantity
             'type' => 'required|in:shop,stock' // Inventory type: shop or stock
