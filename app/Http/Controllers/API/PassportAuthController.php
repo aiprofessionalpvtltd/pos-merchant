@@ -365,7 +365,7 @@ class PassportAuthController extends BaseController
             }
 
             // Generate OTP using last 6 digits of phone number
-            $otpCode = substr($phoneNumber, -6);
+            $otpCode = substr($phoneNumber, -4);
 
             // Store OTP
             Otp::create([
@@ -387,7 +387,7 @@ class PassportAuthController extends BaseController
     {
         $request->validate([
             'phone_number' => 'required|string|max:15',
-            'otp' => 'required|digits:6',
+            'otp' => 'required|digits:4',
             'type' => 'required|string',
         ]);
 
@@ -433,7 +433,7 @@ class PassportAuthController extends BaseController
     {
         $validator = Validator::make($request->all(), [
             'phone_number' => 'required|string',
-            'new_pin' => 'required|string|min:6',
+            'new_pin' => 'required|string|min:4',
             'repeat_pin' => 'required|same:new_pin',
             'type' => 'required|string',
         ]);
@@ -459,7 +459,7 @@ class PassportAuthController extends BaseController
             $user = $userProfile->user;
 
             // Update the user's password
-            $user->password = ($request->new_pin);
+            $user->password = Hash::make($request->new_pin);
             $user->pin = $request->new_pin;
             $user->save();
 
