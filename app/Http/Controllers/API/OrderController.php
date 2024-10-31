@@ -190,7 +190,7 @@ class OrderController extends BaseController
                 ->first();
 
             if (!$cart) {
-                 return $this->sendResponse(['items' => false],'Cart not found.');
+                return $this->sendResponse(['items' => false], 'Cart not found.');
 
             }
 
@@ -204,11 +204,11 @@ class OrderController extends BaseController
             if ($expiredItems->count() > 0) {
                 $cart->items()->delete();  // Delete all items from the cart
                 $cart->delete();  // Delete the cart itself
-                return $this->sendResponse(['items' => false],'Cart and items deleted due to expiration.');
+                return $this->sendResponse(['items' => false], 'Cart and items deleted due to expiration.');
             }
 
             // If no items are expired, return a success message
-            return $this->sendResponse(['items' => true] ,'Cart items are still valid and have not expired.');
+            return $this->sendResponse(['items' => true], 'Cart items are still valid and have not expired.');
 
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving cart checked.', $e->getMessage());
@@ -273,12 +273,10 @@ class OrderController extends BaseController
 
             // Check if the requested quantity is available in the inventory
             if ($request->quantity > $inventory->quantity) {
-                return $this->sendError('Insufficient stock.', [
-                    'message' => 'Requested quantity exceeds available stock. Available stock: ' . $inventory->quantity
-                ]);
+                return $this->sendError('Requested quantity exceeds available stock. Available stock: ' . $inventory->quantity);
             }
 
-            
+
             // Find the specific cart item by product_id
             $cartItem = $cart->items->where('product_id', $request->product_id)->first();
 
@@ -432,7 +430,7 @@ class OrderController extends BaseController
 
             if (!$cart || $cart->items->isEmpty()) {
 //                DB::rollBack();
-                return $this->sendResponse([] , 'Cart is empty.');
+                return $this->sendResponse([], 'Cart is empty.');
             }
 
             // Initialize subtotal
@@ -981,7 +979,7 @@ class OrderController extends BaseController
 
             // Check if orders exist
             if ($orders->isEmpty()) {
-                return $this->sendResponse([],'No orders found for the specified type.');
+                return $this->sendResponse([], 'No orders found for the specified type.');
             }
 
             // Prepare response data
@@ -1049,9 +1047,8 @@ class OrderController extends BaseController
             $orders = $ordersQuery->get();
 
 
-
             if ($orders->isEmpty()) {
-                return $this->sendResponse([],'No orders found for the specified type.');
+                return $this->sendResponse([], 'No orders found for the specified type.');
             }
 
             // Prepare the response data
@@ -1481,7 +1478,7 @@ class OrderController extends BaseController
             // Delete the order itself
             $order->delete();
 
-            return $this->sendResponse([],'Order and its items deleted successfully.');
+            return $this->sendResponse([], 'Order and its items deleted successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error deleting the order.', $e->getMessage());
         }
