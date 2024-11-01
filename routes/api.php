@@ -71,7 +71,9 @@ Route::middleware('auth:api')->group(function () {
     // Payment Routes
     Route::prefix('merchant/invoice')->group(function () {
         Route::post('/route', [PaymentController::class, 'routePaymentAPI']);           // Route payment API
-        Route::post('/payment', [PaymentController::class, 'makeMerchantPayment']);     // Make merchant payment
+        Route::post('/payment', [PaymentController::class, 'makeMerchantPayment']);
+        Route::post('/zaad/payment', [PaymentController::class, 'makeMerchantPaymentToWaafi']);
+// Make merchant payment
     });
 
 

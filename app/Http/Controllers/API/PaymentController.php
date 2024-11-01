@@ -975,4 +975,173 @@ class PaymentController extends BaseController
         }
     }
 
+    public function makeMerchantPaymentToWaafi(Request $request)
+    {
+        // Generate random requestId, sessionId and timestamp
+        $requestId = rand(100000, 999999);
+        $sessionId = rand(100000, 999999);
+        $timestamp = now()->toIso8601String(); // Current timestamp in ISO format
+
+        // Fetch the required values from environment or input
+        $merchantUid = env('WAAFI_MERCHANT_UID', 'M0913698');
+        $apiUserId = env('WAAFI_API_USER_ID', '1007586');
+        $apiKey = env('WAAFI_API_KEY', 'API-282358994AHX');
+
+        $referenceId = $request->input('reference_id');
+        $transactionId = 'zaad_' . round(microtime(true) * 1000);
+        $invoiceId = $request->input('invoice_id');
+        $amount = $request->input('amount_sent_to_merchant');
+        $currency = $request->input('currency');
+        $paymentMethod = $request->input('payment_method');
+
+        if ($request->phone_number) {
+            // for Zaad payment
+            $phoneNumber = $request->input('phone_number');
+            $phoneNo = '+252' . $request->input('phone_number');
+            // Check if a merchant with the provided phone number already exists
+            $merchant = Merchant::where('phone_number', $phoneNo)->first();
+        } else {
+
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            $phoneNumber = $authUser->merchant->zaad_number;
+
+            if (!$phoneNumber) {
+                return $this->sendError('Merchant Zaad mobile number is not Verified', '');
+            }
+
+            $merchant = Merchant::where('zaad_number', $phoneNumber)->first();
+
+
+        }
+
+        if (!$merchant) {
+            return $this->sendError('Merchant mobile number is not registered', '');
+        }
+
+        // Build the payload for the API request
+        $payload = [
+            "schemaVersion" => "1.0",
+            "requestId" => $requestId,
+            "timestamp" => $timestamp,
+            "channelName" => "WEB",
+            "serviceName" => "API_CREDITACCOUNT",
+            "sessionId" => $sessionId,
+            "serviceParams" => [
+                "merchantUid" => $merchantUid,
+                "apiUserId" => $apiUserId,
+                "apiKey" => $apiKey,
+                "paymentMethod" => "MWALLET_ACCOUNT",
+                "payerInfo" => [
+//                    "accountType" => "MERCHANT",
+                    "accountNo" => "252638450708",
+//                    "accountNo" => str_replace('+', '', $phoneNumber),
+
+                ],
+                "transactionInfo" => [
+                    "transactionId" => $transactionId,
+                    "invoiceId" => $invoiceId,
+                    "amount" => $amount,
+                    "currency" => $currency,
+                    "description" => "Credit transaction",
+                ],
+
+            ]
+        ];
+        return $this->sendResponse(
+            $payload,
+            'Merchant payment processed successfully By zaad.'
+        );
+         // Set maximum attempts and delay between retries
+        $maxAttempts = 5;
+        $attempts = 0;
+
+        try {
+            // Begin database transaction
+            DB::beginTransaction();
+            $url = 'https://api.waafipay.net/asm';
+            // Keep checking the transaction status until it's approved or max attempts are reached
+            while ($attempts < $maxAttempts) {
+                // Make the API request
+                $response = Http::timeout(env('API_TIMEOUT'))
+                    ->withHeaders(['Content-Type' => 'application/json'])
+                    ->post($url, $payload);
+
+
+                // Log the API response
+                $this->logApiResponse($url, $payload, $response);
+
+                // If the API call was successful
+                if ($response->successful()) {
+                    $responseData = $response->json();
+                    $apiResponse = $responseData['params'];
+
+                    // Check for success and if transaction is approved
+                    if ($responseData['errorCode'] == 0) {
+                        // Save the response data to the database
+                        $transaction = Transaction::create([
+                            'transaction_amount' => $apiResponse['txAmount'],
+                            'transaction_status' => $apiResponse['state'],
+                            'transaction_message' => $responseData['responseMsg'],
+                            'phone_number' => $phoneNumber,
+                            'transaction_id' => $apiResponse['transactionId'],
+                            'merchant_id' => $merchant->id,
+                            'payment_method' => $paymentMethod ?? 'number',
+                         ]);
+
+
+                        DB::commit(); // Commit transaction
+                        // Load the merchant relationship for the resource
+                        $transaction->load('merchant');
+
+                        return $this->sendResponse(
+                            new TransactionResource($transaction),
+                            'Merchant payment processed successfully By zaad.'
+                        );
+                    } else {
+                        return [
+                            'success' => false,
+                            'message' => 'Failed to Zaad Issue Invoice',
+                            'status' => $responseData['errorCode'],
+                            'mobile_number' => $phoneNumber,
+                            'error' => $responseData['responseMsg']
+                        ];
+                    }
+
+                    // If the transaction is not yet approved, wait for 5 seconds and retry
+                    sleep(5);
+                    $attempts++;
+                } else {
+                    // If the API request fails, return an error with the response details
+                    return $this->sendError([], 'Failed to commit invoice', 500, [
+                        'status' => $response->status(),
+                        'error' => $response->body()
+                    ]);
+                }
+            }
+
+//            // If the maximum number of attempts is reached without success
+//            return $this->sendError([], 'Transaction was not approved within the allowed time frame');
+
+            // If maximum attempts are reached without success, cancel the transaction
+            if ($attempts >= $maxAttempts) {
+                // Call the cancelTransaction function when the attempts reach the max limit
+                return $this->cancelWaafiTransaction($request);
+            }
+
+
+        } catch (\Exception $e) {
+            // In case of any exception, log the error and return a failure response
+            \Log::error('API Commit exception', ['message' => $e->getMessage()]);
+            return response()->json([
+                'error' => 'An error occurred while committing the transaction',
+                'details' => $e->getMessage()
+            ], 500);
+        }
+    }
+
 }
