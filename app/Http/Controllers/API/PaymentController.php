@@ -987,10 +987,8 @@ class PaymentController extends BaseController
         $apiUserId = env('WAAFI_API_USER_ID', '1007586');
         $apiKey = env('WAAFI_API_KEY', 'API-282358994AHX');
 
-        $referenceId = $request->input('reference_id');
-        $transactionId = 'zaad_' . round(microtime(true) * 1000);
-        $invoiceId = $request->input('invoice_id');
-        $amount = $request->input('amount_sent_to_merchant');
+         $transactionId = 'zaad_' . round(microtime(true) * 1000);
+         $amount = $request->input('amount_sent_to_merchant');
         $currency = $request->input('currency');
         $paymentMethod = $request->input('payment_method');
 
@@ -1038,13 +1036,13 @@ class PaymentController extends BaseController
                 "paymentMethod" => "MWALLET_ACCOUNT",
                 "payerInfo" => [
 //                    "accountType" => "MERCHANT",
-                    "accountNo" => "252638450708",
-//                    "accountNo" => str_replace('+', '', $phoneNumber),
+//                    "accountNo" => "252638450708",
+                    "accountNo" => str_replace('+', '', $phoneNumber),
 
                 ],
                 "transactionInfo" => [
                     "transactionId" => $transactionId,
-                    "invoiceId" => $invoiceId,
+                    "invoiceId" => $requestId,
                     "amount" => $amount,
                     "currency" => $currency,
                     "description" => "Credit transaction",
@@ -1052,10 +1050,7 @@ class PaymentController extends BaseController
 
             ]
         ];
-        return $this->sendResponse(
-            $payload,
-            'Merchant payment processed successfully By zaad.'
-        );
+
          // Set maximum attempts and delay between retries
         $maxAttempts = 5;
         $attempts = 0;
