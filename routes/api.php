@@ -157,6 +157,10 @@ Route::middleware('auth:api')->group(function () {
     Route::get('inventory/getSoldItems', [ProductInventoryController::class, 'getSoldItems']);
 
 
+    Route::get('/getTransactionReport', [DashboardController::class, 'getTransactionReport']);
+        Route::get('/getInventoryReport', [DashboardController::class, 'getInventoryReport']);
+
+
     // Cart and Order routes
     Route::post('/cart/add', [OrderController::class, 'addToCart']);
     Route::get('/cart/cart-items', [OrderController::class, 'getCartItems']);

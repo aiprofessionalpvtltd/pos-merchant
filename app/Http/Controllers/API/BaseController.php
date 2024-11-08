@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API;
 
 use App\Http\Controllers\Controller;
 use App\Models\ApiLog;
+use App\Models\InventoryHistory;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
@@ -148,6 +149,19 @@ class BaseController extends Controller
             'status_code' => $statusCode,
             'response_body' => json_decode($responseBody, true), // Decode response body to array
         ]);
+    }
+
+    public function inventoryHistory($productID, $quantity, $from , $to)
+    {
+        $inventoryData = [
+            'product_id' => $productID,
+            'quantity' => $quantity,
+            'from_location' => $from,
+            'to_location' => $to,
+            'user_id' => auth()->user()->id,
+        ];
+        // add entry to inventory history
+        InventoryHistory::create($inventoryData);
     }
 
 }

@@ -341,7 +341,7 @@ class EmployeeController extends BaseController
 
             // Check if employees were found
             if ($employees->isEmpty()) {
-                return response()->json(['message' => 'No active employees found for this merchant.'], 404);
+                    return response()->json(['message' => 'No active employees found for this merchant.'], 404);
             }
 
             return $this->sendResponse(EmployeeResource::collection($employees), 'Employees  retrieved successfully.');

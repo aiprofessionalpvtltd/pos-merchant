@@ -14,7 +14,11 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('product_id')->constrained('products')->onDelete('cascade');
             $table->integer('quantity');
-            $table->enum('type', ['shop', 'stock', 'transportation']);
+//            $table->string('in_out');
+            $table->enum('from_location', ['shop', 'stock', 'transportation']);
+            $table->enum('to_location', ['shop', 'stock', 'transportation']);
+//            $table->enum('type', ['shop', 'stock', 'transportation']);
+            $table->foreignId('user_id')->nullable()->constrained()->onDelete('cascade'); // Associate employee with merchant
             $table->timestamps();
         });
     }

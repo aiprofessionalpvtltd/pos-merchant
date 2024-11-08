@@ -111,12 +111,12 @@ class ProductController extends BaseController
                 ->where('type', $request->input('type'))
                 ->first();
 
-            // Create a new inventory record
+             // Create a new inventory record
             $inventoryData = [
                 'product_id' => $product->id,
                 'quantity' => $request->input('quantity'),
-                'type' => $request->input('type'),
-            ];
+                'type' => $request->input('type')
+             ];
 
             if ($existingInventory) {
                 // Update the existing inventory
@@ -127,8 +127,8 @@ class ProductController extends BaseController
                 ProductInventory::create($inventoryData);
             }
 
-            // add entry to inventory history
-            InventoryHistory::create($inventoryData);
+            //create a new record to history
+//            $this->inventoryHistory($inventoryData['product_id'] ,$inventoryData['quantity'],$request->input('type') ,'in');
 
             // Load the relationships
             $product->load(['category', 'inventories', 'merchant']);

@@ -12,12 +12,20 @@ class InventoryHistory extends Model
     protected $fillable = [
         'product_id',
         'quantity',
-        'type'
+        'from_location',
+        'to_location',
+        'user_id',
+
     ];
 
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 
 }

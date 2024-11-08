@@ -124,7 +124,6 @@ class PaymentController extends BaseController
         // Call the Waafi API using the helper function
         $waafiResponse = $this->callWaafiAPIForPreAuthorize($request);
 
-        dd($waafiResponse);
         // Convert JsonResponse to an associative array
 //        $waafiResponse = $waafiResponse->getData(true);
 
@@ -147,8 +146,7 @@ class PaymentController extends BaseController
         // Add the checkInvoiceStatus response to the responses array
         $responses['waafiCommitResponse'] = $waafiCommitResponse;
 
-        dd($responses);
-        // Return the response from Waafi API to the caller
+         // Return the response from Waafi API to the caller
         return response()->json($responses);
     }
 
@@ -512,6 +510,7 @@ class PaymentController extends BaseController
         $currency = $request->input('currency');
         $transactionId = 'mp_' . round(microtime(true) * 1000);
         $paymentMethod = $request->input('payment_method');
+        $invoiceID = $request->input('invoice_id');
 
 
         if ($request->phone_number) {
@@ -583,6 +582,7 @@ class PaymentController extends BaseController
                 'transaction_id' => $responseData['TransactionId'],
                 'merchant_id' => $merchant->id,
                 'payment_method' => $paymentMethod ?? 'number',
+                'invoice_id' => $invoiceID
 
             ]);
 
@@ -991,6 +991,7 @@ class PaymentController extends BaseController
          $amount = $request->input('amount_sent_to_merchant');
         $currency = $request->input('currency');
         $paymentMethod = $request->input('payment_method');
+        $invoiceID = $request->input('invoice_id');
 
         if ($request->phone_number) {
             // for Zaad payment
@@ -1086,6 +1087,7 @@ class PaymentController extends BaseController
                             'transaction_id' => $apiResponse['transactionId'],
                             'merchant_id' => $merchant->id,
                             'payment_method' => $paymentMethod ?? 'number',
+                            'invoice_id' => $invoiceID
                          ]);
 
 

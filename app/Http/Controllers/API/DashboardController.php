@@ -9,6 +9,7 @@ use App\Http\Resources\ProductResource;
 use App\Http\Resources\TopSellingProductResource;
 use App\Models\CartItem;
 use App\Models\Category;
+use App\Models\InventoryHistory;
 use App\Models\Invoice;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -807,7 +808,6 @@ class DashboardController extends BaseController
                 ->get();
 
 
-
             $clientData = $latestClients->map(function ($invoice) {
                 // Access the associated invoice
 
@@ -874,5 +874,224 @@ class DashboardController extends BaseController
         }
     }
 
+    public function getTransactionReport(Request $request)
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Check if the user is an employee and fetch the associated merchant
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
+            // Get start and end dates from the request query parameters (optional)
+            $startDate = $request->query('start_date');
+            $endDate = $request->query('end_date');
+
+            // Validate the date format using Carbon
+            if ($startDate) {
+                $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
+            }
+
+            if ($endDate) {
+                $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+            }
+
+            // Fetch inventory summaries for the merchant based on product's merchant_id
+            $transactions = Transaction::with(['invoice' => function ($query) use ($merchantID) {
+                $query->where('merchant_id', $merchantID);
+            }])
+                ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
+                    return $query->whereBetween('created_at', [$startDate, $endDate]);
+                })
+                ->get();
+
+            // Initialize sums
+            $cashTotal = 0;
+            $cardTotal = 0;
+            $totalAmount = 0;
+
+            // Prepare transaction summary data
+            $transactionData = $transactions->map(function ($transaction) use (&$cashTotal, &$cardTotal, &$totalAmount) {
+                $transactionDate = $transaction->created_at;
+                $transactionAmount = $transaction->transaction_amount;
+                $paymentMethod = $transaction->payment_method;
+                $customerMobile = $transaction->invoice->mobile_number ?? 'N/A';
+
+                // Accumulate sums based on payment methods
+                if ($paymentMethod == 'cash') {
+                    $cashTotal += $transactionAmount;
+                } elseif (in_array($paymentMethod, ['number', 'card'])) {
+                    $cardTotal += $transactionAmount;
+                }
+
+                // Sum up total amount
+                $totalAmount += $transactionAmount;
+
+                return [
+                    'transaction_date' => showDate($transactionDate),
+                    'transaction_amount' => ($transactionAmount),
+                    'transaction_amount_in_usd' => convertShillingToUSD($transactionAmount),
+                    'payment_method' => $paymentMethod,
+                    'customer_mobile' => $customerMobile,
+                ];
+            });
+
+            // Prepare final response data
+            $responseData = [
+                'date_range' => showDate($startDate) . ' ' . showDate($endDate),
+                'transaction_data' => $transactionData,
+                'cash_total' => $cashTotal,
+                'cash_total_in_usd' => convertShillingToUSD($cashTotal),
+                'mobile_money_total' => $cardTotal,
+                'mobile_money_total_in_usd' => convertShillingToUSD($cardTotal),
+                'total_amount_sls' => $totalAmount,
+                'total_amount_sls_in_usd' => convertShillingToUSD($totalAmount),
+            ];
+
+            // Return success response with the summary data
+            return $this->sendResponse($responseData, 'Transaction summary retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error retrieving transaction summary.', [$e->getMessage()]);
+        }
+    }
+
+
+    public function getInventoryReport(Request $request)
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Check if the user is an employee and fetch the associated merchant
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
+            // Get start and end dates from the request query parameters (optional)
+            $startDate = $request->query('start_date');
+            $endDate = $request->query('end_date');
+
+            // Validate the date format using Carbon
+            if ($startDate) {
+                $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
+            }
+
+            if ($endDate) {
+                $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+            }
+
+            // Fetch inventory history records within the date range and for the merchant
+            $inventoryHistories = InventoryHistory::with(['product', 'user'])
+                ->whereHas('product', function ($query) use ($merchantID) {
+                    $query->where('merchant_id', $merchantID);
+                })
+                ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
+                    return $query->whereBetween('created_at', [$startDate, $endDate]);
+                })
+                ->get();
+
+            // Group by date, product, and locations, then sum the quantities
+            $summaryByDate = $inventoryHistories->groupBy(function ($history) {
+                return $history->created_at->format('Y-m-d') . '_' . $history->product_id . '_' . $history->from_location . '_' . $history->to_location;
+            })->map(function ($records) {
+                $firstRecord = $records->first();
+
+                return [
+                    'date' => $firstRecord->created_at->format('Y-m-d'),
+                    'product_id' => optional($firstRecord->product)->id,
+                    'product_name' => optional($firstRecord->product)->product_name,
+                    'barcode' => optional($firstRecord->product)->bar_code ?? '-',
+                    'from_location' => $firstRecord->from_location,
+                    'to_location' => $firstRecord->to_location,
+                    'total_quantity' => $records->sum('quantity'),  // Sum the quantity for this group
+                    'user_name' => optional($firstRecord->user)->name,
+                ];
+            })->values()->all(); // Flatten to an array
+
+            // Initialize additional inventory metrics
+            $shopSummary = [];
+            $stockSummary = [];
+
+            foreach ($summaryByDate as $summary) {
+                $productId = $summary['product_id'];
+
+                // Fetch the product by ID
+                $product = Product::with(['orderItems', 'inventories'])->find($productId);
+
+                // Calculate quantities
+                $quantityInToShop = $inventoryHistories->where('product_id', $productId)
+                    ->where('to_location', 'shop')
+                    ->sum('quantity');
+
+                $quantityInToStock = $inventoryHistories->where('product_id', $productId)
+                    ->where('to_location', 'stock')
+                    ->sum('quantity');
+
+                $quantityOutFromShop = $inventoryHistories->where('product_id', $productId)
+                    ->where('from_location', 'shop')
+                    ->sum('quantity');
+
+                $quantityOutFromStock = $inventoryHistories->where('product_id', $productId)
+                    ->where('from_location', 'stock')
+                    ->sum('quantity');
+
+                $totalSold = $product->orderItems->sum('quantity'); // Assuming 'quantity' in orderItems
+
+                $currentQuantityInShop = $product->inventories->where('type', 'shop')->sum('quantity'); // Assuming 'type' is location type
+                $currentQuantityInStock = $product->inventories->where('type', 'stock')->sum('quantity'); // Assuming 'type' is location type
+
+                // Add metrics to the array, indexed by product_id
+                $shopSummary[$productId] = [
+                    'product_id' => $productId,
+                    'product_name' => $summary['product_name'],
+                    'in_scan' => $quantityInToShop,
+                    'out_scan' => $quantityOutFromShop,
+                    'total_sold' => $totalSold,
+                    'in_shop' => $currentQuantityInShop,
+                ];
+
+                // Add metrics to the array, indexed by product_id
+                $stockSummary[$productId] = [
+                    'product_id' => $productId,
+                    'product_name' => $summary['product_name'],
+                    'in_scan' => $quantityInToStock,
+                    'out_scan' => $quantityOutFromStock,
+                    'in_stock' => $currentQuantityInStock,
+                ];
+            }
+            // Convert the associative array to an indexed array
+            $shopSummary = array_values($shopSummary);
+            $stockSummary = array_values($stockSummary);
+
+            $finalResult = [
+                'inventory_report' => $summaryByDate,
+                'shopSummary' => $shopSummary,
+                'stockSummary' => $stockSummary
+            ];
+
+            // Return the summary data as a response
+            return $this->sendResponse($finalResult, 'Inventory summary by date and additional metrics retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error retrieving inventory summary by date.', [$e->getMessage()]);
+        }
+    }
 
 }

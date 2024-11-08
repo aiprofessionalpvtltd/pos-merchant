@@ -262,6 +262,7 @@ class ProductInventoryController extends BaseController
                 $stockInventory->quantity += $quantity;
                 $stockInventory->save();
 
+                $this->inventoryHistory($productId, $quantity, 'shop', 'stock');
                 DB::commit();
 
                 return $this->sendResponse([], 'Transfer from shop to stock successful.');
@@ -340,6 +341,8 @@ class ProductInventoryController extends BaseController
                 $shopInventory->quantity += $quantity;
                 $shopInventory->save();
 
+                $this->inventoryHistory($productId, $quantity, 'stock', 'shop');
+
                 DB::commit();
 
                 return $this->sendResponse([], 'Transfer from stock to shop successful.');
@@ -413,6 +416,8 @@ class ProductInventoryController extends BaseController
                 // Add to shop
                 $shopInventory->quantity += $quantity;
                 $shopInventory->save();
+
+                $this->inventoryHistory($productId, $quantity, 'transportation', 'shop');
 
                 DB::commit();
 
@@ -489,6 +494,8 @@ class ProductInventoryController extends BaseController
                 $stockInventory->quantity += $quantity;
                 $stockInventory->save();
 
+                $this->inventoryHistory($productId, $quantity, 'transportation', 'stock');
+
                 DB::commit();
 
                 return $this->sendResponse([], 'Transfer from transportation to stock successful.');
@@ -564,6 +571,8 @@ class ProductInventoryController extends BaseController
                 $transportationInventory->quantity += $quantity;
                 $transportationInventory->save();
 
+                $this->inventoryHistory($productId, $quantity, 'shop', 'transportation');
+
                 DB::commit();
 
                 return $this->sendResponse([], 'Transfer from shop to transportation successful.');
@@ -638,6 +647,8 @@ class ProductInventoryController extends BaseController
                 // Add to transportation
                 $transportationInventory->quantity += $quantity;
                 $transportationInventory->save();
+
+                $this->inventoryHistory($productId, $quantity, 'stock', 'transportation');
 
                 DB::commit();
 
@@ -724,46 +735,4 @@ class ProductInventoryController extends BaseController
             return $this->sendError('Error updating or creating inventory.', [$e->getMessage()]);
         }
     }
-
-//    public function getSoldItems()
-//    {
-//
-//        try {
-//            // Fetch orders by the given type
-//            $orders = Order::where('order_type', $validated['order_type'])
-//                ->with('items.product') // Load related order items and products
-//                ->get();
-//
-//            if ($orders->isEmpty()) {
-//                return $this->sendError('No orders found for the specified type.');
-//            }
-//
-//            // Prepare the response data
-//            $data = $orders->map(function ($order) {
-//                return [
-//                    'order_id' => $order->id,
-//                    'sub_total' => $order->sub_total,
-//                    'vat' => $order->vat,
-//                    'exelo_amount' => $order->exelo_amount,
-//                    'total_price' => $order->total_price,
-//                    'order_status' => $order->order_status,
-//                    'order_items' => $order->items->map(function ($item) {
-//                        return [
-//                            'product_id' => $item->product_id,
-//                            'product_name' => $item->product->product_name,
-//                            'quantity' => $item->quantity,
-//                            'price' => $item->price,
-//                            'total_price' => $item->quantity * $item->price,
-//                        ];
-//                    }),
-//                ];
-//            });
-//
-//            return $this->sendResponse($data, 'Orders retrieved successfully.');
-//        } catch (\Exception $e) {
-//            return $this->sendError('Error retrieving orders.', $e->getMessage());
-//        }
-//    }
-
-
 }
