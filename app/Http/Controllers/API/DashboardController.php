@@ -912,7 +912,7 @@ class DashboardController extends BaseController
             }])
                 ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
                     return $query->whereBetween('created_at', [$startDate, $endDate]);
-                })
+                })->where('merchant_id', $merchantID)
                 ->get();
 
             // Initialize sums
