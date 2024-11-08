@@ -956,6 +956,8 @@ class DashboardController extends BaseController
                 'mobile_money_total_in_usd' => convertShillingToUSD($cardTotal),
                 'total_amount_sls' => $totalAmount,
                 'total_amount_sls_in_usd' => convertShillingToUSD($totalAmount),
+                'downloaded_by' => $authUser->name . ' ' . $authUser->roles[0]->name,
+                'business_name' => $authUser->merchant->business_name,
             ];
 
             // Return success response with the summary data
