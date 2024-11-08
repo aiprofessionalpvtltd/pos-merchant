@@ -1086,7 +1086,9 @@ class DashboardController extends BaseController
             $finalResult = [
                 'inventory_report' => $summaryByDate,
                 'shopSummary' => $shopSummary,
-                'stockSummary' => $stockSummary
+                'stockSummary' => $stockSummary,
+                'downloaded_by' => $authUser->name . ' ' . $authUser->roles[0]->name,
+                'business_name' => $authUser->merchant->business_name,
             ];
 
             // Return the summary data as a response
