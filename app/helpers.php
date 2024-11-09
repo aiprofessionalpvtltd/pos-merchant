@@ -297,7 +297,7 @@ function checkMobileCompany($phoneNumber , $paymentMethod){
     $phoneNumber = preg_replace('/\D/', '', $phoneNumber);
 
     // Ensure the phone number starts with the Somaliland country code (+252)
-    if (strpos($phoneNumber, '252') !== 0) {
+    if ($phoneNumber && strpos($phoneNumber, '252') !== 0) {
         return "Invalid Somaliland phone number";
     }
 
