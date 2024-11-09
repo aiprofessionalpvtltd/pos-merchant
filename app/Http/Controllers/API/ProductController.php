@@ -128,7 +128,7 @@ class ProductController extends BaseController
             }
 
             //create a new record to history
-//            $this->inventoryHistory($inventoryData['product_id'] ,$inventoryData['quantity'],$request->input('type') ,'in');
+            $this->inventoryHistory($inventoryData['product_id'] ,$inventoryData['quantity'],$request->input('type') ,$request->input('type'));
 
             // Load the relationships
             $product->load(['category', 'inventories', 'merchant']);

@@ -996,7 +996,6 @@ class DashboardController extends BaseController
         }
     }
 
-
     public function getInventoryReport(Request $request)
     {
         try {
@@ -1070,18 +1069,33 @@ class DashboardController extends BaseController
                 // Calculate quantities
                 $quantityInToShop = $inventoryHistories->where('product_id', $productId)
                     ->where('to_location', 'shop')
+                    ->where('from_location', '!=', 'shop') // Exclude same-location
                     ->sum('quantity');
 
                 $quantityInToStock = $inventoryHistories->where('product_id', $productId)
                     ->where('to_location', 'stock')
+                    ->where('from_location', '!=', 'stock') // Exclude same-location
                     ->sum('quantity');
 
                 $quantityOutFromShop = $inventoryHistories->where('product_id', $productId)
                     ->where('from_location', 'shop')
+                    ->where('to_location', '!=', 'shop') // Exclude same-location
                     ->sum('quantity');
 
                 $quantityOutFromStock = $inventoryHistories->where('product_id', $productId)
                     ->where('from_location', 'stock')
+                    ->where('to_location', '!=', 'stock') // Exclude same-location
+                    ->sum('quantity');
+
+                // Check for same-location movements and update in_shop or in_stock
+                $sameLocationQuantityInShop = $inventoryHistories->where('product_id', $productId)
+                    ->where('from_location', 'shop')
+                    ->where('to_location', 'shop')
+                    ->sum('quantity');
+
+                $sameLocationQuantityInStock = $inventoryHistories->where('product_id', $productId)
+                    ->where('from_location', 'stock')
+                    ->where('to_location', 'stock')
                     ->sum('quantity');
 
                 $totalSold = $product->orderItems->sum('quantity'); // Assuming 'quantity' in orderItems
@@ -1093,7 +1107,7 @@ class DashboardController extends BaseController
                 $shopSummary[$productId] = [
                     'product_id' => $productId,
                     'product_name' => $summary['product_name'],
-                    'in_scan' => $quantityInToShop,
+                    'in_scan' => $quantityInToShop + $sameLocationQuantityInShop, // Include same-location quantity
                     'out_scan' => $quantityOutFromShop,
                     'total_sold' => $totalSold,
                     'in_shop' => $currentQuantityInShop,
@@ -1103,7 +1117,7 @@ class DashboardController extends BaseController
                 $stockSummary[$productId] = [
                     'product_id' => $productId,
                     'product_name' => $summary['product_name'],
-                    'in_scan' => $quantityInToStock,
+                    'in_scan' => $quantityInToStock + $sameLocationQuantityInStock, // Include same-location quantity
                     'out_scan' => $quantityOutFromStock,
                     'in_stock' => $currentQuantityInStock,
                 ];
