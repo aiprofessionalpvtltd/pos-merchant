@@ -877,7 +877,6 @@ class DashboardController extends BaseController
     public function getTransactionReport(Request $request)
     {
         try {
-            // Get authenticated user
             $authUser = auth()->user();
 
             // Check if the user is an employee and fetch the associated merchant
@@ -890,77 +889,107 @@ class DashboardController extends BaseController
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
-            // Get merchant ID from authenticated user's merchant relation
             $merchantID = $authUser->merchant->id;
-
-            // Get start and end dates from the request query parameters (optional)
             $startDate = $request->query('start_date');
             $endDate = $request->query('end_date');
 
-            // Validate the date format using Carbon
             if ($startDate) {
                 $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
             }
-
             if ($endDate) {
                 $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
             }
 
-            // Fetch inventory summaries for the merchant based on product's merchant_id
             $transactions = Transaction::with(['invoice' => function ($query) use ($merchantID) {
                 $query->where('merchant_id', $merchantID);
-            }])
-                ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
-                    return $query->whereBetween('created_at', [$startDate, $endDate]);
-                })->where('merchant_id', $merchantID)
+            }, 'order.items.product']) // Eager load order items and products for VAT calculation
+            ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
+                return $query->whereBetween('created_at', [$startDate, $endDate]);
+            })
+                ->where('merchant_id', $merchantID)
                 ->get();
 
-            // Initialize sums
             $cashTotal = 0;
-            $cardTotal = 0;
-            $totalAmount = 0;
+            $edahabTotal = 0;
+            $zaadTotal = 0;
+            $totalVatAmount = 0;
 
-            // Prepare transaction summary data
-            $transactionData = $transactions->map(function ($transaction) use (&$cashTotal, &$cardTotal, &$totalAmount) {
+            $transactionData = $transactions->map(function ($transaction) use (
+                &$cashTotal, &$edahabTotal, &$zaadTotal, &$totalVatAmount
+            ) {
                 $transactionDate = $transaction->created_at;
                 $transactionAmount = $transaction->transaction_amount;
                 $paymentMethod = $transaction->payment_method;
                 $customerMobile = $transaction->invoice->mobile_number ?? 'N/A';
 
-                // Accumulate sums based on payment methods
-                if ($paymentMethod == 'cash') {
-                    $cashTotal += $transactionAmount;
-                } elseif (in_array($paymentMethod, ['number', 'card'])) {
-                    $cardTotal += $transactionAmount;
+                // Determine mobile company type
+                $mobileCompany = checkMobileCompany($customerMobile, $paymentMethod);
+
+                // Calculate VAT for each item in the transaction's order
+                $vatAmount = 0;
+                if ($transaction->order && $transaction->order->items) {
+                    foreach ($transaction->order->items as $item) {
+                        $productVatPercentage = $item->product->vat ?? 0;
+                        $itemPrice = $item->price;
+                        $itemVat = ($itemPrice * $productVatPercentage) / 100;
+                        $vatAmount += $itemVat;
+                    }
                 }
 
-                // Sum up total amount
-                $totalAmount += $transactionAmount;
+                // Include VAT in the transaction amount
+                $transactionTotalWithVAT = $transactionAmount + $vatAmount;
+                $totalVatAmount += $vatAmount;
+
+                // Accumulate totals by payment method including VAT
+                switch ($mobileCompany) {
+                    case 'E-Dahab':
+                        $edahabTotal += $transactionTotalWithVAT;
+                        break;
+                    case 'Zaad':
+                    case 'Golis':
+                    case 'EVC':
+                        $zaadTotal += $transactionTotalWithVAT;
+                        break;
+                    default:
+                        $cashTotal += $transactionTotalWithVAT;
+                        break;
+                }
 
                 return [
                     'transaction_date' => showDate($transactionDate),
-                    'transaction_amount' => ($transactionAmount),
+                    'transaction_amount' => $transactionAmount,
                     'transaction_amount_in_usd' => convertShillingToUSD($transactionAmount),
-                    'payment_method' => $paymentMethod,
+                    'payment_method' => $mobileCompany,
                     'customer_mobile' => $customerMobile,
+                    'vat_amount' => $vatAmount,
+                    'vat_amount_in_usd' => convertShillingToUSD($vatAmount),
+                    'total_with_vat' => $transactionTotalWithVAT,
+                    'total_with_vat_in_usd' => convertShillingToUSD($transactionTotalWithVAT),
                 ];
             });
 
-            // Prepare final response data
+            // Calculate final total amount including all payment methods and total VAT
+            $totalAmount = $cashTotal + $edahabTotal + $zaadTotal + $totalVatAmount;
+
             $responseData = [
-                'date_range' => showDate($startDate) . ' ' . showDate($endDate),
+                'date_range' => showDate($startDate) . ' - ' . showDate($endDate),
                 'transaction_data' => $transactionData,
-                'cash_total' => $cashTotal,
-                'cash_total_in_usd' => convertShillingToUSD($cashTotal),
-                'mobile_money_total' => $cardTotal,
-                'mobile_money_total_in_usd' => convertShillingToUSD($cardTotal),
-                'total_amount_sls' => $totalAmount,
-                'total_amount_sls_in_usd' => convertShillingToUSD($totalAmount),
+                'totals' => [
+                    'cash_total' => round($cashTotal),
+                    'cash_total_in_usd' => convertShillingToUSD($cashTotal),
+                    'edahab_total' => round($edahabTotal),
+                    'edahab_total_in_usd' => convertShillingToUSD($edahabTotal),
+                    'zaad_total' => round($zaadTotal),
+                    'zaad_total_in_usd' => convertShillingToUSD($zaadTotal),
+                    'total_amount_sls' => round($totalAmount),
+                    'total_amount_sls_in_usd' => convertShillingToUSD($totalAmount),
+                    'total_vat' => round($totalVatAmount),
+                    'total_vat_in_usd' => convertShillingToUSD($totalVatAmount),
+                ],
                 'downloaded_by' => $authUser->name . ' ' . $authUser->roles[0]->name,
                 'business_name' => $authUser->merchant->business_name,
             ];
 
-            // Return success response with the summary data
             return $this->sendResponse($responseData, 'Transaction summary retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving transaction summary.', [$e->getMessage()]);

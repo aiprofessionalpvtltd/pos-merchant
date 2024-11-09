@@ -290,6 +290,44 @@ function convertVATDecimaloPercentage($vat){
 }
 
 
+function checkMobileCompany($phoneNumber , $paymentMethod){
+
+
+    // Remove any spaces, hyphens, or other formatting characters from the phone number
+    $phoneNumber = preg_replace('/\D/', '', $phoneNumber);
+
+    // Ensure the phone number starts with the Somaliland country code (+252)
+    if (strpos($phoneNumber, '252') !== 0) {
+        return "Invalid Somaliland phone number";
+    }
+
+    if (in_array($paymentMethod, ['number', 'card'])) {
+        // Extract the relevant part after the country code
+        $localNumber = substr($phoneNumber, 3); // Strip country code (+252)
+
+        // Check the company based on the starting digits
+
+        // Edahab has multiple prefixes: '65', '66', and '62'
+        if (in_array(substr($localNumber, 0, 2), ['65', '66', '62'])) {
+            return "E-Dahab";
+        } elseif (strpos($localNumber, '63') === 0) {
+            return "Zaad";
+        } elseif (strpos($localNumber, '90') === 0) {
+            return "Golis";
+        } elseif (strpos($localNumber, '61') === 0) {
+            return "EVC";
+        } else {
+            return null;
+        }
+    }else{
+
+        return 'Cash';
+    }
+
+
+}
+
+
 
 
 

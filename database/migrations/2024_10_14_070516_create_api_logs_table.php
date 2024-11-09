@@ -16,7 +16,7 @@ return new class extends Migration
             $table->string('url'); // API endpoint URL
             $table->json('payload'); // Request payload (stored as JSON)
             $table->integer('status_code'); // HTTP status code of the response
-            $table->json('response_body'); // Response body (stored as JSON)
+            $table->json('response_body')->nullable(); // Response body (stored as JSON)
             $table->timestamps(); // Created and updated timestamps
         });
     }
