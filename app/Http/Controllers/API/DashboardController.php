@@ -26,44 +26,51 @@ use Illuminate\Support\Facades\DB;
 class DashboardController extends BaseController
 {
 
-    public function mainDashboard()
-    {
-        try {
-            // Get authenticated user
-            $authUser = auth()->user();
-
-            if ($authUser->user_type == 'employee') {
-                $authUser->merchant = $authUser->employee->merchant;
-            }
-
-
-            // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
-                return $this->sendError('Merchant not found for the authenticated user.');
-            }
-
-            // Get merchant ID from authenticated user's merchant relation
-            $merchantID = $authUser->merchant->id;
-
-            $pendingCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Pending')->count();
-            $completeCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Complete')->count();
-
-
-            // Prepare response data
-            $data = [
-                'pending_order_count' => $pendingCount,
-                'complete_order_count' => $completeCount,
-
-
-            ];
-
-            // Return success response with the statistics
-            return $this->sendResponse($data, 'Overall product statistics retrieved successfully.');
-
-        } catch (\Exception $e) {
-            return $this->sendError('Error fetching overall product statistics.', [$e->getMessage()]);
-        }
-    }
+//    public function mainDashboard()
+//    {
+//        try {
+//            // Get authenticated user
+//            $authUser = auth()->user();
+//
+//            if ($authUser->user_type == 'employee') {
+//                $authUser->merchant = $authUser->employee->merchant;
+//            }
+//
+//
+//            // Ensure the authenticated user exists and has a merchant
+//            if (!$authUser || !$authUser->merchant) {
+//                return $this->sendError('Merchant not found for the authenticated user.');
+//            }
+//
+//            // Get merchant ID from authenticated user's merchant relation
+//            $merchantID = $authUser->merchant->id;
+//
+//            if ($authUser->user_type == 'employee') {
+//                $authUser->merchant = $authUser->employee->merchant;
+//                $pendingCount = Order::where('user_id', $authUser->id)->where('order_status', 'Pending')->count();
+//                $completeCount = Order::where('user_id', $authUser->id)->where('order_status', 'Complete')->count();
+//
+//            } else {
+//                $pendingCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Pending')->count();
+//                $completeCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Complete')->count();
+//
+//            }
+//
+//            // Prepare response data
+//            $data = [
+//                'pending_order_count' => $pendingCount,
+//                'complete_order_count' => $completeCount,
+//
+//
+//            ];
+//
+//            // Return success response with the statistics
+//            return $this->sendResponse($data, 'Overall product statistics retrieved successfully.');
+//
+//        } catch (\Exception $e) {
+//            return $this->sendError('Error fetching overall product statistics.', [$e->getMessage()]);
+//        }
+//    }
 
 
     public function getOverallProductStatistics()
@@ -141,8 +148,13 @@ class DashboardController extends BaseController
                 ? ($newProductsInStock / $overallTotal) * 100
                 : 0;
 
-            $pendingCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Pending')->count();
-            $completeCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Complete')->count();
+            if ($authUser->user_type == 'employee') {
+                $pendingCount = Order::where('user_id', $authUser->id)->where('order_status', 'Pending')->count();
+                $completeCount = Order::where('user_id', $authUser->id)->where('order_status', 'Complete')->count();
+            } else {
+                $pendingCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Pending')->count();
+                $completeCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Complete')->count();
+            }
 
 
             if ($authUser->user_type == 'merchant') {
