@@ -932,7 +932,7 @@ class DashboardController extends BaseController
                 $transactionDate = $transaction->created_at;
                 $transactionAmount = $transaction->transaction_amount;
                 $paymentMethod = $transaction->payment_method;
-                $customerMobile = $transaction->invoice->mobile_number ?? 'N/A';
+                $customerMobile = $transaction->invoice->mobile_number ?? '-';
 
                 // Determine mobile company type
                 $mobileCompany = checkMobileCompany($customerMobile, $paymentMethod);
