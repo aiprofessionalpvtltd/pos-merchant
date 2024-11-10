@@ -5,7 +5,10 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\MerchantSubscription;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Yajra\DataTables\DataTables;
+use Illuminate\Support\Facades\Validator;
+
 
 class MerchantSubscriptionController extends Controller
 {
@@ -37,7 +40,17 @@ class MerchantSubscriptionController extends Controller
                 ->addColumn('status', function ($subscription) {
                     return $subscription->deleted_at ? 'Inactive' : 'Active';
                 })
+                ->addColumn('action', function ($subscription) {
+                    $viewBtn = '';
+                    $deleteBtn = '';
 
+                    if (auth()->user()->can('view-merchant')) {
+                        $viewBtn = '<a title="View" href="' . route('edit-subscriptions', $subscription->id) . '"
+class="badge bg-primary m-1"><i class="fas fa-fw fa-edit"></i></a>';
+                    }
+
+                    return '<div class="d-flex">' . $viewBtn . '</div>';
+                })
                 ->rawColumns(['action'])
                 ->make(true);
         }
@@ -45,9 +58,48 @@ class MerchantSubscriptionController extends Controller
         return view('admin.merchant_subscriptions.index', compact('title'));
     }
 
-//    public function show($id)
-//    {
-//        $subscription = MerchantSubscription::with(['merchant', 'subscriptionPlan'])->findOrFail($id);
-//        return view('admin.merchant_subscriptions.index', compact('subscription'));
-//    }
+    public function edit($id)
+    {
+        $title = 'Update Subscriptions';
+        $subscription = MerchantSubscription::with(['merchant', 'subscriptionPlan'])->findOrFail($id);
+//        dd($subscription);
+        return view('admin.merchant_subscriptions.edit', compact('subscription', 'title'));
+    }
+
+    public function update(Request $request, $id)
+    {
+        $subscription = MerchantSubscription::find($id);
+
+         if (!$subscription) {
+            return redirect()->route('admin.subscriptions.index')->with('error', 'Subscription not found.');
+        }
+
+        DB::beginTransaction();
+
+        try {
+            $validator = Validator::make($request->all(), [
+                'subscription_plan_id' => 'required',
+            ]);
+
+            if ($validator->fails()) {
+                return redirect()->back()
+                    ->withErrors($validator)
+                    ->withInput();
+            }
+
+            $validatedData = $validator->validated();
+
+
+            $subscription->update($validatedData);
+
+
+            DB::commit();
+            return redirect()->route('admin.subscriptions.index')->with('success', 'Subscription Updated Successfully');
+        } catch (\Exception $e) {
+            DB::rollBack();
+            return redirect()->back()->with('error', 'Something went wrong: ' . $e->getMessage());
+        }
+    }
+
+
 }

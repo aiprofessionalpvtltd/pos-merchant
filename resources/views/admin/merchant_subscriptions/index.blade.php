@@ -33,6 +33,7 @@
                         <th>Cancel Status</th>
                         <th>Cancellation Date</th>
                         <th>Status</th>
+                        <th>Action</th>
                      </tr>
                     </thead>
                 </table>
@@ -64,6 +65,7 @@
                     {data: 'is_canceled', name: 'is_canceled'},
                     {data: 'canceled_at', name: 'canceled_at'},
                     {data: 'status', name: 'status'},
+                    {data: 'action', name: 'action', orderable: false, searchable: false, className: 'text-center'}
                  ]
             });
         });

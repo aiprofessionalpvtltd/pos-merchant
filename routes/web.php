@@ -66,6 +66,9 @@ Route::middleware(['auth'])->group(function () {
 
     //Transaction Controllers
     Route::get('/admin/subscriptions', [MerchantSubscriptionController::class, 'index'])->name('admin.subscriptions.index');
+    Route::get('subscriptions/{id}/edit', [MerchantSubscriptionController::class, 'edit'])->name('edit-subscriptions');
+    Route::put('update-subscriptions{id}', [MerchantSubscriptionController::class, 'update'])->name('update-subscriptions');
+
     Route::get('merchant_subscriptions/getSubscriptions', [MerchantSubscriptionController::class, 'getSubscriptions'])->name('admin.subscriptions.getSubscriptions');
 
 });
