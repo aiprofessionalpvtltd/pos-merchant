@@ -1,7 +1,5 @@
 @extends('admin.layouts.app')
 @push('style')
-    <link href="{{asset('backend/vendor/select2/css/select2.min.css')}}" rel="stylesheet">
-    <link href="{{asset('backend/vendor/bootstrap-select/dist/css/bootstrap-select.min.css')}}" rel="stylesheet">
 
 @endpush
 @section('content')
@@ -103,7 +101,6 @@
     <script src="{{asset('assets/global_assets/js/plugins/forms/styling/uniform.min.js')}}"></script>
     <script src="{{asset('assets/global_assets/js/demo_pages/form_validation.js')}}"></script>
     <script src="{{asset('assets/global_assets/js/demo_pages/form_select2.js')}}"></script>
-    <script src="{{asset('assets/global_assets/js/plugins/forms/inputs/inputmask.js')}}"></script>
-
+ 
 
 @endpush
