@@ -27,6 +27,8 @@ class MerchantSubscriptionController extends Controller
             return DataTables::of($subscriptions)
                 ->addColumn('merchant_name', function ($subscription) {
                     return $subscription->merchant->business_name ?? 'N/A';
+                }) ->addColumn('phone_number', function ($subscription) {
+                    return $subscription->merchant->phone_number ?? 'N/A';
                 })
                 ->addColumn('subscription_plan_name', function ($subscription) {
                     return $subscription->subscriptionPlan->name ?? 'N/A';

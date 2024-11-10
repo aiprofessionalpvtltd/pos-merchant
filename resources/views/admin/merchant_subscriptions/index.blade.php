@@ -27,6 +27,7 @@
                     <thead>
                     <tr>
                          <th>Merchant Name</th>
+                         <th>Phone Number</th>
                         <th>Subscription Plan</th>
                         <th>Start Date</th>
                         <th>End Date</th>
@@ -59,6 +60,7 @@
                 },
                 columns: [
                      {data: 'merchant_name', name: 'merchant.business_name'},
+                    {data: 'phone_number', name: 'merchant.phone_number'},
                     {data: 'subscription_plan_name', name: 'subscriptionPlan.name'},
                     {data: 'start_date', name: 'start_date'},
                     {data: 'end_date', name: 'end_date'},
