@@ -106,6 +106,9 @@ class MerchantController extends Controller
         ]);
 
         $merchant->delete();
+        $merchant->user->update([
+            'email' => 'deleted@email.com',
+        ]);
         $merchant->user->delete();
         return response()->json(['success' => 'Merchant has been deleted successfully.']);
     }
