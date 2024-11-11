@@ -295,6 +295,10 @@ class EmployeeController extends BaseController
             // Check if the employee has an associated user
             if ($employee->user) {
                 // Soft delete the associated user
+                $employee->update([
+                    'email' => 'deleted@email.com',
+                ]);
+                
                 $employee->user->delete();
             }
 
@@ -585,8 +589,12 @@ class EmployeeController extends BaseController
             // Get the merchant's ID
             $merchantID = $authUser->merchant->id;
 
-            // Get all invoices for the merchant with the given conditions
-            $invoices = Invoice::with('transactions')
+            // Get all invoices for the merchant with the given conditions within the current month
+            $invoices = Invoice::with(['transactions' => function ($query) {
+                // Filter transactions by current month and year
+                $query->whereMonth('created_at', now()->month)
+                    ->whereYear('created_at', now()->year);
+            }])
                 ->where('merchant_id', $merchantID)
                 ->where('user_id', $id)
                 ->where('type', 'POS')
