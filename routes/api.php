@@ -20,7 +20,6 @@ use Illuminate\Support\Facades\Route;
 Route::post('login', [PassportAuthController::class, 'login']);
 Route::post('logout', [PassportAuthController::class, 'logout'])->middleware('auth:api');
 Route::post('login/verifyUser', [PassportAuthController::class, 'verifyUser']);
-Route::post('login/verifyUserPin', [PassportAuthController::class, 'verifyUserPin']);
 Route::post('login/checkInvoice', [PassportAuthController::class, 'checkInvoiceAndRegisterMerchant']);
 
 Route::post('user/forgot-password', [PassportAuthController::class, 'forgotPassword']);
@@ -60,6 +59,7 @@ Route::post('merchants/checkForDuplicatePhoneNumber', [MerchantController::class
 Route::middleware('auth:api')->group(function () {
 
     Route::get('login/userinfo', [PassportAuthController::class, 'userInfo']);
+    Route::post('login/verifyUserPin', [PassportAuthController::class, 'verifyUserPin']);
 
 
     Route::post('merchants/change-pin', [MerchantVerificationController::class, 'changePin']);
@@ -200,5 +200,7 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/employee/getSingleEmployee/{id}', [EmployeeController::class, 'getSingleEmployee']); // Get employee records
     Route::post('/employee/{id}', [EmployeeController::class, 'updateEmployee']); // Store employee
     Route::delete('/employee/{id}', [EmployeeController::class, 'deleteEmployee']); // Store employee
+    Route::get('/employee/getEmployeeSaleCombine', [EmployeeController::class, 'getEmployeeSaleCombine']); // Get employee records
+    Route::get('/employee/getEmployeeSale/{id}', [EmployeeController::class, 'getEmployeeSale']); // Get employee records
 
 });

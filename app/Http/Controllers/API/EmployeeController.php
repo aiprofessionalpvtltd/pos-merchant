@@ -10,8 +10,10 @@ use App\Http\Resources\POSPermissionResource;
 use App\Http\Resources\UserResource;
 use App\Models\Category;
 use App\Models\EmployeePermission;
+use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Models\POSPermission;
+use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Http\Request;
 
@@ -531,6 +533,80 @@ class EmployeeController extends BaseController
             return $this->sendError('An error occurred while storing the PIN code.', ['error' => $e->getMessage()]);
         }
     }
+
+    public function getEmployeeSaleCombine()
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
+            // Get the sum of transaction amounts for the merchant's transactions
+            $transactionAmountSum = Transaction::where('merchant_id', $merchantID)->sum('transaction_amount');
+
+            // Return or use the sum as needed
+            return $this->sendResponse([
+                'total_sale' => $transactionAmountSum,
+                'total_sale_in_usd' => convertShillingToUSD($transactionAmountSum),
+            ], 'Transaction Loaded successful.');
+
+
+        } catch (\Exception $e) {
+            return $this->sendError('An error occurred while fetching the employee.', ['error' => $e->getMessage()]);
+        }
+    }
+
+    public function getEmployeeSale($id)
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Ensure the authenticated user has a merchant relation
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
+
+            // Get all invoices for the merchant with the given conditions
+            $invoices = Invoice::with('transactions')
+                ->where('merchant_id', $merchantID)
+                ->where('user_id', $id)
+                ->where('type', 'POS')
+                ->where('status', 'Paid')
+                ->get();
+
+            // Sum all transaction amounts from the transactions related to these invoices
+            $totalTransactionAmount = $invoices->flatMap->transactions->sum('transaction_amount');
+
+            // Return or use the sum as needed
+            return $this->sendResponse([
+                'total_sale' => $totalTransactionAmount,
+                'total_sale_in_usd' => convertShillingToUSD($totalTransactionAmount),
+            ], 'Transaction Loaded successfully.');
+
+        } catch (\Exception $e) {
+            return $this->sendError('An error occurred while fetching the employee.', ['error' => $e->getMessage()]);
+        }
+    }
+
 
 
 }
