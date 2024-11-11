@@ -32,7 +32,7 @@ class EmployeeController extends BaseController
         try {
             $permissions = POSPermission::all();
             if ($permissions->isEmpty()) {
-                return $this->sendResponse([],'No permissions found.');
+                return $this->sendResponse([], 'No permissions found.');
             }
             return $this->sendResponse(POSPermissionResource::collection($permissions), 'Categories retrieved successfully.');
         } catch (\Exception $e) {
@@ -221,12 +221,11 @@ class EmployeeController extends BaseController
                 'first_name' => $request->first_name,
                 'last_name' => $request->last_name,
                 'dob' => $request->dob,
-                 'salary' => $request->salary,
+                'salary' => $request->salary,
             ]);
 
 
-
-            if($request->permissions){
+            if ($request->permissions) {
                 // Sync permissions: remove old and add new permissions
                 EmployeePermission::where('employee_id', $employee->id)->delete();
                 foreach ($request->permissions as $permissionId) {
@@ -288,6 +287,7 @@ class EmployeeController extends BaseController
             // Update the employee's status to 'inactive'
             $employee->update([
                 'status' => 'inactive',
+                'phone_number' => 0,
             ]);
 
             // Check if the employee has an associated user
@@ -336,12 +336,12 @@ class EmployeeController extends BaseController
             }])
                 ->where('merchant_id', $authUser->merchant->id)
                 ->where('status', 'active') // Only fetch active employees
-                ->orderBy('id','DESC')
+                ->orderBy('id', 'DESC')
                 ->get();
 
             // Check if employees were found
             if ($employees->isEmpty()) {
-                    return response()->json(['message' => 'No active employees found for this merchant.'], 404);
+                return response()->json(['message' => 'No active employees found for this merchant.'], 404);
             }
 
             return $this->sendResponse(EmployeeResource::collection($employees), 'Employees  retrieved successfully.');

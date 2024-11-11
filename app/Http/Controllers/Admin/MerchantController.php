@@ -96,9 +96,17 @@ class MerchantController extends Controller
         if (!$merchant) {
             return response()->json(['error' => 'Merchant not found.'], 404);
         }
+        // Update the employee's status to 'inactive'
+        $merchant->update([
+            'phone_number' => 0,
+            'edahab_number' => 0,
+            'zaad_number' => 0,
+            'golis_number' => 0,
+            'evc_number' => 0,
+        ]);
 
         $merchant->delete();
-
+        $merchant->user->delete();
         return response()->json(['success' => 'Merchant has been deleted successfully.']);
     }
 

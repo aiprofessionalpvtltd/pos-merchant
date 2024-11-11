@@ -137,26 +137,59 @@ class PassportAuthController extends BaseController
             ]);
 
             $phoneNumber = str_replace(' ', '', $request->phone_number);
-            $merchant = Merchant::where('phone_number', $phoneNumber)->first();
 
-            if (!$merchant) {
-                return $this->sendError('Phone number not found.', '', 404);
+            // Get the authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists
+            if (!$authUser) {
+                return $this->sendError('User not authenticated.', '', 401);
             }
 
-            if (!Hash::check($request->pin, $merchant->user->password)) {
-                return $this->sendError('Invalid PIN code.', '', 401);
+
+            if ($authUser->user_type == 'employee') {
+
+                $merchant = $authUser->employee->merchant;
+
+                $employee = Employee::where('phone_number', $phoneNumber)->where('merchant_id', $merchant->id)->first();
+                if (!$employee) {
+                    return $this->sendError('Phone number not found.', '', 404);
+                }
+
+                if (!Hash::check($request->pin, $employee->user->password)) {
+                    return $this->sendError('Invalid PIN code.', '', 401);
+                }
+
+                $user = $merchant->user;
+
+                return $this->sendResponse([
+                    'user' => new UserResource($user),
+                    'employee' => new EmployeeResource($employee),
+                    'phone_number' => $phoneNumber,
+                    'user_type' => $user->user_type,
+                    'short_name' => $this->getInitials($user->name)
+                ], 'Employee Pin Verified successful.');
+            } else {
+
+                $merchant = Merchant::where('phone_number', $phoneNumber)->first();
+                if (!$merchant) {
+                    return $this->sendError('Phone number not found.', '', 404);
+                }
+
+                if (!Hash::check($request->pin, $merchant->user->password)) {
+                    return $this->sendError('Invalid PIN code.', '', 401);
+                }
+
+                $user = $merchant->user;
+
+                return $this->sendResponse([
+                    'user' => new UserResource($user),
+                    'merchant' => new MerchantResource($merchant),
+                    'phone_number' => $merchant->phone_number,
+                    'user_type' => $user->user_type,
+                    'short_name' => $this->getInitials($user->name)
+                ], 'Merchant Pin Verified successful.');
             }
-
-            $user = $merchant->user;
-
-
-            return $this->sendResponse([
-                'user' => new UserResource($user),
-                'merchant' => new MerchantResource($merchant),
-                'phone_number' => $merchant->phone_number,
-                'user_type' => $user->user_type,
-                'short_name' => $this->getInitials($user->name)
-            ], 'Merchant Pin Verified successful.');
 
         } catch (\Exception $e) {
             return $this->sendError('An error occurred during the verification process.', ['error' => $e->getMessage()]);
