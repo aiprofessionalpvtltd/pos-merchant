@@ -259,7 +259,7 @@ function generateTransactionCode()
 function convertShillingToUSD($shillings)
 {
     // Define the new conversion rate (9200 Shillings = 1 USD)
-    $conversionRate = 9200;
+    $conversionRate = env('CONVERSION_RATE');
 
     // Convert shillings to USD
     $usd = $shillings / $conversionRate;
@@ -271,7 +271,7 @@ function convertShillingToUSD($shillings)
 function convertUSDToShilling($usd)
 {
     // Define the new conversion rate (1 USD = 9200 Shillings)
-    $conversionRate = 9200;
+    $conversionRate = env('CONVERSION_RATE');
 
     // Convert USD to Shillings
     $shillings = $usd * $conversionRate;
