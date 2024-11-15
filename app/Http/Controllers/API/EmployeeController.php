@@ -296,7 +296,7 @@ class EmployeeController extends BaseController
             if ($employee->user) {
                 // Soft delete the associated user
                 $employee->user->update([
-                    'email' => 'deleted@email.com',
+                    'email' => 'deleted'.$id.'@email.com',
                 ]);
 
                 $employee->user->delete();
