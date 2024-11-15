@@ -566,6 +566,42 @@ class PassportAuthController extends BaseController
         return $this->sendError('Either start time or end time is required.', '', 422);
     }
 
+    public function getShiftData(Request $request)
+    {
+        // Get the authenticated user
+        $authUser = auth()->user();
+
+        // Ensure the authenticated user exists
+        if (!$authUser) {
+            return $this->sendError('User not authenticated.', '', 401);
+        }
+
+        // Optional parameter to get only the latest shift
+        $latest = $request->get('latest', false);
+
+        if ($latest) {
+            // Get the latest shift for the authenticated user
+            $shift = Shift::where('user_id', $authUser->id)->latest()->first();
+
+            if (!$shift) {
+                return $this->sendError('No shifts found for the user.', '', 404);
+            }
+
+            return $this->sendResponse($shift, 'Latest shift retrieved successfully.');
+        }
+
+        // Get all shifts for the authenticated user
+        $shifts = Shift::where('user_id', $authUser->id)->orderBy('created_at', 'desc')->get();
+
+        if ($shifts->isEmpty()) {
+            return $this->sendError('No shifts found for the user.', '', 404);
+        }
+
+        return $this->sendResponse($shifts, 'All shifts retrieved successfully.');
+    }
+
+
+
 
 
 }
