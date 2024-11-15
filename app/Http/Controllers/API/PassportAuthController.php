@@ -14,6 +14,7 @@ use App\Models\Merchant;
 use App\Models\Order;
 use App\Models\Otp;
 use App\Models\POSPermission;
+use App\Models\Shift;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -504,6 +505,67 @@ class PassportAuthController extends BaseController
             return $this->sendError('PIN change failed.', ['error' => $e->getMessage()], 500);
         }
     }
+
+
+    public function saveShift(Request $request)
+    {
+        $request->validate([
+            'start_time' => 'nullable|date_format:H:i:s', // Validate time format
+            'end_time' => 'nullable|date_format:H:i:s',   // Validate time format
+        ]);
+
+        // Get the authenticated user
+        $authUser = auth()->user();
+
+        // Ensure the authenticated user exists
+        if (!$authUser) {
+            return $this->sendError('User not authenticated.', '', 401);
+        }
+
+        // Get the latest shift for the user
+        $shift = Shift::where('user_id', $authUser->id)->latest()->first();
+
+        if ($request->start_time && $request->end_time) {
+            // Both start_time and end_time shouldn't be sent together
+            return $this->sendError('Cannot set both start time and end time simultaneously.', '', 422);
+        }
+
+        if ($request->start_time) {
+            // Create a new shift if start_time is provided
+            if ($shift && !$shift->end_time) {
+                return $this->sendError('The previous shift is still open. Please close it before starting a new one.', '', 422);
+            }
+
+            $shift = Shift::create([
+                'user_id' => $authUser->id,
+                'start_time' => currentDateInsert() . ' ' . $request->start_time,
+            ]);
+
+            return $this->sendResponse($shift, 'Shift started successfully.');
+        }
+
+        if ($request->end_time) {
+            // Ensure a shift exists and start_time is set
+            if (!$shift || !$shift->start_time) {
+                return $this->sendError('Start time is required before setting an end time.', '', 422);
+            }
+
+            // Ensure the shift is not already closed
+            if ($shift->end_time) {
+                return $this->sendError('The shift is already closed.', '', 422);
+            }
+
+            $shift->update([
+                'end_time' => currentDateInsert() . ' ' . $request->end_time,
+            ]);
+
+            return $this->sendResponse($shift, 'Shift ended successfully.');
+        }
+
+        // If neither start_time nor end_time is present
+        return $this->sendError('Either start time or end time is required.', '', 422);
+    }
+
 
 
 }

@@ -60,6 +60,7 @@ Route::middleware('auth:api')->group(function () {
 
     Route::get('login/userinfo', [PassportAuthController::class, 'userInfo']);
     Route::post('login/verifyUserPin', [PassportAuthController::class, 'verifyUserPin']);
+    Route::post('user/shift', [PassportAuthController::class, 'saveShift']);
 
 
     Route::post('merchants/change-pin', [MerchantVerificationController::class, 'changePin']);
