@@ -188,12 +188,16 @@ class DashboardController extends BaseController
             $pendingTransaction = $this->getPendingOrders()->getData(true);
             $pendingTransaction = $pendingTransaction['data'];
 
+            $transactionHistoriesForLastThreeMonths = $this->getTransactionForLastThreeMonths()->getData(true);
+            $transactionHistoriesForLastThreeMonths = $transactionHistoriesForLastThreeMonths['data'];
+
             // Prepare response data
             $data = [
                 'top_selling' => $this->getTopSellingProducts(),
                 'weekly_summary' => $weeklyStatistics,
                 'limit' => $this->getProductLimitCounts(),
                 'transaction_history' => $transactionHistories,
+                'transaction_history_three_months' => $transactionHistoriesForLastThreeMonths,
                 'pending_transaction' => $pendingTransaction,
                 'latest_client' => $latestClient,
                 'pending_order_count' => $pendingCount,
@@ -642,6 +646,48 @@ class DashboardController extends BaseController
             return $this->sendResponse($transactionData, 'transaction without orders fetched successfully.');
         } catch (\Exception $e) {
             return $this->sendError('An error occurred while fetching transaction.', ['error' => $e->getMessage()]);
+        }
+    }
+
+    public function getTransactionForLastThreeMonths()
+    {
+        try {
+            // Get the authenticated merchant
+            $authUser = auth()->user();
+
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            $merchant = $authUser->merchant;
+            $merchantID = $merchant->id;
+
+            // Calculate the date three months ago
+            $threeMonthsAgo = \Carbon\Carbon::now()->subMonths(3);
+
+            // Fetch transactions from the last three months
+            $transactions = Transaction::with('order')
+                ->where('merchant_id', $merchantID)
+                ->where('created_at', '>=', $threeMonthsAgo) // Filter by last three months
+                ->orderBy('id', 'desc') // Order by creation date descending
+                ->get();
+
+            // Format the response
+            $transactionData = $transactions->map(function ($transaction) {
+                return [
+                    'invoice_id' => $transaction->id,
+                    'order_id' => $transaction->order->id ?? null, // Include order details if available
+                    'name' => $transaction->phone_number, // Assuming mobile number stored in the invoice
+                    'payment_method' => $transaction->payment_method, // Payment method
+                    'order_date' => dateInsert($transaction->created_at), // Invoice creation date
+                    'invoice_amount' => convertShillingToUSD($transaction->transaction_amount), // Invoice amount in USD
+                    'name_initial' => 'N/A' // Initials not applicable if no order details
+                ];
+            });
+
+            return $this->sendResponse($transactionData, 'Transactions from the last three months fetched successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('An error occurred while fetching transactions.', ['error' => $e->getMessage()]);
         }
     }
 

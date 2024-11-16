@@ -67,4 +67,9 @@ class User extends Authenticatable
     {
         return $this->hasOne(Order::class)->withDefault();
     }
+
+    public function shifts()
+    {
+        return $this->hasMany(Shift::class, 'user_id');
+    }
 }

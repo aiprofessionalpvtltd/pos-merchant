@@ -13,6 +13,7 @@ use App\Models\EmployeePermission;
 use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Models\POSPermission;
+use App\Models\Shift;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Http\Request;
@@ -23,6 +24,7 @@ use App\Models\Employee;
 use App\Models\Permission;
 use App\Http\Resources\EmployeeResource;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
@@ -538,9 +540,15 @@ class EmployeeController extends BaseController
         }
     }
 
-    public function getEmployeeSaleCombine()
+    public function getEmployeeSaleCombine(Request $request)
     {
         try {
+            // Validate the input for start and end dates
+            $request->validate([
+                'start_date' => 'nullable|date|before_or_equal:end_date',
+                'end_date' => 'nullable|date|after_or_equal:start_date',
+            ]);
+
             // Get authenticated user
             $authUser = auth()->user();
 
@@ -556,18 +564,66 @@ class EmployeeController extends BaseController
             // Get the merchant's ID
             $merchantID = $authUser->merchant->id;
 
-            // Get the sum of transaction amounts for the merchant's transactions
-            $transactionAmountSum = Transaction::where('merchant_id', $merchantID)->sum('transaction_amount');
 
-            // Return or use the sum as needed
+            // Get the date range (default to all data if not provided)
+            $startDate = $request->start_date ? Carbon::parse($request->start_date)->startOfDay() : null;
+            $endDate = $request->end_date ? Carbon::parse($request->end_date)->endOfDay() : null;
+
+
+            // Fetch employees associated with the merchant
+            $employees = Employee::where('merchant_id', $merchantID)
+                ->with(['user.shifts' => function ($query) use ($startDate, $endDate) {
+                    // Filter shifts by the date range
+                    if ($startDate && $endDate) {
+                        $query->whereBetween('start_time', [$startDate, $endDate]);
+                    }
+                }])
+                ->get();
+
+            if ($employees->isEmpty()) {
+                return $this->sendError('No employees found for the merchant.');
+            }
+
+            $totalWorkingHours = 0;
+            $totalSalaries = 0;
+
+            foreach ($employees as $employee) {
+                $user = $employee->user; // Get the associated user
+
+                if ($user) {
+                    // Calculate total working hours for each user's shifts
+                    $userWorkingHours = $user->shifts->reduce(function ($carry, $shift) {
+                        if ($shift->start_time && $shift->end_time) {
+                            $start = \Carbon\Carbon::parse($shift->start_time);
+                            $end = \Carbon\Carbon::parse($shift->end_time);
+                            $carry += $start->diffInHours($end); // Add working hours
+                        }
+                        return $carry;
+                    }, 0);
+
+                    // Add to totals
+                    $totalWorkingHours += $userWorkingHours;
+                    $totalSalaries += $employee->salary; // Assuming salary is in Employee model
+                }
+            }
+
+            // Get the sum of transaction amounts for the merchant's transactions within the date range
+            $transactionQuery = Transaction::where('merchant_id', $merchantID);
+            if ($startDate && $endDate) {
+                $transactionQuery->whereBetween('created_at', [$startDate, $endDate]);
+            }
+            $transactionAmountSum = $transactionQuery->sum('transaction_amount');
+
+            // Return combined data
             return $this->sendResponse([
                 'total_sale' => $transactionAmountSum,
-                'total_sale_in_usd' => convertShillingToUSD($transactionAmountSum),
-            ], 'Transaction Loaded successful.');
-
+                'total_sale_in_sls' => convertUSDToShilling($transactionAmountSum),
+                'total_working_hours' => round($totalWorkingHours),
+                'total_salaries' => $totalSalaries,
+            ], 'Employee salary and working hours calculated successfully.');
 
         } catch (\Exception $e) {
-            return $this->sendError('An error occurred while fetching the employee.', ['error' => $e->getMessage()]);
+            return $this->sendError('An error occurred while fetching the employee data.', ['error' => $e->getMessage()]);
         }
     }
 
@@ -589,32 +645,49 @@ class EmployeeController extends BaseController
             // Get the merchant's ID
             $merchantID = $authUser->merchant->id;
 
-            // Get all invoices for the merchant with the given conditions within the current month
-            $invoices = Invoice::with(['transactions' => function ($query) {
-                // Filter transactions by current month and year
-                $query->whereMonth('created_at', now()->month)
-                    ->whereYear('created_at', now()->year);
-            }])
+            // Fetch the specific employee and their related user and shifts
+            $employee = Employee::where('merchant_id', $merchantID)
+                ->with('user.shifts') // Load shifts related to the user
+                ->find($id);
+
+            if (!$employee) {
+                return $this->sendError('Employee not found for the given ID.');
+            }
+
+            $user = $employee->user;
+
+            // Calculate total working hours for the employee's shifts
+            $totalWorkingHours = $user->shifts->reduce(function ($carry, $shift) {
+                if ($shift->start_time && $shift->end_time) {
+                    $start = \Carbon\Carbon::parse($shift->start_time);
+                    $end = \Carbon\Carbon::parse($shift->end_time);
+                    $carry += $start->diffInHours($end);
+                }
+                return $carry;
+            }, 0);
+
+            // Get all invoices for the merchant and the specific employee
+            $invoices = Invoice::with('transactions')
                 ->where('merchant_id', $merchantID)
                 ->where('user_id', $id)
                 ->where('type', 'POS')
                 ->where('status', 'Paid')
                 ->get();
 
-            // Sum all transaction amounts from the transactions related to these invoices
+            // Sum all transaction amounts for the invoices
             $totalTransactionAmount = $invoices->flatMap->transactions->sum('transaction_amount');
 
-            // Return or use the sum as needed
+            // Return combined data for the specific employee
             return $this->sendResponse([
-                'total_sale' => $totalTransactionAmount,
+                 'total_sale' => $totalTransactionAmount,
                 'total_sale_in_usd' => convertShillingToUSD($totalTransactionAmount),
-            ], 'Transaction Loaded successfully.');
+                'total_working_hours' => round($totalWorkingHours),
+                'salary' => $employee->salary,
+            ], 'Employee details loaded successfully.');
 
         } catch (\Exception $e) {
-            return $this->sendError('An error occurred while fetching the employee.', ['error' => $e->getMessage()]);
+            return $this->sendError('An error occurred while fetching the employee details.', ['error' => $e->getMessage()]);
         }
     }
-
-
 
 }
