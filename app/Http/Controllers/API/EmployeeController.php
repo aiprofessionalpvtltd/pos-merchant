@@ -669,7 +669,7 @@ class EmployeeController extends BaseController
             // Get all invoices for the merchant and the specific employee
             $invoices = Invoice::with('transactions')
                 ->where('merchant_id', $merchantID)
-                ->where('user_id', $id)
+                ->where('user_id', $user->id)
                 ->where('type', 'POS')
                 ->where('status', 'Paid')
                 ->get();
