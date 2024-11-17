@@ -55,7 +55,7 @@ class HomeController extends Controller
         $merchant = Merchant::where('phone_number', $phoneNumber)->first();
 
         if (!$merchant) {
-             return redirect()->back()->with('success', 'Phone number not found');
+             return redirect()->back()->with('error', 'Phone number not found');
 
         }
 
