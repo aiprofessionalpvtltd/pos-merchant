@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\API\PassportAuthController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -19,6 +20,8 @@ Auth::routes();
 
 Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
 Route::get('/verifyPayment', [App\Http\Controllers\HomeController::class, 'verifyPayment'])->name('verifyPayment');
+Route::get('/deleteAccount', [App\Http\Controllers\HomeController::class, 'delete']);
+Route::delete('/delete-account', [App\Http\Controllers\HomeController::class, 'deleteAccount'])->name('delete-account');
 
 Route::middleware(['auth'])->group(function () {
 
