@@ -55,7 +55,8 @@ class HomeController extends Controller
         $merchant = Merchant::where('phone_number', $phoneNumber)->first();
 
         if (!$merchant) {
-            return $this->sendError('Phone number not found.', 404);
+             return redirect()->back()->with('success', 'Phone number not found');
+
         }
 
         // Update the employee's status to 'inactive'
