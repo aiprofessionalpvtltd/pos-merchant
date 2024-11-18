@@ -1310,7 +1310,12 @@ class OrderController extends BaseController
             $mobileNumberPrefix = substr($phoneNo, 0, 2);
 
             // Determine if it's edahab_number or zaad_number
-            $mobileNumberType = in_array($mobileNumberPrefix, $dahabPrefixes) ? 'E-Dahab' : 'Zaad';
+            if($transaction->payment_method == 'number'){
+                $mobileNumberType = in_array($mobileNumberPrefix, $dahabPrefixes) ? 'E-Dahab' : 'Zaad';
+
+            }else{
+                $mobileNumberType = $transaction->payment_method;
+            }
 
             // Prepare the response data
             $data = [
@@ -1331,7 +1336,7 @@ class OrderController extends BaseController
                 'customer' => [
                     'name' => $transaction->customer_name ?? 'N/A', // Assuming customer_name field on transaction
                     'mobile_number' => $mobileNO,
-                    'account' => $transaction->payment_method,
+                    'account' => $mobileNumberType,
                     'initial_name' => $this->getInitials($transaction->customer_name ?? 'Not Available'),
                 ]
             ];
