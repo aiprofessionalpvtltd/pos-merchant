@@ -1325,7 +1325,7 @@ class OrderController extends BaseController
                 'invoice' => [
                     'invoice_no' => $transaction->id,
                     'amount' => $invoice->amount ?? $invoice->transaction_amount,
-                    'invoice_date' => showDate($invoice->created_at),
+                    'invoice_date' => showDate($transaction->created_at),
                     'payment_status' => $transaction->status ?? 'Paid By Cash', // Assuming status field
                 ],
                 'customer' => [
