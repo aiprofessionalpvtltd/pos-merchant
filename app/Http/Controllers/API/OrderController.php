@@ -1326,12 +1326,12 @@ class OrderController extends BaseController
                     'invoice_no' => $transaction->id,
                     'amount' => $invoice->amount ?? $invoice->transaction_amount,
                     'invoice_date' => showDate($transaction->created_at),
-                    'payment_status' => $transaction->status ?? 'Paid By Cash', // Assuming status field
+                    'payment_status' => $transaction->transaction_status ?? 'Paid By Cash', // Assuming status field
                 ],
                 'customer' => [
                     'name' => $transaction->customer_name ?? 'N/A', // Assuming customer_name field on transaction
                     'mobile_number' => $mobileNO,
-                    'account' => $mobileNumberType,
+                    'account' => $transaction->payment_method,
                     'initial_name' => $this->getInitials($transaction->customer_name ?? 'Not Available'),
                 ]
             ];
