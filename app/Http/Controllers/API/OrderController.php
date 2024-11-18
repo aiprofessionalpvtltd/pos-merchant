@@ -1290,8 +1290,7 @@ class OrderController extends BaseController
             // Retrieve the transaction and invoice with necessary relations
             $transaction = Transaction::with(['merchant', 'invoice'])
                 ->where('merchant_id', $merchantID)
-                ->where('invoice_id', $invoiceID)
-                ->first();
+                ->find($invoiceID);
 
             // Check if the transaction exists
             if (!$transaction) {
