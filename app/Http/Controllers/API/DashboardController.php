@@ -960,7 +960,9 @@ class DashboardController extends BaseController
 
             $transactions = Transaction::with(['invoice' => function ($query) use ($merchantID) {
                 $query->where('merchant_id', $merchantID);
-            }, 'order.items.product']) // Eager load order items and products for VAT calculation
+            }, 'order.items.product' => function ($query) {
+                $query->withTrashed(); // Include soft-deleted products
+            }]) // Eager load order items and products for VAT calculation
             ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
                 return $query->whereBetween('created_at', [$startDate, $endDate]);
             })
