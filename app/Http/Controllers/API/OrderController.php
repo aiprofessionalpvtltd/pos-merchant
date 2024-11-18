@@ -1314,7 +1314,7 @@ class OrderController extends BaseController
 
             // Prepare the response data
             $data = [
-                'invoice_id' => $invoice->id,
+                'invoice_id' => $transaction->id,
                 'merchant' => [
                     'business_name' => $transaction->merchant->business_name,
                     'merchant_code' => $transaction->merchant->merchant_code,
@@ -1323,7 +1323,7 @@ class OrderController extends BaseController
                     'zaad_number' => $transaction->merchant->zaad_number ?? 'N/A',
                 ],
                 'invoice' => [
-                    'invoice_no' => $invoice->id,
+                    'invoice_no' => $transaction->id,
                     'amount' => $invoice->amount ?? $invoice->transaction_amount,
                     'invoice_date' => showDate($invoice->created_at),
                     'payment_status' => $transaction->status ?? 'Paid By Cash', // Assuming status field
