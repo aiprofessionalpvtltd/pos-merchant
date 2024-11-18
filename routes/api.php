@@ -181,6 +181,8 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/cart/updateOrderStatusToPending', [OrderController::class, 'updateOrderStatusToPending']); // Place an order
     Route::post('/cart/getOrderDetails', [OrderController::class, 'getOrderDetails']); // Place an order
     Route::get('/order/getOrderDetailsForInvoice/{orderID}', [OrderController::class, 'getOrderDetailsForInvoice']); // Show checkout details
+    Route::get('/order/getInvoiceDetailsForInvoice/{invoiceID}', [OrderController::class, 'getInvoiceDetailsForInvoice']); // Show checkout details
+
     Route::delete('/order/delete/{orderID}', [OrderController::class, 'deleteOrder']); // Show checkout details
 
 

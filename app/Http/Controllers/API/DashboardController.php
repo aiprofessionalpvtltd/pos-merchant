@@ -1046,10 +1046,10 @@ class DashboardController extends BaseController
                     'total_vat' => round($totalVatAmount),
                     'total_vat_in_usd' => convertShillingToUSD($totalVatAmount),
                 ],
-                'downloaded_by' => $authUser->name . ' ' . $authUser->roles[0]->name,
+                'downloaded_by' => $authUser->name,
                 'business_name' => $authUser->merchant->business_name,
             ];
-
+ 
             return $this->sendResponse($responseData, 'Transaction summary retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error retrieving transaction summary.', [$e->getMessage()]);

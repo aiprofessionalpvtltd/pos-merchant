@@ -1269,6 +1269,76 @@ class OrderController extends BaseController
         }
     }
 
+    public function getInvoiceDetailsForInvoice($invoiceID)
+    {
+        try {
+            // Get authenticated user
+            $authUser = auth()->user();
+
+            // Ensure the authenticated user exists and has a merchant
+            if (!$authUser || !$authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
+
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
+
+            // Get merchant ID from authenticated user's merchant relation
+            $merchantID = $authUser->merchant->id;
+
+            // Retrieve the transaction and invoice with necessary relations
+            $transaction = Transaction::with(['merchant', 'invoice'])
+                ->where('merchant_id', $merchantID)
+                ->where('invoice_id', $invoiceID)
+                ->first();
+
+            // Check if the transaction exists
+            if (!$transaction) {
+                return $this->sendError('Transaction not found.');
+            }
+
+            $invoice = $transaction->invoice;
+            // Dahab and Zaad prefixes
+            $dahabPrefixes = ['65', '66', '62'];
+            $mobileNO = $invoice->mobile_number ?? 'N/A'; // Check invoice's mobile_number
+            $phoneNo = str_replace('+252', '', $mobileNO);
+            $mobileNumberPrefix = substr($phoneNo, 0, 2);
+
+            // Determine if it's edahab_number or zaad_number
+            $mobileNumberType = in_array($mobileNumberPrefix, $dahabPrefixes) ? 'E-Dahab' : 'Zaad';
+
+            // Prepare the response data
+            $data = [
+                'invoice_id' => $invoice->id,
+                'merchant' => [
+                    'business_name' => $transaction->merchant->business_name,
+                    'merchant_code' => $transaction->merchant->merchant_code,
+                    'cashier_name' => $authUser->name, // Assumed to be the cashier
+                    'edahab_number' => $transaction->merchant->edahab_number ?? 'N/A',
+                    'zaad_number' => $transaction->merchant->zaad_number ?? 'N/A',
+                ],
+                'invoice' => [
+                    'invoice_no' => $invoice->id,
+                    'amount' => $invoice->amount,
+                    'invoice_date' => showDate($invoice->created_at),
+                    'payment_status' => $transaction->status ?? 'Paid By Cash', // Assuming status field
+                ],
+                'customer' => [
+                    'name' => $transaction->customer_name ?? 'N/A', // Assuming customer_name field on transaction
+                    'mobile_number' => $mobileNO,
+                    'account' => $mobileNumberType,
+                    'initial_name' => $this->getInitials($transaction->customer_name ?? 'Not Available'),
+                ]
+            ];
+
+            return $this->sendResponse($data, 'Invoice details retrieved successfully.');
+        } catch (\Exception $e) {
+            return $this->sendError('Error retrieving invoice details.', $e->getMessage());
+        }
+    }
+
+
     public function transactionByCash(Request $request)
     {
         // Validate the input fields
