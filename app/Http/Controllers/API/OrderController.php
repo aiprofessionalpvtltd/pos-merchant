@@ -1297,7 +1297,12 @@ class OrderController extends BaseController
                 return $this->sendError('Transaction not found.');
             }
 
-            $invoice = $transaction->invoice;
+             if($transaction->invoice){
+
+                $invoice = $transaction->invoice;
+            }else{
+                $invoice = $transaction;
+            }
             // Dahab and Zaad prefixes
             $dahabPrefixes = ['65', '66', '62'];
             $mobileNO = $invoice->mobile_number ?? 'N/A'; // Check invoice's mobile_number
@@ -1319,7 +1324,7 @@ class OrderController extends BaseController
                 ],
                 'invoice' => [
                     'invoice_no' => $invoice->id,
-                    'amount' => $invoice->amount,
+                    'amount' => $invoice->amount ?? $invoice->transaction_amount,
                     'invoice_date' => showDate($invoice->created_at),
                     'payment_status' => $transaction->status ?? 'Paid By Cash', // Assuming status field
                 ],
