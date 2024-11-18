@@ -1182,9 +1182,13 @@ class OrderController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Retrieve the order with items and product relationship
-            $order = Order::with('items.product', 'user.merchant', 'merchant', 'invoice')
+            // Modify the with relationship to include soft-deleted products
+            $order = Order::with(['items.product' => function($query) {
+                $query->withTrashed(); // Include soft-deleted products
+            }, 'user.merchant', 'merchant', 'invoice'])
                 ->where('merchant_id', $merchantID)
                 ->find($orderID);
+
 
             if (!$order || $order->items->isEmpty()) {
                 return $this->sendError('Order not found or has no items.');
