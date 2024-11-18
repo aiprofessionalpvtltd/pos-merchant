@@ -1087,7 +1087,9 @@ class DashboardController extends BaseController
             }
 
             // Fetch inventory history records within the date range and for the merchant
-            $inventoryHistories = InventoryHistory::with(['product', 'user'])
+            $inventoryHistories = InventoryHistory::with(['product' => function($query) {
+                $query->withTrashed(); // Include soft-deleted products
+            }, 'user'])
                 ->whereHas('product', function ($query) use ($merchantID) {
                     $query->where('merchant_id', $merchantID);
                 })
@@ -1121,8 +1123,8 @@ class DashboardController extends BaseController
             foreach ($summaryByDate as $summary) {
                 $productId = $summary['product_id'];
 
-                // Fetch the product by ID
-                $product = Product::with(['orderItems', 'inventories'])->find($productId);
+                // Fetch the product by ID, including soft-deleted products
+                $product = Product::with(['orderItems', 'inventories'])->withTrashed()->find($productId);
 
                 // Calculate quantities
                 $quantityInToShop = $inventoryHistories->where('product_id', $productId)
@@ -1180,6 +1182,7 @@ class DashboardController extends BaseController
                     'in_stock' => $currentQuantityInStock,
                 ];
             }
+
             // Convert the associative array to an indexed array
             $shopSummary = array_values($shopSummary);
             $stockSummary = array_values($stockSummary);
