@@ -7,6 +7,7 @@ use App\Http\Resources\EmployeeResource;
 use App\Http\Resources\MerchantPermissionResource;
 use App\Http\Resources\MerchantResource;
 use App\Http\Resources\POSPermissionResource;
+use App\Http\Resources\ShiftResource;
 use App\Http\Resources\UserResource;
 use App\Models\Employee;
 use App\Models\Invoice;
@@ -541,7 +542,7 @@ class PassportAuthController extends BaseController
                 'start_time' => currentDateInsert() . ' ' . $request->start_time,
             ]);
 
-            return $this->sendResponse($shift, 'Shift started successfully.');
+            return $this->sendResponse(new ShiftResource($shift), 'Shift started successfully.');
         }
 
         if ($request->end_time) {
@@ -559,7 +560,7 @@ class PassportAuthController extends BaseController
                 'end_time' => currentDateInsert() . ' ' . $request->end_time,
             ]);
 
-            return $this->sendResponse($shift, 'Shift ended successfully.');
+            return $this->sendResponse(new ShiftResource($shift), 'Shift ended successfully.');
         }
 
         // If neither start_time nor end_time is present
@@ -576,20 +577,6 @@ class PassportAuthController extends BaseController
             return $this->sendError('User not authenticated.', '', 401);
         }
 
-        // Optional parameter to get only the latest shift
-        $latest = $request->get('latest', false);
-
-        if ($latest) {
-            // Get the latest shift for the authenticated user
-            $shift = Shift::where('user_id', $authUser->id)->latest()->first();
-
-            if (!$shift) {
-                return $this->sendError('No shifts found for the user.', '', 404);
-            }
-
-            return $this->sendResponse($shift, 'Latest shift retrieved successfully.');
-        }
-
         // Get all shifts for the authenticated user
         $shifts = Shift::where('user_id', $authUser->id)->orderBy('created_at', 'desc')->get();
 
@@ -597,11 +584,54 @@ class PassportAuthController extends BaseController
             return $this->sendError('No shifts found for the user.', '', 404);
         }
 
-        return $this->sendResponse($shifts, 'All shifts retrieved successfully.');
+        return $this->sendResponse(ShiftResource::collection($shifts), 'All shifts retrieved successfully.');
     }
 
+    public function updateShift(Request $request, $shiftId)
+    {
+        $request->validate([
+            'start_time' => 'nullable|date_format:H:i:s', // Validate time format
+            'end_time' => 'nullable|date_format:H:i:s',   // Validate time format
+        ]);
 
+        // Get the authenticated user
+        $authUser = auth()->user();
 
+        // Ensure the authenticated user exists
+        if (!$authUser) {
+            return $this->sendError('User not authenticated.', '', 401);
+        }
+
+        // Find the shift by ID and ensure it belongs to the authenticated user
+        $shift = Shift::where('id', $shiftId)->where('user_id', $authUser->id)->first();
+
+        if (!$shift) {
+            return $this->sendError('Shift not found or does not belong to the authenticated user.', '', 404);
+        }
+
+        // Ensure there is something to update
+        if (!$request->start_time && !$request->end_time) {
+            return $this->sendError('At least one of start time or end time must be provided to update the shift.', '', 422);
+        }
+
+        // Update fields if provided
+        $updates = [];
+
+        if ($request->start_time) {
+
+            $updates['start_time'] = currentDateInsert() . ' ' . $request->start_time;
+        }
+
+        if ($request->end_time) {
+             
+            $updates['end_time'] = currentDateInsert() . ' ' . $request->end_time;
+        }
+
+        // Update the shift
+        $shift->update($updates);
+
+        return $this->sendResponse(new ShiftResource($shift), 'Shift updated successfully.');
+    }
 
 
 }
