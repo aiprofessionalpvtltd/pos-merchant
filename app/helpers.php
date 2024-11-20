@@ -183,6 +183,12 @@ function showDateTime($obj)
     return date('d-M-Y h:i:s', strtotime($obj));
 }
 
+function showTime($obj)
+{
+    return date('h:i A', strtotime($obj));
+}
+
+
 function showMonth($obj)
 {
     return date('M', strtotime($obj));
