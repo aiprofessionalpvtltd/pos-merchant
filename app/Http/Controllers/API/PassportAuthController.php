@@ -523,8 +523,14 @@ class PassportAuthController extends BaseController
             return $this->sendError('User not authenticated.', '', 401);
         }
 
-        // Get the latest shift for the user
-        $shift = Shift::where('user_id', $authUser->id)->latest()->first();
+        // Get the current date
+        $currentDate = now()->toDateString();
+
+        // Check if a shift already exists for today
+        $shift = Shift::where('user_id', $authUser->id)
+            ->whereDate('created_at', $currentDate)
+            ->latest()
+            ->first();
 
         if ($request->start_time && $request->end_time) {
             // Both start_time and end_time shouldn't be sent together
@@ -532,32 +538,39 @@ class PassportAuthController extends BaseController
         }
 
         if ($request->start_time) {
-            // Create a new shift if start_time is provided
+            // Ensure no shift with start_time exists for today
             if ($shift && !$shift->end_time) {
                 return $this->sendError('The previous shift is still open. Please close it before starting a new one.', '', 422);
             }
 
+            // Ensure a shift with a start time for today does not already exist
+            if ($shift && $shift->start_time) {
+                return $this->sendError('A shift has already been started for today.', '', 422);
+            }
+
+            // Create a new shift for today
             $shift = Shift::create([
                 'user_id' => $authUser->id,
-                'start_time' => currentDateInsert() . ' ' . $request->start_time,
+                'start_time' => $currentDate . ' ' . $request->start_time,
             ]);
 
             return $this->sendResponse(new ShiftResource($shift), 'Shift started successfully.');
         }
 
         if ($request->end_time) {
-            // Ensure a shift exists and start_time is set
+            // Ensure a shift exists for today with a start time
             if (!$shift || !$shift->start_time) {
                 return $this->sendError('Start time is required before setting an end time.', '', 422);
             }
 
             // Ensure the shift is not already closed
             if ($shift->end_time) {
-                return $this->sendError('The shift is already closed.', '', 422);
+                return $this->sendError('The shift is already closed in same date', '', 422);
             }
 
+            // Update the end_time for the shift
             $shift->update([
-                'end_time' => currentDateInsert() . ' ' . $request->end_time,
+                'end_time' => $currentDate . ' ' . $request->end_time,
             ]);
 
             return $this->sendResponse(new ShiftResource($shift), 'Shift ended successfully.');
@@ -623,7 +636,7 @@ class PassportAuthController extends BaseController
         }
 
         if ($request->end_time) {
-             
+
             $updates['end_time'] = currentDateInsert() . ' ' . $request->end_time;
         }
 
