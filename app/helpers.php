@@ -172,11 +172,12 @@ function showDate($obj)
 {
     if ($obj != '0000-00-00') {
 
-        return date('d-M-Y', strtotime($obj));
+        return date('d.m.Y', strtotime($obj));
     } else {
         return '';
     }
 }
+
 
 function showDateTime($obj)
 {
@@ -185,7 +186,7 @@ function showDateTime($obj)
 
 function showTime($obj)
 {
-    return date('h:i A', strtotime($obj));
+    return date('H:i', strtotime($obj));
 }
 
 
