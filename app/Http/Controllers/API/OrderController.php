@@ -1020,7 +1020,6 @@ class OrderController extends BaseController
         }
 
         try {
-
             // Get the authenticated merchant ID
             $authUser = auth()->user();
 
@@ -1037,7 +1036,9 @@ class OrderController extends BaseController
             // Fetch orders by the given type and conditions
             $ordersQuery = Order::where('order_status', $request->order_status)
                 ->where('merchant_id', $merchantID)
-                ->with('items.product'); // Load related order items and products
+                ->with(['items.product' => function ($query) {
+                    $query->withTrashed(); // Include soft-deleted products
+                }]);
 
             // For employees, filter orders by the authenticated user's ID
             if ($authUser->user_type == 'employee') {
@@ -1045,7 +1046,6 @@ class OrderController extends BaseController
             }
 
             $orders = $ordersQuery->get();
-
 
             if ($orders->isEmpty()) {
                 return $this->sendResponse([], 'No orders found for the specified type.');
@@ -1069,7 +1069,7 @@ class OrderController extends BaseController
                     'order_items' => $order->items->map(function ($item) {
                         return [
                             'product_id' => $item->product_id,
-                            'product_name' => $item->product->product_name,
+                            'product_name' => $item->product->product_name ?? 'N/A', // Handle soft-deleted product name gracefully
                             'quantity' => $item->quantity,
                             'price' => convertShillingToUSD($item->price),
                             'total_price' => convertShillingToUSD($item->quantity * $item->price),
