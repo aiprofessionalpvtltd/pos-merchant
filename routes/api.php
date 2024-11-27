@@ -121,6 +121,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('/products', [ProductController::class, 'store']);          // Create a new product
     Route::post('/products/{id}', [ProductController::class, 'update']);    // Update a product
     Route::delete('/products/{product}', [ProductController::class, 'destroy']); // Delete a product
+
     Route::get('/getSoldProducts', [ProductController::class, 'getSoldProducts']);
     Route::get('/getAllProductsWithCategories', [ProductController::class, 'getAllProductsWithCategories']); // Get product statistics
     Route::get('/getTotalProductsInShop', [ProductController::class, 'getTotalProductsInShop']); // Get product statistics
@@ -173,8 +174,8 @@ Route::middleware('auth:api')->group(function () {
 
     Route::get('/cart/checkout', [OrderController::class, 'checkout']); // Show checkout details
     Route::get('/order/all', [OrderController::class, 'getOrdersByType']); // Show checkout details
-    Route::get('/order/allByStatus', [OrderController::class, 'getOrdersByStatus']); // Show checkout details
     Route::post('/cart/placeOrder', [OrderController::class, 'placeOrder']); // Place an order
+    Route::get('/order/allByStatus', [OrderController::class, 'getOrdersByStatus']); // Show checkout details
     Route::post('/cart/transactionByCash', [OrderController::class, 'transactionByCash']); // Place an order
     Route::post('/cart/paidOrder', [OrderController::class, 'paidOrder']); // Paid an order
     Route::post('/cart/placePendingOrder', [OrderController::class, 'placePendingOrder']); // Place an order

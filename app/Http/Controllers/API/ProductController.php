@@ -81,7 +81,7 @@ class ProductController extends BaseController
 
             $product = NULL;
 
-            if($request->input('bar_code')){
+            if ($request->input('bar_code')) {
                 // Check if the product already exists by product_name and category_id
                 $product = Product::where('bar_code', $request->input('bar_code'))
                     ->where('category_id', $request->input('category_id'))
@@ -89,8 +89,9 @@ class ProductController extends BaseController
             }
 
 
-
             $input['price'] = $request->price;
+            $input['price_sls'] = convertUSDToShilling($request->price);
+            $input['exchange_rate'] = env('CONVERSION_RATE');
             $input['vat'] = $request->vat * 100; // Assume this is 0, 5, or 10 as per your formula
 
             // Calculate final price with VAT
@@ -111,12 +112,12 @@ class ProductController extends BaseController
                 ->where('type', $request->input('type'))
                 ->first();
 
-             // Create a new inventory record
+            // Create a new inventory record
             $inventoryData = [
                 'product_id' => $product->id,
                 'quantity' => $request->input('quantity'),
                 'type' => $request->input('type')
-             ];
+            ];
 
             if ($existingInventory) {
                 // Update the existing inventory
@@ -128,7 +129,7 @@ class ProductController extends BaseController
             }
 
             //create a new record to history
-            $this->inventoryHistory($inventoryData['product_id'] ,$inventoryData['quantity'],$request->input('type') ,$request->input('type'));
+            $this->inventoryHistory($inventoryData['product_id'], $inventoryData['quantity'], $request->input('type'), $request->input('type'));
 
             // Load the relationships
             $product->load(['category', 'inventories', 'merchant']);
@@ -324,6 +325,8 @@ class ProductController extends BaseController
             // Check if 'price' is provided, then update
             if ($request->filled('price')) {
                 $input['price'] = $request->price;
+                $input['price_sls'] = convertUSDToShilling($request->price);
+                $input['exchange_rate'] = env('CONVERSION_RATE');
                 $input['vat'] = $product->vat; // Assume this is 0, 5, or 10 as per your formula
 
                 // Calculate final price with VAT
@@ -414,10 +417,11 @@ class ProductController extends BaseController
                     'id' => $product->id,
                     'product_name' => $product->product_name,
                     'price' => $product->price,
-                    'price_in_usd' => convertShillingToUSD($product->price),
+                    'price_in_sls' => $product->price_sls,
+                    'exchange_rate' => $product->exchange_rate,
                     'vat' => convertVATPercentagetoDecimal($product->vat),
                     'total_price' => $product->total_price,
-                    'total_price_in_usd' => convertShillingToUSD($product->total_price),
+                    'total_price_in_sls' => convertUSDToShilling($product->total_price),
                     'in_stock_quantity' => $inStockQuantity,
                     'in_shop_quantity' => $inShopQuantity,
                     'in_transportation_quantity' => $inTransportationQuantity,

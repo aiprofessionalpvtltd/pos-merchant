@@ -18,6 +18,8 @@ class Order extends Model
         'mobile_number',
         'signature',
         'total_price',
+        'total_price_sls',
+        'exchange_rate',
         'vat',
         'exelo_amount',
         'sub_total',
