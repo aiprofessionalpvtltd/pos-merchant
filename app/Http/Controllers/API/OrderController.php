@@ -1254,15 +1254,15 @@ class OrderController extends BaseController
                     return [
                         'product_name' => $item->product->product_name,
                         'quantity' => $item->quantity,
-                        'price' => convertShillingToUSD($item->price),
-                        'total_price' => convertShillingToUSD($item->quantity * $item->price),
+                        'price' =>  ($item->price),
+                        'total_price' =>  ($item->quantity * $item->price),
                     ];
                 }),
-                'sub_total' => convertShillingToUSD($subtotal),
-                'vat' => convertShillingToUSD($vat),
+                'sub_total' =>  ($subtotal),
+                'vat' =>  ($vat),
                 'vat_charge' => env('VAT_CHARGE') * 100 . '%',
-                'exelo_amount' => convertShillingToUSD($exeloAmount),
-                'total' => convertShillingToUSD($totalPriceWithVAT)
+                'exelo_amount' =>  ($exeloAmount),
+                'total' =>  ($totalPriceWithVAT)
 
 
             ];
