@@ -757,10 +757,10 @@ class ProductController extends BaseController
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
                     'price' => $product->price,
-                    'price_in_usd' => convertShillingToUSD($product->price),
+                    'price_in_sls' => convertUSDToShilling($product->price),
                     'vat' => convertVATPercentagetoDecimal($product->vat),
                     'total_price' => $product->total_price,
-                    'total_price_in_usd' => convertShillingToUSD($product->total_price),
+                    'total_price_in_sls' => convertUSDToShilling($product->total_price),
                     'in_shop_quantity' => $inShopQuantity,
                     'date' => $inventoryUpdatedAt, // Add inventory updated_at to response
                 ];
@@ -837,10 +837,10 @@ class ProductController extends BaseController
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
                     'price' => $product->price,
-                    'price_in_usd' => convertShillingToUSD($product->price),
+                    'price_in_sls' => convertUSDToShilling($product->price),
                     'vat' => convertVATPercentagetoDecimal($product->vat),
                     'total_price' => $product->total_price,
-                    'total_price_in_usd' => convertShillingToUSD($product->total_price),
+                    'total_price_in_sls' => convertUSDToShilling($product->total_price),
                     'in_stock_quantity' => $inStockQuantity,
                     'date' => $inventoryUpdatedAt, // Add inventory updated_at to response
                 ];
@@ -908,10 +908,10 @@ class ProductController extends BaseController
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
                     'price' => $product->price,
-                    'price_in_usd' => convertShillingToUSD($product->price),
+                    'price_in_sls' => convertUSDToShilling($product->price),
                     'vat' => convertVATPercentagetoDecimal($product->vat),
                     'total_price' => $product->total_price,
-                    'total_price_in_usd' => convertShillingToUSD($product->total_price),
+                    'total_price_in_sls' => convertUSDToShilling($product->total_price),
                     'in_shop_quantity' => $inventory->total_quantity,
                     'date' => $inventory->updated_at->format('Y-m-d H:i:s'), // Add inventory updated_at date
                 ];
@@ -979,10 +979,10 @@ class ProductController extends BaseController
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
                     'price' => $product->price,
-                    'price_in_usd' => convertShillingToUSD($product->price),
+                    'price_in_sls' => convertUSDToShilling($product->price),
                     'vat' => convertVATPercentagetoDecimal($product->vat),
                     'total_price' => $product->total_price,
-                    'total_price_in_usd' => convertShillingToUSD($product->total_price),
+                    'total_price_in_sls' => convertUSDToShilling($product->total_price),
                     'in_stock_quantity' => $inventory->total_quantity,
                     'date' => $inventory->updated_at->format('Y-m-d H:i:s'), // Add inventory updated_at date
                 ];
