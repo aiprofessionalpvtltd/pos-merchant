@@ -1333,7 +1333,7 @@ class OrderController extends BaseController
                 ],
                 'invoice' => [
                     'invoice_no' => $transaction->id,
-                    'amount' => $invoice->amount ?? $invoice->transaction_amount,
+                    'amount' => convertShillingToUSD($invoice->amount) ?? convertShillingToUSD($invoice->transaction_amount),
                     'invoice_date' => showDate($transaction->created_at),
                     'payment_status' => $transaction->transaction_status ?? 'Paid By Cash', // Assuming status field
                 ],
