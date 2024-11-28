@@ -652,6 +652,7 @@ class ProductController extends BaseController
             // Execute the query
             $soldProducts = $soldProducts->get();
 
+
             // Prepare the result set as a nested array grouped by sold date
             $data = [];
             foreach ($soldProducts as $soldProduct) {
@@ -667,13 +668,16 @@ class ProductController extends BaseController
                 $inStockQuantity = $product->inventories
                         ->firstWhere('type', 'stock')->quantity ?? 0;
 
+
+
                 // Add product details to the nested structure
                 $data[] = [
                     'product_id' => $product->id,
                     'product_name' => $product->product_name,
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
-                    'price' => convertShillingToUSD($product->total_price * $soldProduct->total_sold), // Multiply price by total sold
+                    'price' =>  ($product->total_price * $soldProduct->total_sold), // Multiply price by total sold
+                    'price_in_sls' => convertUSDToShilling($product->total_price * $soldProduct->total_sold), // Multiply price by total sold
                     'in_shop_quantity' => $inShopQuantity,
                     'in_stock_quantity' => $inStockQuantity,
                     'total_sold' => $soldProduct->total_sold,

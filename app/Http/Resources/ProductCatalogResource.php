@@ -54,7 +54,8 @@ class ProductCatalogResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->product_name,
-            'price' => convertShillingToUSD($this->price),
+            'price' => ($this->price),
+            'price_in_sls' => convertUSDToShilling($this->price),
             'image' => Storage::url($this->image),
             'category' => $this->category->name ?? null, // Assuming `category` relationship exists
             'total_sold' => $totalSold, // Sum of quantities from orderItems
