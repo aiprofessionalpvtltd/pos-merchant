@@ -1045,9 +1045,9 @@ class OrderController extends BaseController
                 }]);
 
             // For employees, filter orders by the authenticated user's ID
-            if ($authUser->user_type == 'employee') {
-                $ordersQuery->where('user_id', $authUser->id);
-            }
+//            if ($authUser->user_type == 'employee') {
+//                $ordersQuery->where('user_id', $authUser->id);
+//            }
 
             $orders = $ordersQuery->get();
 
