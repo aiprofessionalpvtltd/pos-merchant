@@ -1080,20 +1080,12 @@ class DashboardController extends BaseController
             $endDate = $request->query('end_date');
 
             // Validate the date format using Carbon
-//            if ($startDate) {
-//                $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
-//            }
-//
-//            if ($endDate) {
-//                $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
-//            }
-
             if ($startDate) {
-                $startDate = $startDate . ' 00:00:00'; // Start of the day
+                $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
             }
 
             if ($endDate) {
-                $endDate = $endDate . ' 23:59:59'; // End of the day
+                $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
             }
 
             // Fetch inventory history records within the date range and for the merchant
@@ -1103,18 +1095,11 @@ class DashboardController extends BaseController
                 ->whereHas('product', function ($query) use ($merchantID) {
                     $query->where('merchant_id', $merchantID);
                 })
-//                ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
-//                    return $query->whereBetween('created_at', [$startDate, $endDate]);
-//                })
-                ->when($startDate && !$endDate, function ($query) use ($startDate) {
-                    return $query->where('created_at', '>=', $startDate);
-                })
-                ->when(!$startDate && $endDate, function ($query) use ($endDate) {
-                    return $query->where('created_at', '<=', $endDate);
+                ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
+                    return $query->whereBetween('created_at', [$startDate, $endDate]);
                 })
                 ->get();
 
-//            dd($inventoryHistories);
             // Group by date, product, and locations, then sum the quantities
             $summaryByDate = $inventoryHistories->groupBy(function ($history) {
                 return $history->created_at->format('Y-m-d') . '_' . $history->product_id . '_' . $history->from_location . '_' . $history->to_location;
@@ -1133,86 +1118,84 @@ class DashboardController extends BaseController
                 ];
             })->values()->all(); // Flatten to an array
 
-             // Initialize additional inventory metrics
+            // Initialize additional inventory metrics
             $shopSummary = [];
             $stockSummary = [];
-            $finalResult = [];
 
-            if(count($summaryByDate) > 0){
-                foreach ($summaryByDate as $summary) {
-                    $productId = $summary['product_id'];
+            foreach ($summaryByDate as $summary) {
+                $productId = $summary['product_id'];
 
-                    // Fetch the product by ID, including soft-deleted products
-                    $product = Product::with(['orderItems', 'inventories'])->withTrashed()->find($productId);
+                // Fetch the product by ID, including soft-deleted products
+                $product = Product::with(['orderItems', 'inventories'])->withTrashed()->find($productId);
 
-                    // Calculate quantities
-                    $quantityInToShop = $inventoryHistories->where('product_id', $productId)
-                        ->where('to_location', 'shop')
-                        ->where('from_location', '!=', 'shop') // Exclude same-location
-                        ->sum('quantity');
+                // Calculate quantities
+                $quantityInToShop = $inventoryHistories->where('product_id', $productId)
+                    ->where('to_location', 'shop')
+                    ->where('from_location', '!=', 'shop') // Exclude same-location
+                    ->sum('quantity');
 
-                    $quantityInToStock = $inventoryHistories->where('product_id', $productId)
-                        ->where('to_location', 'stock')
-                        ->where('from_location', '!=', 'stock') // Exclude same-location
-                        ->sum('quantity');
+                $quantityInToStock = $inventoryHistories->where('product_id', $productId)
+                    ->where('to_location', 'stock')
+                    ->where('from_location', '!=', 'stock') // Exclude same-location
+                    ->sum('quantity');
 
-                    $quantityOutFromShop = $inventoryHistories->where('product_id', $productId)
-                        ->where('from_location', 'shop')
-                        ->where('to_location', '!=', 'shop') // Exclude same-location
-                        ->sum('quantity');
+                $quantityOutFromShop = $inventoryHistories->where('product_id', $productId)
+                    ->where('from_location', 'shop')
+                    ->where('to_location', '!=', 'shop') // Exclude same-location
+                    ->sum('quantity');
 
-                    $quantityOutFromStock = $inventoryHistories->where('product_id', $productId)
-                        ->where('from_location', 'stock')
-                        ->where('to_location', '!=', 'stock') // Exclude same-location
-                        ->sum('quantity');
+                $quantityOutFromStock = $inventoryHistories->where('product_id', $productId)
+                    ->where('from_location', 'stock')
+                    ->where('to_location', '!=', 'stock') // Exclude same-location
+                    ->sum('quantity');
 
-                    // Check for same-location movements and update in_shop or in_stock
-                    $sameLocationQuantityInShop = $inventoryHistories->where('product_id', $productId)
-                        ->where('from_location', 'shop')
-                        ->where('to_location', 'shop')
-                        ->sum('quantity');
+                // Check for same-location movements and update in_shop or in_stock
+                $sameLocationQuantityInShop = $inventoryHistories->where('product_id', $productId)
+                    ->where('from_location', 'shop')
+                    ->where('to_location', 'shop')
+                    ->sum('quantity');
 
-                    $sameLocationQuantityInStock = $inventoryHistories->where('product_id', $productId)
-                        ->where('from_location', 'stock')
-                        ->where('to_location', 'stock')
-                        ->sum('quantity');
+                $sameLocationQuantityInStock = $inventoryHistories->where('product_id', $productId)
+                    ->where('from_location', 'stock')
+                    ->where('to_location', 'stock')
+                    ->sum('quantity');
 
-                    $totalSold = $product->orderItems->sum('quantity'); // Assuming 'quantity' in orderItems
+                $totalSold = $product->orderItems->sum('quantity'); // Assuming 'quantity' in orderItems
 
-                    $currentQuantityInShop = $product->inventories->where('type', 'shop')->sum('quantity'); // Assuming 'type' is location type
-                    $currentQuantityInStock = $product->inventories->where('type', 'stock')->sum('quantity'); // Assuming 'type' is location type
+                $currentQuantityInShop = $product->inventories->where('type', 'shop')->sum('quantity'); // Assuming 'type' is location type
+                $currentQuantityInStock = $product->inventories->where('type', 'stock')->sum('quantity'); // Assuming 'type' is location type
 
-                    // Add metrics to the array, indexed by product_id
-                    $shopSummary[$productId] = [
-                        'product_id' => $productId,
-                        'product_name' => $summary['product_name'],
-                        'in_scan' => $quantityInToShop + $sameLocationQuantityInShop, // Include same-location quantity
-                        'out_scan' => $quantityOutFromShop,
-                        'total_sold' => $totalSold,
-                        'in_shop' => $currentQuantityInShop,
-                    ];
+                // Add metrics to the array, indexed by product_id
+                $shopSummary[$productId] = [
+                    'product_id' => $productId,
+                    'product_name' => $summary['product_name'],
+                    'in_scan' => $quantityInToShop + $sameLocationQuantityInShop, // Include same-location quantity
+                    'out_scan' => $quantityOutFromShop,
+                    'total_sold' => $totalSold,
+                    'in_shop' => $currentQuantityInShop,
+                ];
 
-                    // Add metrics to the array, indexed by product_id
-                    $stockSummary[$productId] = [
-                        'product_id' => $productId,
-                        'product_name' => $summary['product_name'],
-                        'in_scan' => $quantityInToStock + $sameLocationQuantityInStock, // Include same-location quantity
-                        'out_scan' => $quantityOutFromStock,
-                        'in_stock' => $currentQuantityInStock,
-                    ];
-                }
-
-                // Convert the associative array to an indexed array
-                $shopSummary = array_values($shopSummary);
-                $stockSummary = array_values($stockSummary);
-                $finalResult = [
-                    'inventory_report' => $summaryByDate,
-                    'shopSummary' => $shopSummary,
-                    'stockSummary' => $stockSummary,
-                    'downloaded_by' => $authUser->name . ' ' . $authUser->roles[0]->name,
-                    'business_name' => $authUser->merchant->business_name,
+                // Add metrics to the array, indexed by product_id
+                $stockSummary[$productId] = [
+                    'product_id' => $productId,
+                    'product_name' => $summary['product_name'],
+                    'in_scan' => $quantityInToStock + $sameLocationQuantityInStock, // Include same-location quantity
+                    'out_scan' => $quantityOutFromStock,
+                    'in_stock' => $currentQuantityInStock,
                 ];
             }
+
+            // Convert the associative array to an indexed array
+            $shopSummary = array_values($shopSummary);
+            $stockSummary = array_values($stockSummary);
+
+            $finalResult = [
+                'inventory_report' => $summaryByDate,
+                'shopSummary' => $shopSummary,
+                'stockSummary' => $stockSummary,
+                'downloaded_by' => $authUser->name,
+                'business_name' => $authUser->merchant->business_name,
+            ];
 
             // Return the summary data as a response
             return $this->sendResponse($finalResult, 'Inventory summary by date and additional metrics retrieved successfully.');
