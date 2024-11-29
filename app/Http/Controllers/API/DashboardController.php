@@ -1080,12 +1080,20 @@ class DashboardController extends BaseController
             $endDate = $request->query('end_date');
 
             // Validate the date format using Carbon
+//            if ($startDate) {
+//                $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
+//            }
+//
+//            if ($endDate) {
+//                $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+//            }
+
             if ($startDate) {
-                $startDate = \Carbon\Carbon::createFromFormat('Y-m-d', $startDate)->startOfDay();
+                $startDate = $startDate . ' 00:00:00'; // Start of the day
             }
 
             if ($endDate) {
-                $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
+                $endDate = $endDate . ' 23:59:59'; // End of the day
             }
 
             // Fetch inventory history records within the date range and for the merchant
@@ -1205,7 +1213,7 @@ class DashboardController extends BaseController
                     'business_name' => $authUser->merchant->business_name,
                 ];
             }
-            
+
             // Return the summary data as a response
             return $this->sendResponse($finalResult, 'Inventory summary by date and additional metrics retrieved successfully.');
         } catch (\Exception $e) {
