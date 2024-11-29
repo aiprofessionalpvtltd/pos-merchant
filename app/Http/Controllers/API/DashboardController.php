@@ -1205,9 +1205,7 @@ class DashboardController extends BaseController
                     'business_name' => $authUser->merchant->business_name,
                 ];
             }
-
-
-
+            
             // Return the summary data as a response
             return $this->sendResponse($finalResult, 'Inventory summary by date and additional metrics retrieved successfully.');
         } catch (\Exception $e) {
