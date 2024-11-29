@@ -148,13 +148,13 @@ class DashboardController extends BaseController
                 ? ($newProductsInStock / $overallTotal) * 100
                 : 0;
 
-            if ($authUser->user_type == 'employee') {
-                $pendingCount = Order::where('user_id', $authUser->id)->where('order_status', 'Pending')->count();
-                $completeCount = Order::where('user_id', $authUser->id)->where('order_status', 'Complete')->count();
-            } else {
+//            if ($authUser->user_type == 'employee') {
+//                $pendingCount = Order::where('user_id', $authUser->id)->where('order_status', 'Pending')->count();
+//                $completeCount = Order::where('user_id', $authUser->id)->where('order_status', 'Complete')->count();
+//            } else {
                 $pendingCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Pending')->count();
                 $completeCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Complete')->count();
-            }
+//            }
 
 
             if ($authUser->user_type == 'merchant') {
