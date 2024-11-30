@@ -81,7 +81,7 @@ class MerchantController extends BaseController
                 return $this->sendError('Merchant code is already registered.', '');
             }
 
-            
+
 
             // Remove spaces from phone number
             $phoneNumber = str_replace(' ', '', $request->input('phone_number'));
@@ -113,10 +113,11 @@ class MerchantController extends BaseController
             $merchant = Merchant::create($request->all());
 
             // Get Merchant Subscription
-            $silverPackageID = 2;
+//            $silverPackageID = 2;
+            $subscriptionID = env('SUBSCRIPTION_ID');
             MerchantSubscription::create([
                 'merchant_id' => $merchant->id,
-                'subscription_plan_id' => $silverPackageID,
+                'subscription_plan_id' => $subscriptionID,
                 'start_date' => now(),
                 'end_date' => now()->addMonth(),
                 'transaction_status' => 'Paid',
