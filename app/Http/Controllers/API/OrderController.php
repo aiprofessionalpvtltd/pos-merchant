@@ -454,7 +454,7 @@ class OrderController extends BaseController
             // Prepare the response data
             $data = [
                 'subtotal' => round($subtotal,2),
-//                'vat' => convertShillingToUSD($vat),
+                'subtotal_in_sls' => convertUSDToShilling(round($subtotal,2)),
                 'exelo_amount' => round($exeloAmount,2),
                 'total' => round($totalPriceWithVAT, 2),
                 'total_in_sls' => convertUSDToShilling($totalPriceWithVAT),
