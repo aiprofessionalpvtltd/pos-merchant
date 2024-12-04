@@ -146,7 +146,7 @@ class PaymentController extends BaseController
         // Add the checkInvoiceStatus response to the responses array
         $responses['waafiCommitResponse'] = $waafiCommitResponse;
 
-         // Return the response from Waafi API to the caller
+        // Return the response from Waafi API to the caller
         return response()->json($responses);
     }
 
@@ -544,10 +544,11 @@ class PaymentController extends BaseController
             return $this->sendError('Merchant mobile number is not registered', '');
         }
 
+        $merchantCode = $merchant->merchant_code;
 
         $payload = [
             "apiKey" => $apiKey,
-            "phoneNumber" => str_replace('+252', '', $phoneNumber),
+            "phoneNumber" => $merchantCode ?? str_replace('+252', '', $phoneNumber),
             "transactionAmount" => $amountSentToMerchant,
             "transactionId" => $transactionId,
             "currency" => $currency
@@ -987,8 +988,8 @@ class PaymentController extends BaseController
         $apiUserId = env('WAAFI_API_USER_ID', '1007586');
         $apiKey = env('WAAFI_API_KEY', 'API-282358994AHX');
 
-         $transactionId = 'zaad_' . round(microtime(true) * 1000);
-         $amount = $request->input('amount_sent_to_merchant');
+        $transactionId = 'zaad_' . round(microtime(true) * 1000);
+        $amount = $request->input('amount_sent_to_merchant');
         $currency = $request->input('currency');
         $paymentMethod = $request->input('payment_method');
         $invoiceID = $request->input('invoice_id');
@@ -1022,6 +1023,8 @@ class PaymentController extends BaseController
             return $this->sendError('Merchant mobile number is not registered', '');
         }
 
+        $merchantCode = $merchant->other_merchant_code;
+
         // Build the payload for the API request
         $payload = [
             "schemaVersion" => "1.0",
@@ -1038,8 +1041,7 @@ class PaymentController extends BaseController
                 "payerInfo" => [
 //                    "accountType" => "MERCHANT",
 //                    "accountNo" => "252638450708",
-                    "accountNo" => str_replace('+', '', $phoneNumber),
-
+                    "accountNo" => $merchantCode ?? str_replace('+', '', $phoneNumber),
                 ],
                 "transactionInfo" => [
                     "transactionId" => $transactionId,
@@ -1052,7 +1054,7 @@ class PaymentController extends BaseController
             ]
         ];
 
-         // Set maximum attempts and delay between retries
+        // Set maximum attempts and delay between retries
         $maxAttempts = 5;
         $attempts = 0;
 
@@ -1088,7 +1090,7 @@ class PaymentController extends BaseController
                             'merchant_id' => $merchant->id,
                             'payment_method' => $paymentMethod ?? 'number',
                             'invoice_id' => $invoiceID
-                         ]);
+                        ]);
 
 
                         DB::commit(); // Commit transaction
