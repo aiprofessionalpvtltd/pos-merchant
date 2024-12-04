@@ -17,6 +17,7 @@ class Merchant extends Model
         'location',
         'business_name',
         'merchant_code',
+        'other_merchant_code',
         'email',
         'phone_number',
         'edahab_number',

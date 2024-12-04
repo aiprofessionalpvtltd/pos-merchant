@@ -51,6 +51,7 @@ class MerchantController extends BaseController
             'location' => 'required|string|max:255',
             'business_name' => 'required|string|max:255',
             'merchant_code' => 'required|string|max:255',
+            'other_merchant_code' => 'required|string|max:255',
             'email' => 'nullable|email|max:255',
             'phone_number' => 'required|string|max:15',
             'user_id' => 'nullable|exists:users,id',
@@ -75,10 +76,18 @@ class MerchantController extends BaseController
             }
 
             // Check if a merchant with the provided merchant_code already exists
-            $merchantCodeCount = Merchant::where('merchant_code', $request->input('merchant_code'))->count();
+            $edahabMerchantCodeCount = Merchant::where('merchant_code', $request->input('merchant_code'))->count();
 
-            if ($merchantCodeCount > 0) {
-                return $this->sendError('Merchant code is already registered.', '');
+            if ($edahabMerchantCodeCount > 0) {
+                return $this->sendError('Edahab Merchant code is already registered.', '');
+            }
+
+
+            // Check if a merchant with the provided merchant_code already exists
+            $zaadMerchantCodeCount = Merchant::where('other_merchant_code', $request->input('other_merchant_code'))->count();
+
+            if ($zaadMerchantCodeCount > 0) {
+                return $this->sendError('Zaad Merchant code is already registered.', '');
             }
 
 
