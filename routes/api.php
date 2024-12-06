@@ -69,6 +69,7 @@ Route::middleware('auth:api')->group(function () {
     Route::post('merchants/verifyPhoneNumberByCompany', [MerchantController::class, 'verifyPhoneNumberByCompany']);
     Route::post('merchants/verificationComplete', [MerchantController::class, 'verificationComplete']);
     Route::get('merchants/getPhoneNumbersStatus', [MerchantController::class, 'getPhoneNumbersStatus']);
+    Route::put('update-merchants', [MerchantController::class, 'update']);
 
 
     // Payment Routes

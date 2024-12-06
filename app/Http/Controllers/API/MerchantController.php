@@ -185,21 +185,36 @@ class MerchantController extends BaseController
         return $this->sendResponse($merchant, 'Merchant retrieved successfully.');
     }
 
-    public function update(Request $request, Merchant $merchant)
+    public function update(Request $request)
     {
         $validator = $this->validateRequest($request, [
-            'name' => 'sometimes|required|string|max:255',
-            'address' => 'sometimes|required|string|max:255',
-            'country' => 'sometimes|required|string|max:255',
-            'city' => 'sometimes|required|string|max:255',
-            'state' => 'sometimes|required|string|max:255',
-            'phone_number' => 'sometimes|required|string|max:15|unique:merchants,phone_number,' . $merchant->id,
-            'user_id' => 'sometimes|required|exists:users,id',
-        ]);
+            'first_name' => 'required|string|max:255',
+            'last_name' => 'required|string|max:255',
+             'location' => 'required|string|max:255',
+            'business_name' => 'required|string|max:255',
+            'merchant_code' => 'nullable|string|max:255',
+            'other_merchant_code' => 'nullable|string|max:255',
+          ]);
 
         if ($validator->fails()) {
             return $this->sendError('Validation Error.', $validator->errors());
         }
+
+        // Get authenticated user
+        $authUser = auth()->user();
+
+        // Check if the authenticated user has an associated merchant
+        if (!$authUser || !$authUser->merchant) {
+            return $this->sendError('Merchant not found for the authenticated user.');
+        }
+
+        // Get the merchant
+        $merchant = $authUser->merchant;
+
+        if (!$merchant) {
+            return $this->sendError('Merchant Not Found', 404);
+        }
+
 
         $merchant->update($request->all());
         return $this->sendResponse(new MerchantResource($merchant), 'Merchant updated successfully.');
