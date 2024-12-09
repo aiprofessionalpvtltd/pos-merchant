@@ -1109,7 +1109,7 @@ class PaymentController extends BaseController
                     } else {
                         return [
                             'success' => false,
-                            'message' => 'Failed to Zaad Issue Invoice',
+                            'message' => 'Failed to make merchant payment',
                             'status' => $responseData['errorCode'],
                             'mobile_number' => $merchantCode ??   $phoneNumber,
                             'error' => $responseData['responseMsg']
@@ -1121,7 +1121,7 @@ class PaymentController extends BaseController
                     $attempts++;
                 } else {
                     // If the API request fails, return an error with the response details
-                    return $this->sendError([], 'Failed to commit invoice', 500, [
+                    return $this->sendError([], 'Failed to make merchant payment', 500, [
                         'status' => $response->status(),
                         'error' => $response->body()
                     ]);
