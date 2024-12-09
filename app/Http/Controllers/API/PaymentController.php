@@ -1058,6 +1058,7 @@ class PaymentController extends BaseController
             ]
         ];
 
+//        dd($payload);
         // Set maximum attempts and delay between retries
         $maxAttempts = 5;
         $attempts = 0;
@@ -1110,7 +1111,7 @@ class PaymentController extends BaseController
                             'success' => false,
                             'message' => 'Failed to Zaad Issue Invoice',
                             'status' => $responseData['errorCode'],
-                            'mobile_number' => $phoneNumber,
+                            'mobile_number' => $merchantCode ??   $phoneNumber,
                             'error' => $responseData['responseMsg']
                         ];
                     }
