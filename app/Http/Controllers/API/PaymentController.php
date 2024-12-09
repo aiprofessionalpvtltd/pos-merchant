@@ -359,6 +359,11 @@ class PaymentController extends BaseController
                 $invoiceData = $response->json();
 
 
+                if ($invoiceData['StatusDescription'] == 'Validation Error') {
+                    $error = $invoiceData['ValidationErrors'][0]['ErrorMessage'];
+                     return $this->sendError($invoiceData['StatusDescription'], $error);
+                }
+
                 // Simulating database insertion of the transaction details
                 $invoice = Invoice::create([
                     'merchant_id' => $merchantID,
@@ -553,7 +558,6 @@ class PaymentController extends BaseController
             "transactionId" => $transactionId,
             "currency" => $currency
         ];
-
 
         $bodyStr = json_encode($payload);
         $secret = env('SECRET_KEY');
