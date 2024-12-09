@@ -28,10 +28,10 @@
                         <h6 class="m-4"><strong>First Name:</strong> {{ $merchant->first_name }}</h6>
                         <h6 class="m-4"><strong>Last Name:</strong> {{ $merchant->last_name }}</h6>
                         <h6 class="m-4"><strong>DOB:</strong> {{ $merchant->dob }}</h6>
-                        <h6 class="m-4"><strong>Agent Code:</strong> {{ $merchant->merchant_code }}</h6>
+                        <h6 class="m-4"><strong>Edahab Agent Code:</strong> {{ $merchant->merchant_code }}</h6>
+                        <h6 class="m-4"><strong>Zaad Agent Code:</strong> {{ $merchant->other_merchant_code }}</h6>
 
-                        <h6 class="m-4"><strong>Merchant ID:</strong> {{ $merchant->merchant_code }}</h6>
-                        <h6 class="m-4"><strong>Address:</strong> {{ $merchant->location }}</h6>
+                         <h6 class="m-4"><strong>Address:</strong> {{ $merchant->location }}</h6>
                         <h6 class="m-4"><strong>Email:</strong> {{ $merchant->email }}</h6>
                         <h6 class="m-4"><strong>Phone NO:</strong> {{ $merchant->phone_number }}</h6>
                     </div>
