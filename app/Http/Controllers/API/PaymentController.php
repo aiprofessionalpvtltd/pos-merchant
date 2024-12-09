@@ -1043,7 +1043,7 @@ class PaymentController extends BaseController
                 "apiKey" => $apiKey,
                 "paymentMethod" => "MWALLET_ACCOUNT",
                 "payerInfo" => [
-//                    "accountType" => "MERCHANT",
+                    "accountType" => "MERCHANT",
 //                    "accountNo" => "252638450708",
                     "accountNo" => $merchantCode ?? str_replace('+', '', $phoneNumber),
                 ],
