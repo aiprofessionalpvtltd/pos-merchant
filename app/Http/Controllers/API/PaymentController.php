@@ -1090,7 +1090,7 @@ class PaymentController extends BaseController
                             'transaction_amount' => $apiResponse['txAmount'],
                             'transaction_status' => $apiResponse['state'],
                             'transaction_message' => $responseData['responseMsg'],
-                            'phone_number' => $phoneNumber,
+                            'phone_number' => $merchantCode ??   $phoneNumber,
                             'transaction_id' => $apiResponse['transactionId'],
                             'merchant_id' => $merchant->id,
                             'payment_method' => $paymentMethod ?? 'number',
