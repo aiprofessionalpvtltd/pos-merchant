@@ -44,7 +44,7 @@ class PassportAuthController extends BaseController
         ]);
 
         $phoneNumber = str_replace(' ', '', $request->phone_number);
-        $merchant = Merchant::where('phone_number', $phoneNumber)->first();
+        $merchant = Merchant::with('currentSubscription')->where('phone_number', $phoneNumber)->first();
 
         if (!$merchant) {
             return $this->sendError('Phone number not found.', 404);
