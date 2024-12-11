@@ -16,7 +16,7 @@ class MerchantResource extends JsonResource
     {
         $currentSubscription = $this->whenLoaded('currentSubscription');
 
-         return [
+        return [
             'id' => $this->id,
             'first_name' => $this->first_name,
             'last_name' => $this->last_name,
@@ -39,12 +39,12 @@ class MerchantResource extends JsonResource
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
             // Conditionally include currentSubscription details
-            'currentSubscription' => $this->currentSubscription->reSubscriptionEligible
+            'currentSubscription' => $currentSubscription && $currentSubscription->reSubscriptionEligible
                 ? [
                     'subscription_plan_id' => 1, // Default or fallback ID
                     'reSubscriptionEligible' => true,
                 ]
-                : new MerchantSubscriptionResource($currentSubscription),
+                : ($currentSubscription ? new MerchantSubscriptionResource($currentSubscription) : null),
         ];
     }
 
