@@ -38,13 +38,17 @@ class MerchantResource extends JsonResource
             'otp_expires_at' => $this->otp_expires_at,
             'created_at' => $this->created_at,
             'updated_at' => $this->updated_at,
+            'currentSubscription' => [
+                'subscription_plan_id' => 1, // Default or fallback ID
+                'reSubscriptionEligible' => true,
+            ],
             // Conditionally include currentSubscription details
-            'currentSubscription' => $currentSubscription && $currentSubscription->reSubscriptionEligible
-                ? [
-                    'subscription_plan_id' => 1, // Default or fallback ID
-                    'reSubscriptionEligible' => true,
-                ]
-                : ($currentSubscription ? new MerchantSubscriptionResource($currentSubscription) : null),
+//            'currentSubscription' => $currentSubscription && $currentSubscription->reSubscriptionEligible
+//                ? [
+//                    'subscription_plan_id' => 1, // Default or fallback ID
+//                    'reSubscriptionEligible' => true,
+//                ]
+//                : ($currentSubscription ? new MerchantSubscriptionResource($currentSubscription) : null),
         ];
     }
 
