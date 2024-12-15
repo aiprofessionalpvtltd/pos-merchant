@@ -47,6 +47,7 @@
                     <th>User Name</th>
                     <th>Email</th>
                     <th>Role</th>
+                    <th>PIN</th>
                      <th class="text-center">Actions</th>
                 </tr>
                 </thead>
@@ -55,7 +56,8 @@
                     <tr>
                         <td>{{$user->name}}</td>
                         <td>{{$user->email}}</td>
-                        <td>{{$user->roles[0]->name ?? ''}}</td>
+                        <td>{{$user->user_type}}</td>
+                        <td>{{$user->pin}}</td>
                         <td>`
                             <div class="d-flex">
                                 @can('edit-users')

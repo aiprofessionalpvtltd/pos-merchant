@@ -39,7 +39,7 @@ class UserController extends Controller
         $users = User::with('roles')
             ->where('id', '>', auth()->user()->id)
             ->whereDoesntHave('roles', function($query) {
-                $query->where('name', 'Super Admin')->orwhere('name', 'Merchant');
+                $query->where('name', 'Super Admin');
             })
             ->orderBy('created_at', 'DESC')
             ->get();
