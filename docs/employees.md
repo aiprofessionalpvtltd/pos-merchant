@@ -41,7 +41,7 @@ Full URL = `{BASE_URL}/api/v1` + path.
 | 1 | GET | `/api/v1/permissions` | List the assignable permissions | Bearer | — | `200` | — |
 | 2 | GET | `/api/v1/employees` | List staff | `employees` | `status`, `q`, `page`, `per_page` | `200` + pagination | `403 auth.permission_denied`, `422 validation.failed` |
 | 3 | GET | `/api/v1/employees/{id}` | One employee with performance | `employees` | `from`, `to` | `200` | `403`, `404 employee.not_found` |
-| 4 | POST | `/api/v1/employees` | Add a staff member | `employees` + PIN confirmation, Gold plan | `first_name`, `last_name`, `phone_number`, `dob`, `role`, `permission_keys`; optional `salary`, `salary_period` | `201` | `401 auth.confirmation_required`, `403 plan.feature_unavailable`, `403 auth.permission_denied`, `409 employee.phone_taken`, `422 employee.permission_unknown`, `422 validation.failed` |
+| 4 | POST | `/api/v1/employees` | Add a staff member | `employees` + PIN confirmation, Gold plan | `first_name`, `last_name`, `phone_number`, `dob`, `role`, `permission_keys`; optional `pin` + `pin_confirmation`, `salary`, `salary_period` | `201` | `401 auth.confirmation_required`, `403 plan.feature_unavailable`, `403 auth.permission_denied`, `409 employee.phone_taken`, `422 employee.permission_unknown`, `422 auth.pin_too_weak`, `422 validation.failed` |
 | 5 | PATCH | `/api/v1/employees/{id}` | Change a staff member | `employees` | any subset of the fields above | `200` | `403`, `404 employee.not_found`, `422` |
 | 6 | DELETE | `/api/v1/employees/{id}` | Remove a staff member | `employees` | — | `200` | `403`, `404 employee.not_found` |
 | 7 | GET | `/api/v1/employees/summary` | Team KPI strip | `employees` | `from`, `to` | `200` | `403`, `422` |
@@ -136,6 +136,10 @@ and shifts stay, so reports keep working. The removed person still appears under
 
 ### Shifts
 
+- **Sign in first.** A shift can only be started by a signed-in user: the
+  employee logs in with their phone number and PIN, and only then clocks in with
+  `POST /shifts/start`. Without a token it returns `401 auth.token_invalid`. See
+  [Daily flow](#daily-flow-sign-in-then-start-the-shift).
 - A shift belongs to a **user**, so the owner can clock in too.
 - Only one shift can be open at a time; starting another returns
   `409 shift.already_active` with the open shift.
@@ -301,6 +305,8 @@ two.
   "role": "Cashier",
   "salary": { "amount": 450, "currency": "USD" },
   "salary_period": "daily",
+  "pin": "2468",
+  "pin_confirmation": "2468",
   "permission_keys": ["pos", "inventory"]
 }
 ```
@@ -313,6 +319,8 @@ two.
 | `role` | string | yes | Free text: `Cashier`, `Stock keeper`, `Supervisor` |
 | `salary` | Money | no | `{ "amount": int, "currency": "USD" \| "SLSH" }`, in minor units |
 | `salary_period` | enum | no | `hourly` \| `daily` \| `monthly`. Default `daily`. |
+| `pin` | string | no | The employee's PIN: exactly 4 digits, not weak (`0000`, `1234`, repeated digits). Stored as a hash. |
+| `pin_confirmation` | string | with `pin` | Must match `pin` |
 | `permission_keys` | array | yes | At least one stable key from `GET /permissions` |
 
 **Response `201`**
@@ -332,7 +340,7 @@ two.
     "salary": { "amount": 450, "currency": "USD", "display": "$4.50" },
     "salary_period": "daily",
     "status": "off_shift",
-    "has_pin": false,
+    "has_pin": true,
     "permissions": [ { "key": "pos", "name": "POS" }, { "key": "inventory", "name": "Inventory" } ],
     "current_shift": null,
     "created_at": "2026-09-19T13:09:49Z"
@@ -340,8 +348,17 @@ two.
 }
 ```
 
-`has_pin: false` — the employee sets their own PIN on first sign-in with
-[`POST /auth/pin`](auth.md#post-authpin). No default PIN exists.
+The PIN is never returned. `has_pin` tells you which case you are in:
+
+- **`has_pin: true`** (you sent `pin`) — the employee can sign in straight away
+  with their phone number and that PIN. The owner chose it, so tell the employee
+  what it is and ask them to change it with [`PATCH /auth/pin`](auth.md#patch-authpin).
+- **`has_pin: false`** (you left `pin` out) — the employee creates their own PIN on
+  first sign-in with [`POST /auth/pin`](auth.md#post-authpin).
+
+No default PIN exists in either case. The PIN is checked before the owner's PIN
+confirmation is spent, so a weak PIN (`422 auth.pin_too_weak`) or a mismatch does
+not cost another PIN entry.
 
 **Errors**
 
@@ -352,7 +369,8 @@ two.
 | `403` | `auth.permission_denied` | You tried to grant a permission you do not hold (`details.required_permission`) |
 | `409` | `employee.phone_taken` | Number already belongs to an EXELO user |
 | `422` | `employee.permission_unknown` | Bad key in `permission_keys` (`details.permission_keys`) |
-| `422` | `validation.failed` | Per-field messages |
+| `422` | `auth.pin_too_weak` | The `pin` is `0000`, `1234` or repeated digits |
+| `422` | `validation.failed` | Per-field messages, including a `pin` that is not 4 digits or does not match `pin_confirmation` |
 
 ```json
 {
@@ -580,6 +598,12 @@ without the `employees` permission; `404 employee.not_found`.
 **Purpose:** Starts the caller's shift. Replaces `POST /api/user/shift` with a
 `start_time` field.
 
+**Before you call it:** the employee must be signed in. Log in with
+`POST /auth/pin/login` (phone number and PIN), then send the returned token as
+`Authorization: Bearer <token>` here. Without it the call returns
+`401 auth.token_invalid`. See
+[Daily flow](#daily-flow-sign-in-then-start-the-shift).
+
 **Request** — body is optional
 
 ```json
@@ -747,15 +771,45 @@ records. Replaces `PUT /api/user/shift/{id}`.
 
 ---
 
+## Daily flow: sign in, then start the shift
+
+Every working day the employee follows the same order. The shift comes **last**,
+after the phone number and PIN have been accepted.
+
+```
+1. POST /auth/lookup      { phone_number }                → has_pin: true, shows the PIN pad
+2. POST /auth/pin/login   { phone_number, pin }           → token (the PIN is checked here)
+3. POST /shifts/start     Authorization: Bearer <token>   → 201, shift started, timer runs
+   ... work ...
+4. POST /shifts/{id}/end  Authorization: Bearer <token>   → 200, shift ended
+```
+
+| Step | What the app does |
+| --- | --- |
+| 1 | Employee types their phone number. The app calls `lookup` and shows the PIN pad (or "create your PIN" when `has_pin` is `false`). |
+| 2 | Employee enters their PIN. On success the app stores the `token`. A wrong PIN returns `401 auth.invalid_credentials`; five wrong PINs lock the account for 15 minutes (`423 auth.locked`). |
+| 3 | The app calls `shifts/start` with the token, only after step 2 succeeded. It stores `data.id`, which it needs to clock out. |
+| 4 | At the end of the day the app calls `shifts/{id}/end` with that id. |
+
+If the employee is already signed in when the app opens (a saved token), skip
+steps 1 and 2. If the saved token has been revoked, the call returns
+`401 auth.token_invalid`: send them back to step 1. If a shift is already open,
+`shifts/start` returns `409 shift.already_active` with that shift, so the app
+resumes its timer instead of starting another.
+
+The PIN is entered once, at sign-in. `POST /shifts/start` does not ask for it
+again, because the token already proves who is clocking in.
+
 ## Step by step: adding a staff member
 
 ```
 POST /auth/pin/verify   { pin, scope: "employees.create" }   → confirmation_token
-POST /employees         X-EXELO-Confirmation: <token>        → 201, has_pin: false
+POST /employees         X-EXELO-Confirmation: <token>        → 201 (has_pin: true if you sent pin)
    (the employee, on their own phone)
-POST /auth/lookup       { phone_number }                     → user_type: "employee", has_pin: false
-POST /auth/pin          { phone_number, pin, pin_confirmation }  → token, permissions
-POST /shifts/start                                           → clocked in
+POST /auth/lookup       { phone_number }                     → shop name, user_type: "employee", has_pin
+POST /auth/pin          { phone_number, pin, pin_confirmation }  → only when has_pin is false: token, permissions
+POST /auth/pin/login    { phone_number, pin }                → when has_pin is true: token, permissions
+POST /shifts/start      Authorization: Bearer <token>        → clocked in (after signing in)
 ```
 
 | State | Client does |
@@ -764,6 +818,122 @@ POST /shifts/start                                           → clocked in
 | `403 plan.feature_unavailable` | Show the upgrade screen for `details.required_plan` |
 | `409 employee.phone_taken` | Show the error under the phone field; the PIN confirmation is **not** spent |
 | `422 employee.permission_unknown` | Refresh the permission list from `GET /permissions` |
+
+---
+
+## Employee login
+
+Employees sign in with the same endpoints as the shop owner, using their mobile
+number and PIN. There is no separate employee login. The PIN comes from one of two
+places, decided when the owner adds them with `POST /employees`:
+
+- **The owner sets it** (`pin` sent): `has_pin` is `true`, so the employee goes
+  straight to [sign-in](#every-sign-in-after-that).
+- **The employee sets it** (`pin` left out): `has_pin` is `false`, so the
+  employee goes through [first sign-in](#first-sign-in-no-pin-yet) first.
+
+Every call below that creates or uses a PIN needs the header
+`X-EXELO-Device-Id: <stable id per install>`. The token is bound to that device.
+
+### The order: mobile, then shop, then PIN
+
+1. The employee types their **mobile number**.
+2. The app calls `POST /auth/lookup`. The response names the **shop**
+   (`business_name`) and the employee (`display_name`), so the employee can see
+   they are signing in to the right merchant before typing a PIN.
+3. The employee enters their **PIN**, and the app calls `POST /auth/pin/login`
+   (or `POST /auth/pin` the first time).
+
+A number that is not registered as staff or as a shop owner returns
+`exists: false`. Nothing about the shop is shown for an unknown number.
+
+### First sign-in (no PIN yet)
+
+**1. Identify the number** — `POST /auth/lookup`
+
+```json
+{ "phone_number": "+252634110303" }
+```
+
+```json
+{
+  "success": true,
+  "message": "Enter your PIN",
+  "data": {
+    "exists": true,
+    "user_type": "employee",
+    "has_pin": false,
+    "display_name": "Nasra Yusuf",
+    "business_name": "Exelo Retail",
+    "registration": { "complete": true, "invoice_required": false }
+  }
+}
+```
+
+`user_type: "employee"` and `has_pin: false` mean the app should show "create
+your PIN" instead of the PIN pad.
+
+**2. Create the PIN and sign in** — `POST /auth/pin`
+
+```json
+{ "phone_number": "+252634110303", "pin": "2468", "pin_confirmation": "2468" }
+```
+
+`201` returns the `token`, the `user` (with `"type": "employee"`), the shop, the
+plan and the employee's `permissions`. The PIN must be 4 digits and not weak
+(`0000`, `1234` or repeated digits, otherwise `422 auth.pin_too_weak`).
+
+### Every sign-in after that
+
+**1. `POST /auth/lookup`** shows the shop and the employee's name, and whether to
+show the PIN pad (`has_pin: true`) or "create your PIN" (`has_pin: false`).
+
+**2. `POST /auth/pin/login`**
+
+```json
+{ "phone_number": "+252634110303", "pin": "2468" }
+```
+
+`200` returns the same `token`, `user`, `merchant`, `subscription` and
+`permissions` as the create-PIN response. Send `Authorization: Bearer <token>` on
+every later call.
+
+### What the app does with the response
+
+- **Permissions decide the screens.** Show a feature only when its `key` is in
+  `data.permissions` (for example, staff management needs `employees`). The
+  server enforces the same keys, so a hidden screen cannot be reached by calling
+  the API directly.
+- **The plan applies to the whole shop.** An employee sees the owner's plan and
+  features, and cannot change or cancel it (`403 auth.merchant_only`).
+- **Clock in last.** Call `POST /shifts/start` only after the sign-in above has
+  succeeded, with the returned token. See
+  [Daily flow](#daily-flow-sign-in-then-start-the-shift).
+
+### Sign-in errors
+
+| Status | Code | Meaning | Client does |
+| --- | --- | --- | --- |
+| `401` | `auth.invalid_credentials` | Wrong PIN | Show `details.attempts_remaining` |
+| `423` | `auth.locked` | Five wrong PINs; locked for 15 minutes | Show a countdown from `details.retry_after` |
+| `403` | `auth.employee_disabled` | The owner removed this person | Sign out and explain |
+| `409` | `auth.pin_not_set` | Account has no PIN yet | Go to the create-PIN step |
+| `409` | `auth.pin_already_set` | `POST /auth/pin` on an account that has a PIN | Use `pin/login`, or the forgotten-PIN reset |
+| `400` | `request.device_id_missing` | `X-EXELO-Device-Id` header missing | Send the device id |
+
+### Forgotten PIN
+
+Same flow as the owner: `POST /auth/pin/reset/request`, then
+`/auth/pin/reset/verify` with the SMS code, then `POST /auth/pin/reset` with the
+new PIN. It signs the employee in on this device and signs them out everywhere
+else. See [registration.md](registration.md) endpoints 15 to 17 for the full
+requests and responses.
+
+### Removed employees
+
+When the owner removes an employee, their tokens are revoked at once, so their
+next request returns `401 auth.token_invalid`, and any new sign-in returns
+`403 auth.employee_disabled`.
 
 ---
 
@@ -821,8 +991,10 @@ unchanged.
 - **Removal.** The employee's number is stored in `former_phone_number` and the
   active number is cleared (`0`), matching the legacy behaviour that lets a number
   be registered again. The linked login is soft-deleted.
-- **No default PIN.** New staff get an unusable password until they set their own
-  PIN. The legacy endpoint gave everyone the PIN `1234`.
+- **PIN on create is optional.** With `pin` the owner sets the employee's PIN (stored
+  hashed, never returned); without it the employee sets their own. Either way there
+  is no default PIN. New staff without a PIN get an unusable password until they
+  set one. The legacy endpoint gave everyone the PIN `1234`.
 - **Sales figures** come from the shop's `Paid` and `Complete` orders taken by the
   employee, in USD.
 - **Wording.** The 201 message uses "their", since the app does not store gender.

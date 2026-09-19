@@ -382,6 +382,23 @@ class AuthService
         return new ApiException('auth.locked', 'Too many wrong PINs. Try again later.', 423, ['retry_after' => (int) $retryAfter]);
     }
 
+    /**
+     * Rejects a PIN that is too easy to guess, without saving anything.
+     */
+    public function assertPinAcceptable(string $pin): void
+    {
+        $this->assertPinStrong($pin);
+    }
+
+    /**
+     * Stores a PIN (hashed) for a user who has none yet, without signing them in.
+     */
+    public function setPinFor(User $user, string $pin): void
+    {
+        $this->assertPinStrong($pin);
+        $this->storePin($user, $pin);
+    }
+
     private function assertPinStrong(string $pin): void
     {
         $isRepeated = count(array_unique(str_split($pin))) === 1;

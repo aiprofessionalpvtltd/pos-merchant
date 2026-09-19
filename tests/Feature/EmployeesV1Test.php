@@ -192,6 +192,62 @@ it('does not show another shop\'s employee', function () {
     expect($stranger->fresh()->first_name)->toBe('Zed')->and($stranger->fresh()->status)->toBe('active');
 });
 
+it('adds an employee with a PIN so they can look up their shop and sign in at once', function () {
+    $owner = makeMerchant('2580');
+    goldFor($owner, 30);
+    $token = ownerToken();
+
+    $response = $this->withToken($token)->withHeader('X-EXELO-Confirmation', confirmation($token))
+        ->postJson('/api/v1/employees', newStaffBody(['pin' => '2468', 'pin_confirmation' => '2468']))
+        ->assertCreated()
+        ->assertJsonPath('data.has_pin', true)
+        ->assertJsonMissingPath('data.pin');
+
+    // only a hash is stored, never the PIN itself
+    $user = Employee::find($response->json('data.id'))->user;
+    expect($user->pin)->toBeNull()->and(Hash::check('2468', $user->password))->toBeTrue();
+
+    app('auth')->forgetGuards();
+    $this->withoutToken()->postJson('/api/v1/auth/lookup', ['phone_number' => '+252634110303'])
+        ->assertJsonPath('data.user_type', 'employee')
+        ->assertJsonPath('data.business_name', 'Exelo Retail')
+        ->assertJsonPath('data.has_pin', true);
+
+    $this->withoutToken()->postJson('/api/v1/auth/pin/login', ['phone_number' => '+252634110303', 'pin' => '2468'], device('staff-device'))
+        ->assertOk()
+        ->assertJsonPath('data.user.type', 'employee')
+        ->assertJsonPath('data.merchant.business_name', 'Exelo Retail')
+        ->assertJsonPath('data.permissions.0.key', 'pos');
+
+    $this->withoutToken()->postJson('/api/v1/auth/pin/login', ['phone_number' => '+252634110303', 'pin' => '0001'], device('staff-device'))->assertStatus(401);
+});
+
+it('refuses a bad or weak staff PIN without spending the PIN confirmation', function () {
+    $owner = makeMerchant('2580');
+    goldFor($owner, 30);
+    $token = ownerToken();
+    $confirm = confirmation($token);
+
+    foreach (['1234', '0000', '7777'] as $weak) {
+        $this->withToken($token)->withHeader('X-EXELO-Confirmation', $confirm)
+            ->postJson('/api/v1/employees', newStaffBody(['pin' => $weak, 'pin_confirmation' => $weak]))
+            ->assertStatus(422)->assertJsonPath('error.code', 'auth.pin_too_weak');
+    }
+
+    $this->withToken($token)->withHeader('X-EXELO-Confirmation', $confirm)
+        ->postJson('/api/v1/employees', newStaffBody(['pin' => '2468', 'pin_confirmation' => '2469']))
+        ->assertStatus(422)->assertJsonPath('error.code', 'validation.failed');
+    $this->withToken($token)->withHeader('X-EXELO-Confirmation', $confirm)
+        ->postJson('/api/v1/employees', newStaffBody(['pin' => '24', 'pin_confirmation' => '24']))
+        ->assertStatus(422);
+
+    expect(Employee::where('phone_number', '+252634110303')->exists())->toBeFalse();
+
+    // nothing was created and the confirmation still works for a corrected request
+    $this->withToken($token)->withHeader('X-EXELO-Confirmation', $confirm)
+        ->postJson('/api/v1/employees', newStaffBody(['pin' => '2468', 'pin_confirmation' => '2468']))->assertCreated();
+});
+
 it('adds an employee with a PIN confirmation, who then sets a PIN and signs in', function () {
     $owner = makeMerchant('2580');
     goldFor($owner, 30);

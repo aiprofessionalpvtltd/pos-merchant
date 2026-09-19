@@ -100,6 +100,11 @@ class EmployeeService
         $phone = PhoneNumber::normalize($data['phone_number']);
         $permissions = $this->resolvePermissions($actor, $data['permission_keys']);
 
+        // A weak PIN is refused here, before the PIN confirmation is spent
+        if (! empty($data['pin'])) {
+            $this->auth->assertPinAcceptable($data['pin']);
+        }
+
         if ($this->phoneTaken($phone)) {
             throw new ApiException('employee.phone_taken', 'That number already belongs to an EXELO user', 409, [], 'phone_number');
         }
@@ -115,6 +120,11 @@ class EmployeeService
                 'password' => Hash::make(Str::random(40)),
                 'user_type' => 'employee',
             ]);
+
+            // With a PIN the employee can sign in at once; without one they set their own
+            if (! empty($data['pin'])) {
+                $this->auth->setPinFor($user, $data['pin']);
+            }
 
             $employee = Employee::create([
                 'user_id' => $user->id,

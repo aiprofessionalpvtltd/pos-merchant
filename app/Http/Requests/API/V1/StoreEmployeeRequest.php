@@ -23,6 +23,7 @@ class StoreEmployeeRequest extends FormRequest
             'salary.amount' => ['required_with:salary', 'integer', 'min:0'],
             'salary.currency' => ['required_with:salary', 'in:USD,SLSH'],
             'salary_period' => ['nullable', 'in:hourly,daily,monthly'],
+            'pin' => ['nullable', 'string', 'regex:/^\d{4}$/', 'confirmed'],
             'permission_keys' => ['required', 'array', 'min:1'],
             'permission_keys.*' => ['string', 'max:50'],
         ];
