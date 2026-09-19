@@ -12,7 +12,7 @@ use Spatie\Permission\Traits\HasRoles;
 
 class User extends Authenticatable
 {
-    use HasFactory, Notifiable, HasRoles,SoftDeletes , HasApiTokens;
+    use HasApiTokens, HasFactory, HasRoles,Notifiable , SoftDeletes;
 
     /**
      * The attributes that are mass assignable.
@@ -25,6 +25,9 @@ class User extends Authenticatable
         'password',
         'pin',
         'user_type',
+        'pin_failed_attempts',
+        'locked_until',
+        'pin_set_at',
     ];
 
     /**
@@ -41,6 +44,7 @@ class User extends Authenticatable
         'email_verified_at' => 'datetime',
 
     ];
+
     /**
      * Get the attributes that should be cast.
      *
@@ -50,8 +54,30 @@ class User extends Authenticatable
     {
         return [
             'email_verified_at' => 'datetime',
-//            'password' => 'hashed',
+            'locked_until' => 'datetime',
+            'pin_set_at' => 'datetime',
+            //            'password' => 'hashed',
         ];
+    }
+
+    public function hasPin(): bool
+    {
+        return $this->pin_set_at !== null || $this->pin !== null;
+    }
+
+    public function isEmployee(): bool
+    {
+        return $this->user_type === 'employee';
+    }
+
+    /**
+     * The merchant this user acts for: their own, or their employer's.
+     */
+    public function actingMerchant(): ?Merchant
+    {
+        $merchant = $this->isEmployee() ? $this->employee->merchant : $this->merchant;
+
+        return $merchant?->exists ? $merchant : null;
     }
 
     public function merchant()
@@ -63,6 +89,7 @@ class User extends Authenticatable
     {
         return $this->hasOne(Employee::class)->withDefault();
     }
+
     public function order()
     {
         return $this->hasOne(Order::class)->withDefault();

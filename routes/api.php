@@ -14,8 +14,50 @@ use App\Http\Controllers\API\PaymentController;
 use App\Http\Controllers\API\ProductController;
 use App\Http\Controllers\API\ProductInventoryController;
 use App\Http\Controllers\API\SaleController;
-use Illuminate\Http\Request;
+use App\Http\Controllers\API\V1\AuthController;
+use App\Http\Controllers\API\V1\RegistrationController as V1RegistrationController;
 use Illuminate\Support\Facades\Route;
+
+// v1 — see docs/auth.md and docs/registration.md
+Route::prefix('v1')->name('api.v1.')->group(function () {
+    Route::get('geo/states', [V1RegistrationController::class, 'states'])->name('geo.states');
+
+    Route::prefix('registration')->name('registration.')->middleware('throttle:v1-registration')->group(function () {
+        Route::get('quote', [V1RegistrationController::class, 'quote'])->name('quote');
+        Route::post('phone/check', [V1RegistrationController::class, 'checkPhone'])->name('phone.check');
+        Route::post('invoices', [V1RegistrationController::class, 'issueInvoice'])->name('invoices.store');
+        Route::get('invoices/{invoiceId}', [V1RegistrationController::class, 'invoiceStatus'])->name('invoices.show');
+        Route::post('invoices/{invoiceId}/simulate-payment', [V1RegistrationController::class, 'simulatePayment'])->name('invoices.simulate');
+    });
+
+    Route::post('merchants', [V1RegistrationController::class, 'register'])->middleware('throttle:v1-merchant-create')->name('merchants.store');
+
+    Route::prefix('auth')->name('auth.')->group(function () {
+        Route::post('lookup', [AuthController::class, 'lookup'])->middleware('throttle:v1-lookup')->name('lookup');
+
+        Route::middleware(['throttle:v1-credentials', 'device'])->group(function () {
+            Route::post('pin/login', [AuthController::class, 'login'])->name('pin.login');
+            Route::post('pin', [AuthController::class, 'storePin'])->name('pin.store');
+            Route::post('pin/reset', [AuthController::class, 'reset'])->name('pin.reset');
+        });
+
+        Route::middleware('throttle:v1-otp')->group(function () {
+            Route::post('pin/reset/request', [AuthController::class, 'requestReset'])->name('pin.reset.request');
+            Route::post('pin/reset/verify', [AuthController::class, 'verifyReset'])->name('pin.reset.verify');
+        });
+
+        Route::middleware('auth:api')->group(function () {
+            Route::patch('pin', [AuthController::class, 'changePin'])->name('pin.update');
+            Route::post('pin/verify', [AuthController::class, 'verifyPin'])->name('pin.verify');
+            Route::get('session', [AuthController::class, 'session'])->name('session');
+            Route::post('logout', [AuthController::class, 'logout'])->name('logout');
+        });
+    });
+
+    Route::middleware('auth:api')->post('merchants/{id}/verification/complete', [V1RegistrationController::class, 'completeVerification'])
+        ->whereNumber('id')
+        ->name('merchants.verification.complete');
+});
 
 Route::post('login', [PassportAuthController::class, 'login']);
 Route::post('logout', [PassportAuthController::class, 'logout'])->middleware('auth:api');
@@ -25,7 +67,6 @@ Route::post('login/checkInvoice', [PassportAuthController::class, 'checkInvoiceA
 Route::post('user/forgot-password', [PassportAuthController::class, 'forgotPassword']);
 Route::post('user/verify-otp-reset-password', [PassportAuthController::class, 'verifyOtpAndResetPassword']);
 Route::post('user/reset-password', [PassportAuthController::class, 'resetPassword']);
-
 
 Route::post('merchants', [MerchantController::class, 'store']);
 Route::post('merchants/signup', [MerchantController::class, 'signup']);
@@ -44,7 +85,6 @@ Route::post('merchant/invoice/status', [PaymentController::class, 'checkInvoiceS
 Route::post('/zaad/issue', [PaymentController::class, 'callWaafiAPIForPreAuthorize']);
 Route::post('/zaad/commit', [PaymentController::class, 'connectToWaafiCommitAPI']);
 
-
 //Employee
 
 Route::post('/employee/getMerchantDetail', [EmployeeController::class, 'getMerchantDetail']); // Get employee records
@@ -52,9 +92,7 @@ Route::post('/employee/verifyEmployee', [EmployeeController::class, 'verifyEmplo
 Route::post('employee/store-pin', [EmployeeController::class, 'storePin']);
 Route::get('employee/getPOSPermission', [EmployeeController::class, 'getPOSPermission']);
 
-
 Route::post('merchants/checkForDuplicatePhoneNumber', [MerchantController::class, 'checkForDuplicatePhoneNumber']);
-
 
 Route::middleware('auth:api')->group(function () {
 
@@ -64,22 +102,19 @@ Route::middleware('auth:api')->group(function () {
     Route::get('user/getShiftData', [PassportAuthController::class, 'getShiftData']);
     Route::put('user/shift/{shiftId}', [PassportAuthController::class, 'updateShift']);
 
-
     Route::post('merchants/change-pin', [MerchantVerificationController::class, 'changePin']);
     Route::post('merchants/verifyPhoneNumberByCompany', [MerchantController::class, 'verifyPhoneNumberByCompany']);
     Route::post('merchants/verificationComplete', [MerchantController::class, 'verificationComplete']);
     Route::get('merchants/getPhoneNumbersStatus', [MerchantController::class, 'getPhoneNumbersStatus']);
     Route::put('update-merchants', [MerchantController::class, 'update']);
 
-
     // Payment Routes
     Route::prefix('merchant/invoice')->group(function () {
         Route::post('/route', [PaymentController::class, 'routePaymentAPI']);           // Route payment API
         Route::post('/payment', [PaymentController::class, 'makeMerchantPayment']);
         Route::post('/zaad/payment', [PaymentController::class, 'makeMerchantPaymentToWaafi']);
-// Make merchant payment
+        // Make merchant payment
     });
-
 
     // Merchant Routes
     Route::get('/merchants', [MerchantController::class, 'index']);                          // List all merchants
@@ -92,14 +127,12 @@ Route::middleware('auth:api')->group(function () {
     Route::get('/merchants/verify/{merchant_id}', [MerchantVerificationController::class, 'verifyMerchant']);  // Verify a merchant
     Route::post('/merchants/approve', [MerchantVerificationController::class, 'approveMerchant']);             // Approve a merchant
 
-
     // Merchant Subscriptions
     Route::get('/merchants/subscriptions/all', [MerchantSubscriptionController::class, 'index']);  // List all subscriptions
     Route::get('/merchants/subscriptions/current', [MerchantSubscriptionController::class, 'current']);  // List all subscriptions
     Route::get('/merchants/subscriptions/canceled', [MerchantSubscriptionController::class, 'canceled']);  // List all subscriptions
     Route::post('/merchants/subscriptions', [MerchantSubscriptionController::class, 'store']); // Create a subscription
     Route::get('/merchants/subscriptions/{id}/cancel', [MerchantSubscriptionController::class, 'cancel']);  // Cancel a subscription
-
 
     // Sales Routes
     Route::prefix('merchants/sales')->group(function () {
@@ -110,7 +143,7 @@ Route::middleware('auth:api')->group(function () {
     // Merchant Transaction Routes
     Route::post('/merchant/verify-transaction', [MerchantTransactionController::class, 'verifyTransaction']);  // Verify a transaction
 
-// Product Routes
+    // Product Routes
     Route::get('/products', [ProductController::class, 'index']);           // Get all products
     Route::get('/products/merchant', [ProductController::class, 'getByMerchant']); // Get products by merchant
     Route::get('products/category/{category_id}', [ProductController::class, 'getProductsByCategory']);
@@ -148,7 +181,7 @@ Route::middleware('auth:api')->group(function () {
     Route::put('/product-inventories/{inventory}', [ProductInventoryController::class, 'update']); // Update a product inventory
     Route::delete('/product-inventories/{inventory}', [ProductInventoryController::class, 'destroy']); // Delete a product inventory
 
-// Product Inventory Transfer Routes
+    // Product Inventory Transfer Routes
     Route::post('inventory/transfer/shop-to-stock', [ProductInventoryController::class, 'transferShopToStock']);
     Route::post('inventory/transfer/stock-to-shop', [ProductInventoryController::class, 'transferStockToShop']);
     Route::post('inventory/transfer/transportation-to-shop', [ProductInventoryController::class, 'transferTransportationToShop']);
@@ -161,10 +194,8 @@ Route::middleware('auth:api')->group(function () {
     Route::post('inventory/updateInventory', [ProductInventoryController::class, 'updateInventory']);
     Route::get('inventory/getSoldItems', [ProductInventoryController::class, 'getSoldItems']);
 
-
     Route::get('/getTransactionReport', [DashboardController::class, 'getTransactionReport']);
-        Route::get('/getInventoryReport', [DashboardController::class, 'getInventoryReport']);
-
+    Route::get('/getInventoryReport', [DashboardController::class, 'getInventoryReport']);
 
     // Cart and Order routes
     Route::post('/cart/add', [OrderController::class, 'addToCart']);
@@ -188,7 +219,6 @@ Route::middleware('auth:api')->group(function () {
 
     Route::delete('/order/delete/{orderID}', [OrderController::class, 'deleteOrder']); // Show checkout details
 
-
     // Category Routes
     Route::prefix('categories')->group(function () {
         Route::get('/', [CategoryController::class, 'index']);           // List all categories
@@ -199,7 +229,6 @@ Route::middleware('auth:api')->group(function () {
         Route::delete('/{id}', [CategoryController::class, 'destroy']); // Delete a category
         Route::post('/search', [CategoryController::class, 'search']); // Delete a category
     });
-
 
     // Employee Module Routes
     Route::post('/employee', [EmployeeController::class, 'store']); // Store employee

@@ -14,4 +14,8 @@ class Otp extends Model
         'otp',      // The OTP code
         'expires_at', // Expiration time of the OTP
     ];
+
+    protected $casts = [
+        'expires_at' => 'datetime',
+    ];
 }

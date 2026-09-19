@@ -7,16 +7,31 @@ use Illuminate\Database\Eloquent\Model;
 
 class POSPermission extends Model
 {
-     use HasFactory;
+    use HasFactory;
 
     protected $fillable = ['name'];
+
     protected $table = 'pos_permissions';
+
+    private const KEYS = [
+        'POS' => 'pos',
+        'Inventory' => 'inventory',
+        'Transactions' => 'transactions',
+        'Employee Management' => 'employees',
+        'Reports' => 'reports',
+    ];
+
+    /**
+     * Stable identifier clients authorise on; `name` is display only.
+     */
+    public function getPermissionKeyAttribute(): string
+    {
+        return self::KEYS[$this->name] ?? \Illuminate\Support\Str::slug($this->name, '_');
+    }
 
     // Relationship to Employees
     public function employees()
     {
         return $this->belongsToMany(Employee::class, 'employee_permissions');
     }
-
-
 }

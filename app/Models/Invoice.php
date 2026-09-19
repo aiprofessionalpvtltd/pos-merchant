@@ -35,7 +35,25 @@ class Invoice extends Model
         'e_transaction_id',
         'type',
         'payment_method',
+        'public_id',
+        'rail',
+        'wallet_number',
+        'expires_at',
+        'paid_at',
+        'consumed_at',
+        'error_reason',
     ];
+
+    protected $casts = [
+        'expires_at' => 'datetime',
+        'paid_at' => 'datetime',
+        'consumed_at' => 'datetime',
+    ];
+
+    public function scopePaid($query)
+    {
+        return $query->where('status', 'Paid');
+    }
 
     public function order()
     {
@@ -51,6 +69,4 @@ class Invoice extends Model
     {
         return $this->hasMany(Transaction::class);
     }
-
-
 }
