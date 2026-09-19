@@ -39,6 +39,26 @@
                         <div class="card mb-0">
                             <div class="card-body">
 
+                                @if(session('error'))
+                                    <div class="alert alert-danger">{{ session('error') }}</div>
+                                @endif
+
+                                <div class="row mb-3">
+                                    <div class="col-md-12">
+                                        <p class="mb-1"><strong>Merchant:</strong>
+                                            <a href="{{ route('view-merchant', $subscription->merchant_id) }}">{{ $summary['merchant_name'] }}</a>
+                                            ({{ $summary['phone_number'] ?? 'no phone' }})</p>
+                                        <p class="mb-1"><strong>Current plan:</strong>
+                                            {{ $subscription->subscriptionPlan?->name ?? '—' }}
+                                            <span class="badge bg-secondary">{{ $summary['state']['label'] }}</span></p>
+                                        <p class="text-muted mb-0">Changing the plan here skips the payment flow. Use it for support cases or cash arranged outside the app. Any cancellation or scheduled downgrade is cleared.</p>
+                                    </div>
+                                </div>
+
+                                @unless($summary['is_current'])
+                                    <div class="alert alert-warning">This is not the merchant's current subscription, so it cannot be changed.</div>
+                                @endunless
+
                                 <div class="row">
 
                                     <div class="col-md-4">
@@ -51,12 +71,11 @@
                                                     class="form-control select2 mb-3 "
                                                     data-fouc>
                                                 <option></option>
-                                                <option {{($subscription->subscription_plan_id == 1) ? 'selected' : ''}}  value="1">Gold Package
-                                                </option>
-                                                <option {{($subscription->subscription_plan_id == 2) ? 'selected' : ''}}  value="2">
-                                                    Silver Package
-                                                </option>
-
+                                                @foreach($plans as $plan)
+                                                    <option data-default="{{ $plan->is_default ? 1 : 0 }}"
+                                                            {{ (int) old('subscription_plan_id', $subscription->subscription_plan_id) === $plan->id ? 'selected' : '' }}
+                                                            value="{{ $plan->id }}">{{ $plan->name }}@if($plan->price_slsh) — {{ number_format($plan->price_slsh) }} SLSH @else — Free @endif</option>
+                                                @endforeach
                                             </select>
                                             @if ($errors->has('subscription_plan_id'))
                                                 <span
@@ -64,10 +83,21 @@
                                             @endif
                                         </div>
                                     </div>
+
+                                    <div class="col-md-4">
+                                        <label class="col-form-label">End date</label>
+                                        <input type="date" name="end_date" id="end_date" class="form-control mb-1"
+                                               min="{{ now()->addDay()->toDateString() }}"
+                                               value="{{ old('end_date', $subscription->end_date) }}">
+                                        <small class="text-muted">Required for a paid plan. The free plan never expires.</small>
+                                        @if ($errors->has('end_date'))
+                                            <span class="text-danger d-block">{{ $errors->first('end_date') }}</span>
+                                        @endif
+                                    </div>
                                 </div>
                                 <div class="row mt-4">
                                     <div class="col-md-4">
-                                        <button type="submit"
+                                        <button type="submit" {{ $summary['is_current'] ? '' : 'disabled' }}
                                                 class="btn  btn-outline-primary float-end">
                                             <b><i class="icon-plus3"></i></b> Update
                                         </button>

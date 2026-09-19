@@ -38,6 +38,7 @@ class Invoice extends Model
         'public_id',
         'rail',
         'wallet_number',
+        'subscription_plan_id',
         'expires_at',
         'paid_at',
         'consumed_at',
@@ -49,6 +50,11 @@ class Invoice extends Model
         'paid_at' => 'datetime',
         'consumed_at' => 'datetime',
     ];
+
+    public static function generatePublicId(): string
+    {
+        return 'inv_'.\Illuminate\Support\Str::upper(\Illuminate\Support\Str::ulid()->toBase32());
+    }
 
     public function scopePaid($query)
     {

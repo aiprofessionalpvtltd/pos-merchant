@@ -18,6 +18,10 @@ class MerchantSubscription extends Model
         'transaction_status',
         'is_canceled',
         'canceled_at',
+        'next_plan_id',
+        'cancel_reason',
+        'cancel_comment',
+        'invoice_id',
     ];
 
     protected $casts = [
@@ -35,5 +39,13 @@ class MerchantSubscription extends Model
         return $this->belongsTo(SubscriptionPlan::class);
     }
 
+    public function nextPlan()
+    {
+        return $this->belongsTo(SubscriptionPlan::class, 'next_plan_id');
+    }
 
+    public function invoice()
+    {
+        return $this->belongsTo(Invoice::class);
+    }
 }

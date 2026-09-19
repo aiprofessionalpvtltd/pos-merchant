@@ -183,6 +183,12 @@ already exists from an earlier attempt. The client should adopt the record from
 | `subscription.already_on_plan` | 409 | | |
 | `subscription.change_pending` | 409 | Earlier change still settling | `charge_id` |
 | `subscription.plan_unavailable` | 422 | Not offered to this merchant | |
+| `subscription.charge_closed` | 409 | Idempotency key belongs to a failed, expired or cancelled payment; use a new key | `charge_id`, `status` |
+| `subscription.already_cancelled` | 409 | The plan is already set to end | |
+| `subscription.nothing_to_cancel` | 409 | On the default plan, or the paid plan has already lapsed | |
+| `charge.not_found` | 404 | No such charge for this shop | |
+| `invoice.not_pending` | 409 | Only a pending payment can be confirmed or simulated | |
+| `invoice.not_cash` | 409 | Cash confirmation on a non-cash payment | |
 
 `plan.feature_unavailable` should route to the upgrade screen with
 `details.required_plan` preselected, not show a raw error.

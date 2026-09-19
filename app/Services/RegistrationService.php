@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Models\MerchantSubscription;
+use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Support\ApiResponse;
 use App\Support\PhoneNumber;
@@ -19,7 +20,7 @@ class RegistrationService
 {
     private const TYPES = ['registration' => 'Registration', 'verification' => 'Verification'];
 
-    public function __construct(private readonly WalletGateway $gateway) {}
+    public function __construct(private readonly WalletGateway $gateway, private readonly InvoicePaymentService $payments) {}
 
     public function states(): array
     {
@@ -148,7 +149,7 @@ class RegistrationService
         }
 
         if ($invoice->status === 'Pending') {
-            $this->refreshFromProvider($invoice);
+            $this->payments->refresh($invoice);
         }
 
         return match ($invoice->status) {
@@ -252,13 +253,15 @@ class RegistrationService
                 'is_approved' => true,
             ])->save();
 
-            $planId = config('exelo.default_subscription_plan_id');
+            $plan = SubscriptionPlan::default()->orderBy('id')->first() ?? SubscriptionPlan::find(config('exelo.default_subscription_plan_id'));
+            $planId = $plan->id;
 
+            // The default plan never expires, so it has no end date.
             MerchantSubscription::create([
                 'merchant_id' => $merchant->id,
                 'subscription_plan_id' => $planId,
                 'start_date' => now(),
-                'end_date' => now()->addMonth(),
+                'end_date' => $plan->is_default ? null : now()->addMonth(),
                 'transaction_status' => 'Paid',
             ]);
 
@@ -339,47 +342,21 @@ class RegistrationService
             throw new ApiException('not_found', 'Not found', 404);
         }
 
-        $invoice = Invoice::where('public_id', $publicId)->whereIn('type', array_values(self::TYPES))->first();
+        $invoice = Invoice::where('public_id', $publicId)
+            ->whereIn('type', [...array_values(self::TYPES), 'Subscription'])
+            ->first();
 
         if (! $invoice) {
             throw new ApiException('invoice.not_found', 'We could not find that payment', 404);
         }
 
-        if ($invoice->status !== 'Pending') {
-            throw new ApiException('invoice.not_pending', 'Only a pending invoice can be simulated', 409);
-        }
+        $this->payments->simulate($invoice, $outcome);
 
-        if ($outcome === 'paid') {
-            $invoice->update(['status' => 'Paid', 'paid_at' => now(), 'e_transaction_id' => 'SIMULATED']);
-        } else {
-            $invoice->update(['status' => ucfirst($outcome), 'error_reason' => 'Simulated '.$outcome]);
+        if ($invoice->type === 'Subscription') {
+            return ['message' => null, 'data' => $this->payments->chargePayload($invoice->refresh())];
         }
 
         return $this->invoiceStatus($publicId);
-    }
-
-    private function refreshFromProvider(Invoice $invoice): void
-    {
-        $result = $this->gateway->status($invoice);
-
-        if ($result['status'] === 'Paid') {
-            $invoice->update([
-                'status' => 'Paid',
-                'paid_at' => now(),
-                'e_transaction_id' => $result['provider_transaction_id'] ?? $invoice->e_transaction_id,
-            ]);
-
-            return;
-        }
-
-        if ($result['status'] === 'Pending' && $invoice->expires_at?->isFuture()) {
-            return;
-        }
-
-        $invoice->update([
-            'status' => $result['status'] === 'Pending' ? 'Expired' : $result['status'],
-            'error_reason' => $result['reason'],
-        ]);
     }
 
     private function pendingPayload(Invoice $invoice, ?string $message = null): array

@@ -58,6 +58,9 @@ Route::middleware(['auth'])->group(function () {
 
     //Invoice Controllers
     Route::get('/admin/invoices', [InvoiceController::class, 'show'])->name('admin.invoices.show');
+    Route::post('/admin/invoices/{invoice}/confirm-cash', [InvoiceController::class, 'confirmCash'])->name('admin.invoices.confirm-cash');
+    Route::get('/admin/invoices/{invoice}/document', [InvoiceController::class, 'document'])->name('admin.invoices.document');
+    Route::get('/admin/invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])->name('admin.invoices.pdf');
 
 
     //Invoice Controllers

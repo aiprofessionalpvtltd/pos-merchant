@@ -23,6 +23,15 @@ return [
 
     'confirmation_ttl_seconds' => 300,
 
+    'subscription' => [
+        // Days after expiry a plan stays usable, because a shop can be offline for days.
+        'grace_days' => (int) env('SUBSCRIPTION_GRACE_DAYS', 5),
+        // A paid plan can be renewed once it is this close to expiring.
+        'renew_window_days' => 7,
+        // How long a cash payment waits for staff confirmation.
+        'cash_ttl_hours' => 72,
+    ],
+
     'registration' => [
         'quote_ttl_seconds' => 900,
         'invoice_ttl_seconds' => 600,

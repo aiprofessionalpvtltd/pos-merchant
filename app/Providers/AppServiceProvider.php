@@ -29,7 +29,7 @@ class AppServiceProvider extends ServiceProvider
     public function boot(): void
     {
         // Separate counters per group; the throttle:N,1 shorthand shares one counter per IP.
-        foreach (['v1-lookup' => 30, 'v1-credentials' => 20, 'v1-otp' => 10, 'v1-registration' => 60, 'v1-merchant-create' => 20] as $name => $perMinute) {
+        foreach (['v1-lookup' => 30, 'v1-credentials' => 20, 'v1-otp' => 10, 'v1-registration' => 60, 'v1-merchant-create' => 20, 'v1-subscription' => 30] as $name => $perMinute) {
             RateLimiter::for($name, fn (Request $request) => Limit::perMinute($perMinute)->by($name.'|'.$request->ip()));
         }
 

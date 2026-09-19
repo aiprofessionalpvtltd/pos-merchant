@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Services\UserDirectoryService;
 use Carbon\Carbon;
 use DB;
 use File;
@@ -32,19 +33,25 @@ class UserController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function show()
+    public function show(UserDirectoryService $directory)
     {
         $data = array();
         $title = 'Add User';
-        $users = User::with('roles')
+        $users = User::with([
+            'roles',
+            'merchant.currentSubscription.subscriptionPlan',
+            'employee.merchant.currentSubscription.subscriptionPlan',
+        ])
             ->where('id', '>', auth()->user()->id)
             ->whereDoesntHave('roles', function($query) {
                 $query->where('name', 'Super Admin');
             })
             ->orderBy('created_at', 'DESC')
             ->get();
-//        dd($users);
-        return view('admin.user.index', compact('title', 'users', 'data'));
+
+        $rows = $directory->rows($users);
+
+        return view('admin.user.index', compact('title', 'rows', 'data'));
     }
 
     /**

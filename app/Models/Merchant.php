@@ -104,7 +104,8 @@ class Merchant extends Model
 //                            ->whereDate('end_date', '>=', now()); // Canceled but valid until end_date
 //                    });
 //            })
-            ->latest(); // Get the most recent valid subscription
+            ->latest()
+            ->latest('id'); // Most recent row; id breaks ties between rows created in the same second
     }
 
 

@@ -127,7 +127,12 @@ it('issues an invoice, polls to paid, registers, then lets the merchant set a PI
         ->assertJsonPath('data.merchant.city', 'Hargeisa')
         ->assertJsonPath('data.merchant.merchant_code', 'TEST-EXL-102');
 
-    expect(Merchant::where('phone_number', NEW_PHONE)->first()->is_approved)->toBeTruthy();
+    $merchant = Merchant::where('phone_number', NEW_PHONE)->first();
+    expect($merchant->is_approved)->toBeTruthy();
+
+    // the default plan never expires, so its row has no end date
+    $row = App\Models\MerchantSubscription::where('merchant_id', $merchant->id)->first();
+    expect($row->subscription_plan_id)->toBe(App\Models\SubscriptionPlan::default()->value('id'))->and($row->end_date)->toBeNull();
 });
 
 it('does not double-issue when the same idempotency key is replayed', function () {

@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(php -r \"echo extension_loaded\\('gd'\\)?'gd yes':'gd no', ' ', extension_loaded\\('mbstring'\\)?'mb yes':'mb no', PHP_EOL;\")"
+    ]
+  }
+}

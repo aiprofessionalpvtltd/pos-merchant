@@ -55,10 +55,10 @@ Base URL today: `https://exelo.aiprofessionals.co`. All v1 paths are relative to
 
 | Legacy | v1 | Note |
 | --- | --- | --- |
-| `GET /api/merchants/subscriptions/current` | `GET /subscription` | No longer needed at splash |
-| `POST /api/merchants/subscriptions` | `POST /subscription/change` | |
-| `GET /api/merchants/subscriptions/1/cancel` | `POST /subscription/cancel` | Was commented out; was a GET that mutated |
-| — | `GET /plans` | New — plan catalogue |
+| `GET /api/merchants/subscriptions/current` | `GET /subscription` | No longer needed at splash. **Implemented** (v1 never creates a row on read) |
+| `POST /api/merchants/subscriptions` | `POST /subscription/change` | **Implemented.** The legacy route still grants a plan without payment; v1 requires payment |
+| `GET /api/merchants/subscriptions/1/cancel` | `POST /subscription/cancel` | **Implemented.** Was commented out; was a GET that mutated |
+| — | `GET /plans` | New — plan catalogue. **Implemented** |
 
 ---
 

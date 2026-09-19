@@ -6,6 +6,7 @@ use App\Models\Merchant;
 use App\Models\POSPermission;
 use App\Models\Shift;
 use App\Models\User;
+use App\Services\SubscriptionService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -96,43 +97,16 @@ class SessionResource extends JsonResource
 
     private function subscriptionBlock(Merchant $merchant): array
     {
-        $merchant->loadMissing('currentSubscription.subscriptionPlan');
-        $subscription = $merchant->currentSubscription;
-
-        if (! $subscription) {
-            $planId = config('exelo.default_subscription_plan_id');
-
-            return $this->planBlock($planId, null, 'active', null);
-        }
-
-        if ($subscription->is_canceled) {
-            $status = 'canceled';
-        } elseif ($subscription->end_date && now()->gt($subscription->end_date)) {
-            $status = 'expired';
-        } else {
-            $status = 'active';
-        }
-
-        return $this->planBlock(
-            $subscription->subscription_plan_id,
-            $subscription->subscriptionPlan?->name,
-            $status,
-            $subscription->end_date,
-        );
-    }
-
-    private function planBlock(int $planId, ?string $planName, string $status, mixed $endDate): array
-    {
-        $names = [1 => 'gold', 2 => 'silver'];
+        $state = app(SubscriptionService::class)->state($merchant);
 
         $block = [
-            'plan_id' => $planId,
-            'plan' => $planName ? Str::lower(Str::before($planName, ' ')) : ($names[$planId] ?? null),
-            'status' => $status,
+            'plan_id' => $state->plan->id,
+            'plan' => $state->plan->key,
+            'status' => $state->status,
         ];
 
         if (! $this->isFull) {
-            $block['expires_at'] = $endDate ? ApiResponse::iso(\Illuminate\Support\Carbon::parse($endDate)->endOfDay()) : null;
+            $block['expires_at'] = ApiResponse::iso($state->expiresAt);
         }
 
         return $block;

@@ -9,6 +9,7 @@ use App\Models\Merchant;
 use App\Models\Order;
 use App\Models\Sale;
 use App\Models\Transaction;
+use App\Services\MerchantDirectoryService;
 use Carbon\Carbon;
 use DB;
 use File;
@@ -26,10 +27,10 @@ class MerchantController extends Controller
     public function __construct()
     {
         $this->middleware('auth');
-        $this->middleware(['permission:view-merchant'])->only(['index', 'show']);
+        $this->middleware(['permission:view-merchant'])->only(['index', 'show', 'view']);
         $this->middleware(['permission:edit-merchant'])->only(['edit', 'update', 'resetID', 'changePassword', 'change']);
         $this->middleware(['permission:create-merchant'])->only(['create', 'store']);
-        $this->middleware(['permission:delete-merchant'])->only('destroy');
+        $this->middleware(['permission:delete-merchant'])->only(['destroy', 'delete']);
     }
 
     /**
@@ -37,11 +38,31 @@ class MerchantController extends Controller
      *
      * @return \Illuminate\Http\JsonResponse
      */
-    public function index(Request $request)
+    public function index(Request $request, MerchantDirectoryService $directory)
     {
         if ($request->ajax()) {
-            $merchants = Merchant::with('user')->get();
+            // A query, not ->get(): DataTables pages, sorts and searches in the database.
+            $merchants = Merchant::query()->with(['user', 'currentSubscription.subscriptionPlan']);
+
+            $rows = [];
+            $row = function (Merchant $merchant) use (&$rows, $directory) {
+                return $rows[$merchant->id] ??= $directory->listRow($merchant);
+            };
+
             return DataTables::of($merchants)
+                ->addColumn('name', fn (Merchant $merchant) => trim($merchant->first_name . ' ' . $merchant->last_name))
+                ->filterColumn('name', fn ($query, $keyword) => $query->whereRaw("concat_ws(' ', first_name, last_name) like ?", ["%{$keyword}%"]))
+                ->orderColumn('name', 'first_name $1')
+                ->addColumn('address', fn (Merchant $merchant) => $row($merchant)['address'])
+                ->filterColumn('address', fn ($query, $keyword) => $query->where(function ($inner) use ($keyword) {
+                    $inner->where('location', 'like', "%{$keyword}%")
+                        ->orWhere('city', 'like', "%{$keyword}%")
+                        ->orWhere('state', 'like', "%{$keyword}%");
+                }))
+                ->addColumn('plan', fn (Merchant $merchant) => $row($merchant)['plan'])
+                ->addColumn('pin', fn (Merchant $merchant) => $row($merchant)['pin'])
+                ->addColumn('wallets', fn (Merchant $merchant) => $row($merchant)['wallets'])
+                ->editColumn('created_at', fn (Merchant $merchant) => $merchant->created_at?->format('d M Y'))
                 ->addColumn('action', function ($merchant) {
                     $viewBtn = '';
                     $deleteBtn = '';
@@ -69,21 +90,18 @@ class MerchantController extends Controller
      *
      * @return \Illuminate\Http\Response
      */
-    public function view($id)
+    public function view($id, MerchantDirectoryService $directory)
     {
         $title = 'View Merchant';
         $merchant = Merchant::with('user')->find($id);
 
         if (!$merchant) {
-            return redirect()->route('show-merchant')->with('error', 'Merchant not found.');
+            return redirect()->route('admin.merchant.index')->with('error', 'Merchant not found.');
         }
 
-        // Load orders, invoices, and transactions
-        $orders = Order::where('merchant_id', $merchant->id)->get();
-        $invoices = Invoice::where('merchant_id', $merchant->id)->get();
-        $transactions = Transaction::where('merchant_id', $merchant->id)->get();
+        $detail = $directory->detail($merchant);
 
-        return view('admin.merchant.view', compact('merchant', 'title', 'orders', 'invoices', 'transactions'));
+        return view('admin.merchant.view', compact('merchant', 'title', 'detail'));
     }
 
 
@@ -96,20 +114,26 @@ class MerchantController extends Controller
         if (!$merchant) {
             return response()->json(['error' => 'Merchant not found.'], 404);
         }
-        // Update the employee's status to 'inactive'
-        $merchant->update([
-            'phone_number' => 0,
-            'edahab_number' => 0,
-            'zaad_number' => 0,
-            'golis_number' => 0,
-            'evc_number' => 0,
-        ]);
+        // All or nothing: a half-deleted merchant would keep a usable login.
+        DB::transaction(function () use ($merchant) {
+            $merchant->update([
+                'phone_number' => 0,
+                'edahab_number' => 0,
+                'zaad_number' => 0,
+                'golis_number' => 0,
+                'evc_number' => 0,
+            ]);
 
-        $merchant->delete();
-        $merchant->user->update([
-            'email' => 'deleted'.$id.'@email.com',
-        ]);
-        $merchant->user->delete();
+            $merchant->delete();
+
+            if ($merchant->user->exists) {
+                $merchant->user->update([
+                    'email' => 'deleted' . $merchant->id . '@email.com',
+                ]);
+                $merchant->user->delete();
+            }
+        });
+
         return response()->json(['success' => 'Merchant has been deleted successfully.']);
     }
 

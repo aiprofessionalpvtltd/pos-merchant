@@ -15,7 +15,9 @@ use App\Http\Controllers\API\ProductController;
 use App\Http\Controllers\API\ProductInventoryController;
 use App\Http\Controllers\API\SaleController;
 use App\Http\Controllers\API\V1\AuthController;
+use App\Http\Controllers\API\V1\PaymentChargeController;
 use App\Http\Controllers\API\V1\RegistrationController as V1RegistrationController;
+use App\Http\Controllers\API\V1\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 
 // v1 — see docs/auth.md and docs/registration.md
@@ -52,6 +54,15 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('session', [AuthController::class, 'session'])->name('session');
             Route::post('logout', [AuthController::class, 'logout'])->name('logout');
         });
+    });
+
+    Route::get('plans', [SubscriptionController::class, 'plans'])->middleware('throttle:v1-subscription')->name('plans.index');
+
+    Route::middleware(['auth:api', 'throttle:v1-subscription'])->group(function () {
+        Route::get('subscription', [SubscriptionController::class, 'show'])->name('subscription.show');
+        Route::post('subscription/change', [SubscriptionController::class, 'change'])->name('subscription.change');
+        Route::post('subscription/cancel', [SubscriptionController::class, 'cancel'])->name('subscription.cancel');
+        Route::get('payments/charges/{chargeId}', [PaymentChargeController::class, 'show'])->name('payments.charges.show');
     });
 
     Route::middleware('auth:api')->post('merchants/{id}/verification/complete', [V1RegistrationController::class, 'completeVerification'])
