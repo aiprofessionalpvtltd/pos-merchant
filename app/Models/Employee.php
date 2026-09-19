@@ -19,7 +19,15 @@ class Employee extends Model
         'location',
         'role',
         'salary',
+        'salary_currency',
+        'salary_period',
+        'removed_at',
+        'former_phone_number',
         'status',
+    ];
+
+    protected $casts = [
+        'removed_at' => 'datetime',
     ];
 
     // Relationship to User
@@ -37,5 +45,10 @@ class Employee extends Model
     public function permissions()
     {
         return $this->hasMany(EmployeePermission::class, 'employee_id');
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('status', 'active');
     }
 }

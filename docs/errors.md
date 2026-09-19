@@ -172,6 +172,8 @@ already exists from an earlier attempt. The client should adopt the record from
 | `shift.already_active` | 409 | Already clocked in; `details.shift` |
 | `shift.already_ended` | 409 | |
 | `shift.end_before_start` | 422 | |
+| `shift.not_found` | 404 | Not a shift of this user or shop | |
+| `shift.time_in_future` | 422 | Time more than 5 minutes ahead of the server | |
 
 ---
 

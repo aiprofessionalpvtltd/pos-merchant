@@ -515,8 +515,8 @@ Legacy `/api/login/*` and `/api/employee/*` routes are unchanged.
   bound to `LogSmsSender` (logs in `local` only) until a provider is chosen.
 - **Reset token** is single use and valid 10 minutes. Resetting revokes every
   token for the user, then signs in the calling device.
-- **`confirmation_token`** is stored for five minutes with its `scope`. Endpoints
-  that require `X-EXELO-Confirmation` (e.g. `POST /employees`) must consume it.
+- **`confirmation_token`** is stored for five minutes with its `scope`. It is single-use:
+  `POST /employees` consumes it (scope `employees.create`), see [employees.md](employees.md).
 - **Rate limits.** `lookup` 30/min, login and PIN create/reset 20/min, OTP
   request and verify 10/min per IP.
 - **Merchant fields.** `currency` is `USD`, `alt_currency` is `SLSH`,

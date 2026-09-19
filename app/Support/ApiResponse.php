@@ -7,7 +7,10 @@ use Illuminate\Support\Str;
 
 class ApiResponse
 {
-    public static function success(mixed $data = null, ?string $message = null, int $status = 200): JsonResponse
+    /**
+     * @param  array<string, mixed>  $meta  Extra meta, such as pagination, merged after the standard fields
+     */
+    public static function success(mixed $data = null, ?string $message = null, int $status = 200, array $meta = []): JsonResponse
     {
         $body = ['success' => true];
 
@@ -16,7 +19,7 @@ class ApiResponse
         }
 
         $body['data'] = $data;
-        $body['meta'] = self::meta();
+        $body['meta'] = self::meta() + $meta;
 
         return response()->json($body, $status);
     }

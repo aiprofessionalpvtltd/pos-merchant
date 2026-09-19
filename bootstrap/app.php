@@ -24,6 +24,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'role_or_permission' => \Spatie\Permission\Middleware\RoleOrPermissionMiddleware::class,
             'merchant' => \App\Http\Middleware\Merchant::class,
             'device' => \App\Http\Middleware\RequireDeviceId::class,
+            'pos.permission' => \App\Http\Middleware\RequirePosPermission::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {

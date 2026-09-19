@@ -15,8 +15,10 @@ use App\Http\Controllers\API\ProductController;
 use App\Http\Controllers\API\ProductInventoryController;
 use App\Http\Controllers\API\SaleController;
 use App\Http\Controllers\API\V1\AuthController;
+use App\Http\Controllers\API\V1\EmployeeController as V1EmployeeController;
 use App\Http\Controllers\API\V1\PaymentChargeController;
 use App\Http\Controllers\API\V1\RegistrationController as V1RegistrationController;
+use App\Http\Controllers\API\V1\ShiftController;
 use App\Http\Controllers\API\V1\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 
@@ -63,6 +65,26 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('subscription/change', [SubscriptionController::class, 'change'])->name('subscription.change');
         Route::post('subscription/cancel', [SubscriptionController::class, 'cancel'])->name('subscription.cancel');
         Route::get('payments/charges/{chargeId}', [PaymentChargeController::class, 'show'])->name('payments.charges.show');
+    });
+
+    Route::middleware(['auth:api', 'throttle:v1-staff'])->group(function () {
+        Route::get('permissions', [V1EmployeeController::class, 'permissions'])->name('permissions.index');
+
+        Route::middleware('pos.permission:employees')->prefix('employees')->name('employees.')->group(function () {
+            Route::get('/', [V1EmployeeController::class, 'index'])->name('index');
+            Route::post('/', [V1EmployeeController::class, 'store'])->name('store');
+            Route::get('summary', [V1EmployeeController::class, 'summary'])->name('summary');
+            Route::get('{id}', [V1EmployeeController::class, 'show'])->whereNumber('id')->name('show');
+            Route::patch('{id}', [V1EmployeeController::class, 'update'])->whereNumber('id')->name('update');
+            Route::delete('{id}', [V1EmployeeController::class, 'destroy'])->whereNumber('id')->name('destroy');
+        });
+
+        Route::prefix('shifts')->name('shifts.')->group(function () {
+            Route::get('/', [ShiftController::class, 'index'])->name('index');
+            Route::post('start', [ShiftController::class, 'start'])->name('start');
+            Route::post('{id}/end', [ShiftController::class, 'end'])->whereNumber('id')->name('end');
+            Route::patch('{id}', [ShiftController::class, 'update'])->whereNumber('id')->name('update');
+        });
     });
 
     Route::middleware('auth:api')->post('merchants/{id}/verification/complete', [V1RegistrationController::class, 'completeVerification'])

@@ -71,6 +71,32 @@ class User extends Authenticatable
     }
 
     /**
+     * Permission keys this user holds. Shop owners hold every key; staff hold the
+     * ones they were given; anyone else holds none.
+     *
+     * @return array<int, string>
+     */
+    public function posPermissionKeys(): array
+    {
+        if ($this->user_type === 'merchant') {
+            return POSPermission::all()->map->permission_key->all();
+        }
+
+        if (! $this->isEmployee()) {
+            return [];
+        }
+
+        return $this->employee->permissions()->with('permission')->get()
+            ->pluck('permission')->filter()
+            ->map->permission_key->values()->all();
+    }
+
+    public function hasPosPermission(string $key): bool
+    {
+        return in_array($key, $this->posPermissionKeys(), true);
+    }
+
+    /**
      * The merchant this user acts for: their own, or their employer's.
      */
     public function actingMerchant(): ?Merchant

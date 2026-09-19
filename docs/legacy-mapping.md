@@ -145,6 +145,8 @@ Base URL today: `https://exelo.aiprofessionals.co`. All v1 paths are relative to
 
 ## Employees & shifts
 
+**Implemented** — see [employees.md](employees.md). The legacy routes still work alongside.
+
 | Legacy | v1 | Note |
 | --- | --- | --- |
 | `GET /api/employee` | `GET /employees` | |

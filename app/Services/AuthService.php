@@ -130,6 +130,33 @@ class AuthService
         return ['confirmation_token' => $token, 'expires_at' => ApiResponse::iso($expiresAt)];
     }
 
+    /**
+     * Checks a PIN confirmation token without using it, so a request that fails
+     * validation later does not cost the merchant another PIN entry.
+     */
+    public function assertConfirmation(User $user, ?string $token, string $scope): void
+    {
+        $confirmation = $token ? Cache::get('pin-confirmation:'.$token) : null;
+
+        $isValid = $confirmation
+            && $confirmation['user_id'] === $user->id
+            && ($confirmation['scope'] === null || $confirmation['scope'] === $scope);
+
+        if (! $isValid) {
+            throw new ApiException('auth.confirmation_required', 'Enter your PIN to continue', 401);
+        }
+    }
+
+    /**
+     * Uses a confirmation token: each PIN entry authorises exactly one action.
+     */
+    public function consumeConfirmation(User $user, ?string $token, string $scope): void
+    {
+        $this->assertConfirmation($user, $token, $scope);
+
+        Cache::forget('pin-confirmation:'.$token);
+    }
+
     public function requestPinReset(string $phoneNumber): array
     {
         $e164 = PhoneNumber::normalize($phoneNumber);

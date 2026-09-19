@@ -113,6 +113,23 @@ class SubscriptionService
     }
 
     /**
+     * Refuses an action the merchant's current plan does not include.
+     */
+    public function requireFeature(Merchant $merchant, string $feature): void
+    {
+        if (in_array($feature, $this->state($merchant)->features, true)) {
+            return;
+        }
+
+        $requiredPlan = $this->plans()->first(fn (SubscriptionPlan $plan) => $plan->hasFeature($feature));
+
+        throw new ApiException('plan.feature_unavailable', 'This is part of the '.($requiredPlan ? self::planName($requiredPlan) : 'paid').' plan', 403, [
+            'feature' => $feature,
+            'required_plan' => $requiredPlan?->key,
+        ]);
+    }
+
+    /**
      * Upgrade or renew (returns an invoice to pay) or schedule a downgrade.
      *
      * @return array{status: int, message: string, data: array}
