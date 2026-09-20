@@ -105,7 +105,7 @@ class PaymentService
      *
      * @return array{amount: int, payer: 'customer'|'merchant'}
      */
-    private function fee(Merchant $merchant, string $rail, int $amount): array
+    public function fee(Merchant $merchant, string $rail, int $amount): array
     {
         $payer = $this->subscriptions->state($merchant)->effectivePlan->key === 'gold' ? 'customer' : 'merchant';
 

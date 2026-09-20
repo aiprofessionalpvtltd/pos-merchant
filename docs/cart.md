@@ -15,6 +15,58 @@ alone.
 | POST | [`/cart/pay`](#post-cartpay) | Bearer · `pos` |
 | POST | [`/cart/hold`](#post-carthold) | Bearer · `pos` |
 
+> **Status: implemented.** All eight endpoints are live and tested. See
+> [Implementation notes](#implementation-notes) for the rules the server applies
+> and the few differences from the first draft of this spec.
+
+---
+
+## Complete endpoint list
+
+Full URL = `{BASE_URL}/api/v1` + path. Every cart endpoint needs the `pos` permission.
+
+**Headers**
+
+| Header | Sent on | Value |
+| --- | --- | --- |
+| `Accept` | Every request | `application/json` |
+| `Content-Type` | Requests with a body | `application/json` |
+| `Authorization` | Every request | `Bearer <token>` from [`POST /auth/pin/login`](auth.md#post-authpinlogin). The token carries the device, which is what separates one till's ticket from another's. |
+| `If-Match` | `PATCH /cart/items/{product_id}` (optional) | The cart `version` you last read |
+
+| # | Method | Full path | Purpose | Body / query | Success | Errors |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | GET | `/api/v1/cart` | The current ticket with totals | `type` | `200` | `403`, `422` |
+| 2 | POST | `/api/v1/cart/items` | Add a line, or add to one already there | `product_id`, `quantity`, `type`, `unit_price`, `idempotency_key` | `200` | `404 product.not_found`, `409 product.out_of_stock`, `422 cart.quantity_invalid` |
+| 3 | PATCH | `/api/v1/cart/items/{product_id}` | Change quantity or price | `quantity`, `unit_price`, `type` | `200` | `404 cart.line_not_found`, `409 cart.version_conflict`, `409 product.out_of_stock`, `422 cart.quantity_invalid` |
+| 4 | DELETE | `/api/v1/cart/items/{product_id}` | Remove a line | `type` | `200` | `404 cart.line_not_found` |
+| 5 | DELETE | `/api/v1/cart` | Cancel the sale (clear the ticket) | `type` | `200` | — |
+| 6 | POST | `/api/v1/cart/sync` | Reconcile a ticket held offline | `client_ticket_id`, `lines[]`, `strategy`, `idempotency_key` | `200` | `409 idempotency.key_reused`, `422` |
+| 7 | POST | `/api/v1/cart/pay` | Complete the sale | `cart_version`, `rail`, `amount_tendered`, `customer`, `idempotency_key` | `200` paid / `202` waiting | `402`/`409`/`422` (see [below](#post-cartpay)) |
+| 8 | POST | `/api/v1/cart/hold` | Park the ticket as a pending order | `customer`, `note`, `idempotency_key` | `201` | `422 cart.empty` |
+
+**Status codes shared by every endpoint**
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `401` | `auth.token_invalid` | Missing, revoked or expired token: clear the session |
+| `403` | `auth.permission_denied` | The user lacks the `pos` permission |
+| `422` | `validation.failed` | Per-field messages in `error.details` |
+| `429` | `rate_limited` | Slow down; honour `Retry-After` |
+
+**One ticket per till.** A ticket belongs to one shop, one signed-in user, one
+device and one `type` (`shop` sells from the shelf, `stock` from the back room).
+Two tills in the same shop never share a ticket, and the same user on two devices
+gets two. The device comes from the login (`X-EXELO-Device-Id`).
+
+**Every write returns the whole ticket**, so the register redraws its totals
+without a follow-up call. `version` goes up by one on every change; send it back as
+`If-Match` to make an edit conditional, or as `cart_version` when paying.
+
+**Money** is `{ "amount": 1850, "currency": "USD", "display": "$18.50" }` in minor
+units (cents for USD, whole shillings for SLSH); the `_alt` fields show SLSH at the
+shop's own exchange rate.
+
 ---
 
 ## GET /cart
@@ -57,9 +109,9 @@ to get it.
     "totals": {
       "subtotal":  { "amount": 3700, "currency": "USD", "display": "$37.00" },
       "vat":       { "amount": 185,  "currency": "USD", "display": "$1.85" },
-      "fee":       { "amount": 74,   "currency": "USD", "display": "$0.74" },
-      "total":     { "amount": 3774, "currency": "USD", "display": "$37.74" },
-      "total_alt": { "amount": 301920, "currency": "SLSH", "display": "301,920 SLSH" },
+      "fee":       { "amount": 0,    "currency": "USD", "display": "$0.00" },
+      "total":     { "amount": 3885, "currency": "USD", "display": "$38.85" },
+      "total_alt": { "amount": 310800, "currency": "SLSH", "display": "310,800 SLSH" },
       "vat_rate": 0.05,
       "exchange_rate": 8000
     },
@@ -72,7 +124,9 @@ to get it.
 
 The legacy response returned `subtotal`, `vat`, `exelo_amount`, `total`,
 `total_in_sls` and `subtotal_in_sls` as loose sibling strings that the client
-parsed with `double.tryParse`. `fee` here is the same value as `exelo_amount`.
+parsed with `double.tryParse`. `fee` is always `0` in the cart: the wallet fee
+depends on the rail, so it comes from
+[`POST /payments/quote`](payments.md#2-post-apiv1paymentsquote--price-a-payment-before-charging).
 
 **Empty cart** returns `200` with `is_empty: true` and `items: []` — not a
 `404`.
@@ -149,7 +203,10 @@ write wins.
 
 **Response `200`** — the full cart.
 
-**Errors** — `404 cart.line_not_found`, `409 resource.version_conflict`.
+**Errors** — `404 cart.line_not_found`, `409 cart.version_conflict` (with the
+current ticket in `error.details.current`), `409 product.out_of_stock` when
+raising the quantity past what is in stock, `422 cart.quantity_invalid` for `0` or
+a negative number.
 
 ---
 
@@ -307,9 +364,9 @@ them could leave a paid sale with no order.
     "order": {
       "id": 10246,
       "order_status": "Complete",
-      "total": { "amount": 3774, "currency": "USD", "display": "$37.74" }
+      "total": { "amount": 3885, "currency": "USD", "display": "$38.85" }
     },
-    "change_due": { "amount": 226, "currency": "USD", "display": "$2.26" },
+    "change_due": { "amount": 115, "currency": "USD", "display": "$1.15" },
     "receipt": { "invoice_no": "INV-10246", "url": "/api/v1/orders/10246/receipt" },
     "cart": { "cart_id": 4471, "is_empty": true, "version": 8, "items": [] }
   }
@@ -338,13 +395,26 @@ the charge; on success the response carries the order and the cleared cart.
 
 | Status | Code | Meaning |
 | --- | --- | --- |
-| `409` | `cart.version_conflict` | Cart changed — re-read and re-confirm the total |
-| `409` | `cart.has_held_lines` | Unsynced offline lines exist; call `/cart/sync` first |
+| `409` | `cart.version_conflict` | Cart changed: re-read and re-confirm the total (`error.details.current`) |
+| `409` | `payment.charge_pending` | A payment for this ticket is already waiting for the customer (`error.details.charge_id`) |
 | `422` | `cart.empty` | Nothing to pay for |
-| `402` | `payment.declined` | |
+| `422` | `payment.tender_too_low` | Cash given is less than the total (`error.details.due`) |
+| `422` | `payment.rail_unavailable` | The shop cannot take that rail (`error.details.available_rails`) |
+| `422` | `payment.wallet_invalid` | The customer number does not belong to that rail (`error.field: customer.wallet_number`) |
+| `502` | `payment.provider_unavailable` | The wallet provider is down; nothing was charged |
 
-`cart.has_held_lines` is a server-side guard mirroring the client's rule that a
-sale cannot be taken while lines exist only on the device.
+`cart.has_held_lines` (a server-side guard for unsynced offline lines) is **not
+enforced**: the server cannot see lines that exist only on the device, so the app
+keeps its own rule that a sale is not taken while lines are held.
+
+**What the server does.** For a wallet rail the customer is billed in SLSH at the
+shop's exchange rate (plus the wallet fee on Gold, see
+[payments.md](payments.md#2-post-apiv1paymentsquote--price-a-payment-before-charging)),
+and the ticket and stock stay untouched until the payment reaches `paid`. For cash
+the sale completes in the same call. `amount_tendered` is optional; when sent,
+`change_due` is `amount_tendered` minus the amount due. An optional `quote_id`
+from [`POST /payments/quote`](payments.md) locks the quoted fee. Rails `card` and
+`nfc` are not built yet.
 
 ---
 
@@ -398,7 +468,7 @@ saved even if the upload has not finished.
       "order_status": "Pending",
       "name": "Amina Yusuf",
       "mobile_number": "+252635550101",
-      "total": { "amount": 3774, "currency": "USD", "display": "$37.74" },
+      "total": { "amount": 3885, "currency": "USD", "display": "$38.85" },
       "created_at": "2026-09-18T14:22:10Z"
     },
     "cart": { "cart_id": 4471, "is_empty": true, "version": 9, "items": [] }
@@ -408,3 +478,39 @@ saved even if the upload has not finished.
 
 The held order is settled later through
 [`POST /orders/{id}/pay`](orders.md#post-ordersidpay).
+
+Holding does **not** take stock off the shelf: it leaves when the order is paid or
+completed. `signature_file_id` is accepted and ignored until the Files module
+exists. **Errors:** `422 cart.empty`, `422 validation.failed` (the customer name
+and mobile number are required).
+
+---
+
+## Implementation notes
+
+- **Storage.** Tickets use the existing `carts` and `cart_items` tables. A
+  migration adds `carts.device_id` and `carts.version`. Tickets made by the legacy
+  app have no device and are never touched by v1.
+- **Prices.** A line's `unit_price` is the catalogue price **before VAT**, unless
+  the shopkeeper overrode it. An SLSH override is converted to USD at the shop's
+  rate. There is one line per product; adding it again raises its quantity.
+- **Totals.** `subtotal` is the sum of the lines, `vat` is each line's VAT at its
+  product's rate, and `total` is `subtotal + vat`. `totals.fee` is always `0` in the
+  cart, because the wallet fee depends on the rail: it comes from
+  [`POST /payments/quote`](payments.md#2-post-apiv1paymentsquote--price-a-payment-before-charging).
+  `totals.vat_rate` is the shop's default rate.
+- **Stock rule.** A line can never exceed what is in stock at the ticket's
+  location. Adding or raising past it returns `409 product.out_of_stock` with
+  `error.details.available` and `error.details.requested`.
+- **Idempotency.** `POST /cart/items`, `/cart/sync`, `/cart/pay` and `/cart/hold`
+  remember their `idempotency_key` for 24 hours. A retry never adds a second line
+  or takes a second payment; the same key with a different body returns
+  `409 idempotency.key_reused`.
+- **Sync results.** `applied`, `adjusted` (quantity trimmed to stock, with a
+  `product.partial_stock` reason), `rejected` (with `product.not_found`,
+  `product.out_of_stock` or `cart.quantity_invalid`) and `duplicate` (the same
+  `idempotency_key` was already applied: every applied or adjusted line is reported
+  as `duplicate` and nothing is added again). One bad line never fails the batch.
+- **Deleting a product** is refused while it is on a ticket
+  (`409 product.in_active_cart`).
+- **Legacy routes** (`/api/cart/*`) keep working alongside.

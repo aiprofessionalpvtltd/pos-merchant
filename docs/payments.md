@@ -11,12 +11,16 @@ is a field, not a different endpoint.
 >
 > | Endpoint | State |
 > | --- | --- |
-> | `GET /payments/charges/{charge_id}` | **Live for subscription payments only** (`inv_…` ids). Its wider form (sales, cash, card) is specified below. |
-> | Everything else in this file | **Specified, not built yet.** The request and response examples are the **contract to build against**, not captured output. |
+> | `GET /payments/methods` | **Live** |
+> | `POST /payments/quote` | **Live** |
+> | `POST /payments/charges` | **Live** for `cash`, `zaad` and `edahab` (sales and held orders) |
+> | `GET /payments/charges/{charge_id}` | **Live** for every payment of the shop: sales (`chg_…`) and subscriptions (`inv_…`) |
+> | `confirm`, `cancel`, `payouts`, `card/session`, webhooks | **Specified, not built yet.** The examples are the **contract to build against**, not captured output. |
 >
-> Sales charges need the Cart and Orders modules, which do not exist yet. See
-> [Implementation notes](#implementation-notes) for the build order and open
-> decisions.
+> Sales are also taken through [`POST /cart/pay`](cart.md#post-cartpay) and
+> [`POST /orders/{id}/pay`](orders.md#post-ordersidpay), which use the same charge.
+> See [Implementation notes](#implementation-notes) for how a charge works and what
+> is still open.
 
 This replaces the largest duplication in the legacy API: parallel near-identical
 flows per wallet, split again between Gold (`payments.dart`) and Silver
@@ -182,8 +186,8 @@ which is the settings view. Replaces `GET /api/merchants/getPhoneNumbersStatus`.
       { "rail": "golis",  "number": null, "status": "not_set", "label": "Golis" },
       { "rail": "evc",    "number": null, "status": "not_set", "label": "EVC" }
     ],
-    "accepts": ["zaad", "edahab", "cash", "card", "nfc"],
-    "card": { "enabled": true, "provider": "braintree", "environment": "production" }
+    "accepts": ["zaad", "edahab", "cash"],
+    "card": { "enabled": false, "provider": "braintree", "environment": "sandbox" }
   },
   "meta": { "request_id": "req_01JBXS0A1B", "server_time": "2026-09-20T09:00:00Z" }
 }
@@ -192,7 +196,7 @@ which is the settings view. Replaces `GET /api/merchants/getPhoneNumbersStatus`.
 | Field | Meaning |
 | --- | --- |
 | `wallets[]` | All four wallet rails, as on the settings screen |
-| `accepts` | **The definitive list** of rails to show. `cash` is always present. A wallet rail is present only when its wallet is `verified`. `card` and `nfc` appear when enabled for the shop. |
+| `accepts` | **The definitive list** of rails to show, in the order `zaad`, `edahab`, `cash`, `card`, `nfc`. `cash` is always present. `zaad` and `edahab` are present only when that wallet is `verified` (a `pending` or `not_set` wallet is left out). `card` and `nfc` appear only when switched on (`EXELO_CARD_ENABLED`, `EXELO_NFC_ENABLED`). Golis and EVC are stored but cannot take payments yet. |
 | `card.environment` | `production` or `sandbox` |
 
 > `card.environment` is exposed deliberately. The current Braintree integration is
@@ -234,9 +238,10 @@ Replaces `POST /api/merchant/transaction/process`. Needs the `pos` permission.
     "customer_charge":   { "amount": 3850, "currency": "USD", "display": "$38.50" },
     "merchant_receives": { "amount": 3700, "currency": "USD", "display": "$37.00" },
     "fees": {
-      "platform": { "amount": 74, "currency": "USD", "display": "$0.74" },
-      "rail":     { "amount": 76, "currency": "USD", "display": "$0.76" }
+      "platform": { "amount": 108, "currency": "USD", "display": "$1.08" },
+      "rail":     { "amount": 0, "currency": "USD", "display": "$0.00" }
     },
+    "fee_payer": "merchant",
     "amount_alt":    { "amount": 301920, "currency": "SLSH", "display": "301,920 SLSH" },
     "exchange_rate": 8000,
     "expires_at": "2026-09-20T09:15:11Z"
@@ -244,16 +249,30 @@ Replaces `POST /api/merchant/transaction/process`. Needs the `pos` permission.
 }
 ```
 
+The example is a Zaad quote for `$37.74` on a Silver shop. The amounts differ on Gold
+(see below).
+
 | Field | Meaning |
 | --- | --- |
 | `amount` | What was asked for |
 | `customer_charge` | What the customer is billed |
 | `merchant_receives` | What lands in the shop |
-| `fees.platform`, `fees.rail` | The two fee parts, so the difference is explainable |
-| `amount_alt`, `exchange_rate` | The SLSH equivalent, at the shop's own rate from [`GET /merchant/settings`](merchant.md#5-get-apiv1merchantsettings--get-the-shop-preferences) |
-| `expires_at` | Quotes last 15 minutes |
+| `fees.platform` | The one combined wallet fee: **2.85%** of `amount`, rounded to the nearest unit (`EXELO_WALLET_FEE_RATE`) |
+| `fees.rail` | Always `0` for now; kept so a separate provider fee can be added without changing the response |
+| `fee_payer` | `customer` on Gold, `merchant` on Silver; `null` when there is no fee |
+| `amount_alt`, `exchange_rate` | The equivalent in the other currency, at the shop's own rate from [`GET /merchant/settings`](merchant.md#5-get-apiv1merchantsettings--get-the-shop-preferences). A USD amount shows SLSH; an SLSH amount shows USD. |
+| `expires_at` | Quotes last 15 minutes and are kept server-side under `quote_id` |
 
-`cash` quotes carry no fees: `customer_charge` equals `amount`.
+**Who pays the fee** follows the shop's plan, the same rule as the legacy
+`transaction/process`:
+
+| Plan | `customer_charge` | `merchant_receives` |
+| --- | --- | --- |
+| Gold | `amount` + fee | `amount` |
+| Silver (and any other plan) | `amount` | `amount` − fee |
+
+`cash` quotes carry no fee on any plan: `customer_charge` and `merchant_receives`
+both equal `amount`, and `fee_payer` is `null`.
 
 The legacy response returned three loose strings (`total_customer_charge`,
 `amount_sent_to_merchant`, `amount_in_dollars`) with no fee breakdown.
@@ -263,8 +282,16 @@ The legacy response returned three loose strings (`total_customer_charge`,
 | Status | Code | Meaning |
 | --- | --- | --- |
 | `403` | `auth.permission_denied` | No `pos` permission |
-| `422` | `payment.rail_unavailable` | The shop has no verified wallet on that rail (`error.details.available_rails`) |
-| `422` | `validation.failed` | Missing or malformed fields |
+| `422` | `payment.rail_unavailable` | The rail is not in [`accepts`](#1-get-apiv1paymentsmethods--which-payment-methods-the-shop-accepts): no verified wallet, or card/NFC not enabled (`error.details.available_rails`, `error.field: rail`) |
+| `422` | `validation.failed` | Missing or malformed fields. `amount.currency` is `USD` or `SLSH`, `amount.amount` is a whole number of at least 1, and `purpose` is `pos_sale` or `order_settlement`. |
+
+```json
+{
+  "success": false,
+  "message": "That payment method is not available for this shop",
+  "error": { "code": "payment.rail_unavailable", "field": "rail", "details": { "available_rails": ["cash"] } }
+}
+```
 
 ## 3. POST `/api/v1/payments/charges` — Start a payment
 
@@ -292,10 +319,13 @@ required.** Needs the `pos` permission.
 | --- | --- | --- | --- |
 | `rail` | enum | yes | `zaad` \| `edahab` \| `cash` \| `card` \| `nfc` |
 | `purpose` | enum | yes | `pos_sale` or `order_settlement`. The other purposes are created by their own modules. |
-| `amount` | Money | yes | Must match `quote_id` if given |
+| `amount` | Money | yes | The sale total in **USD** (`currency` is `USD`); must equal the ticket or order total, or `409 payment.cart_changed`. Must also match `quote_id` if given |
 | `quote_id` | string | no | Locks the quoted fees |
 | `customer.wallet_number` | string | On wallet rails | The number to bill; must belong to the rail |
 | `customer.name` | string | no | Recorded on the receipt |
+| `customer.mobile_number` | string | no | Recorded on the order |
+| `cart_version` | int | no | The ticket `version` you saw; `409 payment.cart_changed` if it moved |
+| `amount_tendered` | Money | no | Cash only, through [`/cart/pay`](cart.md#post-cartpay) and [`/orders/{id}/pay`](orders.md#post-ordersidpay): checked against the amount due (`422 payment.tender_too_low`) |
 | `cart_id` | int | For `pos_sale` | The cart being settled |
 | `order_id` | int | For `order_settlement` | The order being settled |
 | `payment_nonce` | string | For `card` | Braintree nonce from the client SDK |
@@ -731,29 +761,49 @@ sale charges.
 
 ## Implementation notes
 
-Not built yet, except the subscription case of endpoint 4. What exists today and
-what needs deciding first:
+Endpoints 1, 2, 3 and 4 are built. Endpoints 5 to 9 (`confirm`, `cancel`, payouts,
+card session and webhooks) are not. How the built part works, and what is open:
 
-- **Already there:** `InvoicePaymentService` and `WalletGateway` already issue,
-  poll and settle eDahab and Zaad invoices, with wallet polling, cash confirmation
-  by staff, and the `InvoicePaid` event. `GET /payments/charges/{charge_id}` reads
-  these for subscription payments. Wallet status comes from
-  [`GET /merchant/wallets`](merchant.md).
-- **A charge is not the same as an `invoices` row yet.** Today's ids are `inv_…`
-  and the table only carries registration, verification and subscription fees. The
-  spec's `chg_…` sale charges need either a `charges` table or the `invoices` table
-  widened with `purpose`, `cart_id`, `order_id` and `quote_id`. Whichever is chosen,
-  both id prefixes must resolve through endpoint 4.
-- **Sales need Cart and Orders.** `pos_sale` and `order_settlement` settle against
-  the [cart](cart.md) and [orders](orders.md), which do not exist in v1 yet. The
-  sensible first slice is endpoints 1, 2 and 4, then cash and wallet charges for
-  `order_settlement` once Orders exists, then `pos_sale` with the cart.
-- **Fee rates need confirming.** The quote splits `fees.platform` and `fees.rail`.
-  The legacy `transaction/process` computed a single customer total; the rates to
-  reproduce must be taken from the legacy `PaymentController` before the quote is
-  built. The figures in the example are illustrative.
-- **Quotes are stored server-side** for 15 minutes (cache or a `payment_quotes`
-  table) so `quote_id` locks the fees.
+- **A sale charge is an `invoices` row** of type `Sale`, the same table that holds
+  registration, verification and subscription payments. A migration adds
+  `purpose`, `cart_id`, `cart_version` and `meta` (customer, the ticket lines, and
+  the USD amounts). Sale ids start with `chg_`, subscription ids with `inv_`, and
+  both resolve through `GET /payments/charges/{charge_id}`, which only returns
+  payments of the caller's own shop.
+- **What a charge does.** `POST /payments/charges` (or `/cart/pay`,
+  `/orders/{id}/pay`, which call it) checks the rail against
+  [`accepts`](#1-get-apiv1paymentsmethods--which-payment-methods-the-shop-accepts),
+  checks that `amount` (USD) equals the sale total, and works out the fee. For
+  **cash** it records the charge as paid at once. For **Zaad and eDahab** it asks the
+  provider for a payment and returns `202`; the sale completes when a poll finds it
+  paid.
+- **On `paid`** (cash immediately, wallets on the poll that sees it) one
+  transaction creates the order (`pos_sale`) or settles it (`order_settlement`),
+  takes the stock off the shelf and clears the ticket. It runs once however many
+  times the charge is polled. The ticket is only cleared if it has not changed since
+  the charge started, so a new sale started meanwhile is never wiped.
+- **Currency.** The order and its total are always USD. A **wallet** charge is billed
+  in **SLSH** at the shop's exchange rate (`customer_charge` in cents × rate ÷ 100,
+  in whole shillings), as registration and subscription payments already are; a
+  **cash** charge is recorded in USD. So `amount.currency` on a polled charge is
+  `SLSH` for wallets and `USD` for cash, and `customer_charge` (USD) is returned
+  when the charge is created.
+- **The fee** is the quote's: one 2.85% wallet fee, added to what the customer pays
+  on Gold and taken from the shop otherwise; none on cash. Sending `quote_id` locks
+  the quoted fee and must match the rail, purpose and amount (else `410
+  quote.expired` or `422`).
+- **One open payment per sale.** While a wallet payment for the same ticket or order
+  is waiting for the customer, another returns `409 payment.charge_pending` with the
+  waiting `charge_id`. An expired one no longer blocks.
+- **Known gap: cancelling a wallet payment** is not built. Until the providers
+  offer a cancel call, a shopkeeper who abandons a waiting payment must let it
+  expire (10 minutes) rather than start a second one.
+- **Built code:** `PaymentService` (methods, quote, fee), `ChargeService` (charges,
+  order creation on paid), `V1\PaymentController`, `FinalizeSaleOnPaid` (the
+  `InvoicePaid` listener), and the `payments` settings in `config/exelo.php`
+  (`wallet_fee_rate`, card and NFC switches).
+- **Card and NFC are off** until their modules exist. Even if switched on they are
+  refused by charges (`422 payment.rail_unavailable`) for now.
 - **Idempotency** uses the same cache-lock approach as `subscription/change`, with
   the response stored for 24 hours.
 - **Payout confirmation** reuses the single-use PIN confirmation, adding the scope
@@ -764,11 +814,10 @@ what needs deciding first:
   can wait.
 - **Card** depends on the Braintree Sandbox or Production decision and on rotating
   the credentials listed in the migration note, so it is the last rail to build.
-- **New error codes** to add to [errors.md](errors.md): `charge.not_found`,
-  `payment.already_settled`, `payment.code_invalid`, `payment.cart_changed`,
-  `quote.expired`, `webhook.signature_invalid`. `payment.declined`,
-  `payment.rail_unavailable`, `payment.wallet_invalid` and
-  `payment.provider_unavailable` already exist.
+- **Error codes** are in [errors.md](errors.md). Added for the built endpoints:
+  `payment.charge_pending`, `payment.tender_too_low`, `payment.cart_changed`,
+  `quote.expired`, `cart.not_found`. Still to add with the unbuilt endpoints:
+  `payment.already_settled`, `payment.code_invalid`, `webhook.signature_invalid`.
 - **Legacy routes** (`POST /api/merchant/transaction/process`,
   `POST /api/merchant/invoice/status`, `POST /api/zaad/commit`,
   `POST /api/merchant/make-payment`) keep working alongside until the app moves.

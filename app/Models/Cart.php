@@ -15,6 +15,8 @@ class Cart extends Model
         'quantity',
         'price',
         'cart_type', // 'shop' or 'stock'
+        'device_id',
+        'version',
     ];
 
     // Relationship with CartItem

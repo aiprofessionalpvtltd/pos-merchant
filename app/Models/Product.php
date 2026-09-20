@@ -23,6 +23,8 @@ class Product extends Model
         'alarm_limit',
         'image',
         'bar_code',
+        'version',
+        'client_uuid',
     ];
 
     public function category()

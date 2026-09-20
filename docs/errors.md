@@ -107,7 +107,9 @@ merchant out mid-sale.
 | `payment.provider_unavailable` | 502 | Wallet provider down | `retry_after` |
 | `payment.timeout` | 504 | No answer in time | `charge_id` — **poll it, do not re-charge** |
 | `payment.already_settled` | 409 | Cannot cancel a paid charge | |
-| `payment.cart_changed` | 409 | Cart moved since the quote | `current_total` |
+| `payment.cart_changed` | 409 | Cart moved since the quote, or the amount no longer matches the sale total | `current_total`, or `current` (the ticket) |
+| `payment.charge_pending` | 409 | A payment for this ticket or order is already waiting for the customer | `charge_id` |
+| `payment.tender_too_low` | 422 | Cash given is less than the amount due | `due` |
 | `payment.amount_mismatch` | 422 | Amount does not match the quote | |
 
 ### `payment.timeout` is the dangerous one
@@ -126,6 +128,7 @@ billed twice.
 | Code | Status | Meaning | `details` |
 | --- | --- | --- | --- |
 | `cart.empty` | 422 | Nothing to pay for | |
+| `cart.not_found` | 404 | No such ticket for this user | |
 | `cart.line_not_found` | 404 | Line already removed | |
 | `cart.quantity_invalid` | 422 | Zero or negative | |
 | `cart.version_conflict` | 409 | Cart changed on another till | `current` |
@@ -141,15 +144,14 @@ billed twice.
 | `product.not_found` | 404 | Unknown or deleted | |
 | `product.barcode_unknown` | 404 | No product with that barcode | `barcode`, `normalised` |
 | `product.barcode_taken` | 409 | Another product owns it | `existing_product_id` |
-| `product.duplicate_client_uuid` | 409 | Already created — safe replay | `product` (the existing record) |
 | `product.in_active_cart` | 409 | Cannot delete while on a ticket | `cart_ids` |
 | `category.name_taken` | 409 | Already exists | `category` |
-| `inventory.insufficient_quantity` | 409 | Not enough to move | `available`, `requested` |
-| `inventory.same_location` | 422 | `from` equals `to` | |
+| `inventory.insufficient_quantity` | 409 | Not enough to move | `available` |
 
-`product.duplicate_client_uuid` is a **success in disguise**: the product
-already exists from an earlier attempt. The client should adopt the record from
-`details.product` and delete its queued row.
+Replaying `POST /products` with a `client_uuid` that was already created is **not
+an error**: it returns `200` with the existing product and the message `Product
+already added`. The client adopts the returned record and deletes its queued row.
+A `from` equal to `to` on a transfer is an ordinary `422 validation.failed` on `to`.
 
 ---
 
@@ -160,7 +162,7 @@ already exists from an earlier attempt. The client should adopt the record from
 | `order.not_found` | 404 | | |
 | `order.invalid_transition` | 409 | Not an allowed status change | `from`, `to`, `allowed` |
 | `order.cannot_delete_complete` | 409 | Completed orders are history | |
-| `order.already_paid` | 409 | | `charge_id` |
+| `order.already_paid` | 409 | Money was already received for this order | |
 
 ---
 

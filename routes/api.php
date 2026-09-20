@@ -20,7 +20,12 @@ use App\Http\Controllers\API\V1\PaymentChargeController;
 use App\Http\Controllers\API\V1\RegistrationController as V1RegistrationController;
 use App\Http\Controllers\API\V1\ShiftController;
 use App\Http\Controllers\API\V1\MerchantController as V1MerchantController;
+use App\Http\Controllers\API\V1\CartController as V1CartController;
+use App\Http\Controllers\API\V1\CategoryController as V1CategoryController;
+use App\Http\Controllers\API\V1\InventoryController as V1InventoryController;
+use App\Http\Controllers\API\V1\OrderController as V1OrderController;
 use App\Http\Controllers\API\V1\PaymentController as V1PaymentController;
+use App\Http\Controllers\API\V1\ProductController as V1ProductController;
 use App\Http\Controllers\API\V1\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 
@@ -72,6 +77,48 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::middleware(['auth:api', 'throttle:v1-payments'])->prefix('payments')->name('payments.')->group(function () {
         Route::get('methods', [V1PaymentController::class, 'methods'])->name('methods');
         Route::post('quote', [V1PaymentController::class, 'quote'])->middleware('pos.permission:pos')->name('quote');
+        Route::post('charges', [V1PaymentController::class, 'createCharge'])->middleware('pos.permission:pos')->name('charges.store');
+    });
+
+    Route::middleware(['auth:api', 'throttle:v1-orders'])->prefix('orders')->name('orders.')->group(function () {
+        Route::post('/', [V1OrderController::class, 'store'])->middleware('pos.permission:pos')->name('store');
+        Route::post('{id}/pay', [V1OrderController::class, 'pay'])->whereNumber('id')->middleware('pos.permission:pos')->name('pay');
+
+        Route::middleware('pos.permission:transactions')->group(function () {
+            Route::get('/', [V1OrderController::class, 'index'])->name('index');
+            Route::get('{id}', [V1OrderController::class, 'show'])->whereNumber('id')->name('show');
+            Route::patch('{id}/status', [V1OrderController::class, 'status'])->whereNumber('id')->name('status');
+            Route::delete('{id}', [V1OrderController::class, 'destroy'])->whereNumber('id')->name('destroy');
+            Route::get('{id}/receipt', [V1OrderController::class, 'receipt'])->whereNumber('id')->name('receipt');
+        });
+    });
+
+    Route::middleware(['auth:api', 'throttle:v1-inventory'])->group(function () {
+        Route::get('products/lookup', [V1ProductController::class, 'lookup'])->middleware('pos.permission:pos')->name('products.lookup');
+        Route::get('categories', [V1CategoryController::class, 'index'])->name('categories.index');
+
+        Route::middleware('pos.permission:inventory')->group(function () {
+            Route::get('products', [V1ProductController::class, 'index'])->name('products.index');
+            Route::get('products/{id}', [V1ProductController::class, 'show'])->whereNumber('id')->name('products.show');
+            Route::post('products', [V1ProductController::class, 'store'])->name('products.store');
+            Route::patch('products/{id}', [V1ProductController::class, 'update'])->whereNumber('id')->name('products.update');
+            Route::delete('products/{id}', [V1ProductController::class, 'destroy'])->whereNumber('id')->name('products.destroy');
+            Route::post('categories', [V1CategoryController::class, 'store'])->name('categories.store');
+            Route::post('inventory/transfers', [V1InventoryController::class, 'transfer'])->name('inventory.transfers');
+            Route::patch('inventory/{productId}/quantities', [V1InventoryController::class, 'adjust'])->whereNumber('productId')->name('inventory.quantities');
+            Route::get('inventory/alerts', [V1InventoryController::class, 'alerts'])->name('inventory.alerts');
+        });
+    });
+
+    Route::middleware(['auth:api', 'throttle:v1-cart', 'pos.permission:pos'])->prefix('cart')->name('cart.')->group(function () {
+        Route::get('/', [V1CartController::class, 'show'])->name('show');
+        Route::delete('/', [V1CartController::class, 'clear'])->name('clear');
+        Route::post('items', [V1CartController::class, 'addItem'])->name('items.store');
+        Route::patch('items/{productId}', [V1CartController::class, 'updateItem'])->whereNumber('productId')->name('items.update');
+        Route::delete('items/{productId}', [V1CartController::class, 'removeItem'])->whereNumber('productId')->name('items.destroy');
+        Route::post('sync', [V1CartController::class, 'sync'])->name('sync');
+        Route::post('pay', [V1CartController::class, 'pay'])->name('pay');
+        Route::post('hold', [V1CartController::class, 'hold'])->name('hold');
     });
 
     Route::middleware(['auth:api', 'throttle:v1-merchant'])->prefix('merchant')->name('merchant.')->group(function () {

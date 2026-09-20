@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Events\InvoicePaid;
 use App\Exceptions\ApiException;
 use App\Models\Invoice;
+use App\Models\Order;
 use App\Support\ApiResponse;
 use App\Support\Money;
 
@@ -105,13 +106,17 @@ class InvoicePaymentService
     {
         $status = strtolower($invoice->status);
 
+        $isSale = $invoice->type === 'Sale';
+
         $payload = [
             'charge_id' => $invoice->public_id,
             'status' => $status,
             'rail' => $invoice->rail,
-            'purpose' => strtolower($invoice->type),
-            'amount' => Money::format((int) $invoice->amount, $invoice->currency),
-            'customer' => ['wallet_number' => $invoice->wallet_number],
+            'purpose' => $invoice->purpose ?? strtolower($invoice->type),
+            'amount' => $invoice->currency === 'USD'
+                ? Money::usd(Money::toMinor((float) $invoice->amount, 'USD'))
+                : Money::format((int) $invoice->amount, $invoice->currency),
+            'customer' => ['wallet_number' => $invoice->wallet_number] + ($isSale ? ['name' => $invoice->meta['customer']['name'] ?? null] : []),
             'created_at' => ApiResponse::iso($invoice->created_at),
         ];
 
@@ -123,6 +128,12 @@ class InvoicePaymentService
             ];
         } elseif ($status === 'paid') {
             $payload['paid_at'] = ApiResponse::iso($invoice->paid_at);
+
+            if ($isSale && $invoice->order_id) {
+                $order = Order::find($invoice->order_id);
+                $payload['order'] = ['id' => $order->id, 'order_status' => 'Complete'];
+                $payload['receipt'] = ['invoice_no' => 'INV-'.$order->id, 'url' => '/api/v1/orders/'.$order->id.'/receipt'];
+            }
         } else {
             $payload['failure'] = ['code' => $status, 'message' => $invoice->error_reason];
         }

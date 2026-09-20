@@ -11,8 +11,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 /**
- * Charge polling, limited for now to subscription payments. The rest of
- * docs/payments.md builds on this endpoint.
+ * Charge polling for every payment the shop owns: subscriptions and sales.
  */
 class PaymentChargeController extends Controller
 {
@@ -24,7 +23,6 @@ class PaymentChargeController extends Controller
             ?? throw new ApiException('merchant.not_found', 'We could not find that shop', 404);
 
         $invoice = Invoice::where('public_id', $chargeId)
-            ->where('type', 'Subscription')
             ->where('merchant_id', $merchant->id)
             ->first();
 

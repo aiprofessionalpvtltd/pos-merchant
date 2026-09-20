@@ -1,0 +1,26 @@
+<?php
+
+namespace App\Http\Requests\API\V1;
+
+use Illuminate\Foundation\Http\FormRequest;
+
+class AddCartItemRequest extends FormRequest
+{
+    public function authorize(): bool
+    {
+        return true;
+    }
+
+    public function rules(): array
+    {
+        return [
+            'product_id' => ['required', 'integer'],
+            'quantity' => ['sometimes', 'integer', 'max:100000'],
+            'type' => ['sometimes', 'in:shop,stock'],
+            'unit_price' => ['sometimes', 'array'],
+            'unit_price.amount' => ['required_with:unit_price', 'integer', 'min:0', 'max:100000000'],
+            'unit_price.currency' => ['required_with:unit_price', 'in:USD,SLSH'],
+            'idempotency_key' => ['required', 'string', 'max:64'],
+        ];
+    }
+}

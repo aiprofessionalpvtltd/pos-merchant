@@ -15,6 +15,9 @@ class InventoryHistory extends Model
         'from_location',
         'to_location',
         'user_id',
+        'kind',
+        'reason',
+        'note',
 
     ];
 

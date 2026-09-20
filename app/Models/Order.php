@@ -24,7 +24,37 @@ class Order extends Model
         'exelo_amount',
         'sub_total',
         'order_type', // 'shop' or 'stock'
+        'version',
+        'paid_at',
+        'payment_method',
+        'note',
+        'client_order_id',
+        'cancel_reason',
+        'stock_deducted_at',
     ];
+
+    protected $casts = [
+        'paid_at' => 'datetime',
+        'stock_deducted_at' => 'datetime',
+    ];
+
+    public function isPending(): bool
+    {
+        return strtolower($this->order_status) === 'pending';
+    }
+
+    public function isCancelled(): bool
+    {
+        return strtolower($this->order_status) === 'cancelled';
+    }
+
+    /**
+     * The legacy app wrote "Paid" for a sold order; v1 shows it as Complete.
+     */
+    public function isComplete(): bool
+    {
+        return in_array(strtolower($this->order_status), ['complete', 'paid'], true);
+    }
 
     // Relationship with OrderItem
     public function items()
