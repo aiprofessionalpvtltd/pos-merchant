@@ -439,7 +439,7 @@ class EmployeeController extends BaseController
             $merchant = $employee->merchant;
 
             // Generate an access token for the user
-            $token = $user->createToken('PassportAuth')->accessToken;
+            $token = $user->createToken('PassportAuth')->plainTextToken;
 
             // Load the employee's permissions
             $employee->load('permissions.permission');
@@ -520,7 +520,7 @@ class EmployeeController extends BaseController
             $user->save();
 
             // Generate the access token
-            $token = $user->createToken('PassportAuth')->accessToken;
+            $token = $user->createToken('PassportAuth')->plainTextToken;
 
             DB::commit();
 

@@ -19,6 +19,8 @@ use App\Http\Controllers\API\V1\EmployeeController as V1EmployeeController;
 use App\Http\Controllers\API\V1\PaymentChargeController;
 use App\Http\Controllers\API\V1\RegistrationController as V1RegistrationController;
 use App\Http\Controllers\API\V1\ShiftController;
+use App\Http\Controllers\API\V1\MerchantController as V1MerchantController;
+use App\Http\Controllers\API\V1\PaymentController as V1PaymentController;
 use App\Http\Controllers\API\V1\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 
@@ -65,6 +67,20 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('subscription/change', [SubscriptionController::class, 'change'])->name('subscription.change');
         Route::post('subscription/cancel', [SubscriptionController::class, 'cancel'])->name('subscription.cancel');
         Route::get('payments/charges/{chargeId}', [PaymentChargeController::class, 'show'])->name('payments.charges.show');
+    });
+
+    Route::middleware(['auth:api', 'throttle:v1-payments'])->prefix('payments')->name('payments.')->group(function () {
+        Route::get('methods', [V1PaymentController::class, 'methods'])->name('methods');
+        Route::post('quote', [V1PaymentController::class, 'quote'])->middleware('pos.permission:pos')->name('quote');
+    });
+
+    Route::middleware(['auth:api', 'throttle:v1-merchant'])->prefix('merchant')->name('merchant.')->group(function () {
+        Route::get('/', [V1MerchantController::class, 'show'])->name('show');
+        Route::patch('/', [V1MerchantController::class, 'update'])->name('update');
+        Route::get('wallets', [V1MerchantController::class, 'wallets'])->name('wallets.show');
+        Route::patch('wallets', [V1MerchantController::class, 'updateWallets'])->name('wallets.update');
+        Route::get('settings', [V1MerchantController::class, 'settings'])->name('settings.show');
+        Route::patch('settings', [V1MerchantController::class, 'updateSettings'])->name('settings.update');
     });
 
     Route::middleware(['auth:api', 'throttle:v1-staff'])->group(function () {

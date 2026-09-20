@@ -203,8 +203,8 @@ class EmployeeService
             $openShifts = $user ? Shift::open()->where('user_id', $user->id)->get() : collect();
             $openShifts->each(fn (Shift $shift) => $shift->update(['end_time' => now()->format('Y-m-d H:i:s')]));
 
-            $tokens = $user ? $user->tokens()->where('revoked', false)->get() : collect();
-            $tokens->each->revoke();
+            $tokens = $user ? $user->tokens()->get() : collect();
+            $tokens->each->delete();
 
             $employee->update([
                 'status' => 'inactive',

@@ -102,6 +102,8 @@ merchant out mid-sale.
 | `payment.declined` | 402 | Rail refused | `reason`: `insufficient_funds`, `wallet_blocked`, `limit_exceeded` |
 | `payment.rail_unavailable` | 422 | Merchant has no verified wallet on that rail | `available_rails` |
 | `payment.wallet_invalid` | 422 | Number not valid for that rail | |
+| `wallet.number_taken` | 409 | Payout number already belongs to another shop (`error.field` is `wallets.N.number`) | |
+| `settings.rate_out_of_range` | 422 | Exchange rate outside the allowed range (`error.field: exchange_rate`) | `min`, `max` |
 | `payment.provider_unavailable` | 502 | Wallet provider down | `retry_after` |
 | `payment.timeout` | 504 | No answer in time | `charge_id` — **poll it, do not re-charge** |
 | `payment.already_settled` | 409 | Cannot cancel a paid charge | |

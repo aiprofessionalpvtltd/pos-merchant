@@ -499,7 +499,7 @@ Implemented in `AuthController` / `AuthService`, served under `/api/v1/auth/*`.
 Legacy `/api/login/*` and `/api/employee/*` routes are unchanged.
 
 - **Device binding.** `X-EXELO-Device-Id` is required on `pin/login`, `pin` and
-  `pin/reset`. The Passport token is named `device:<id>`; logging in again on
+  `pin/reset`. The Sanctum token is named `device:<id>`; logging in again on
   the same device replaces that device's previous token.
 - **Lockout.** 5 wrong PINs lock the account for 15 minutes (`auth.locked`,
   `retry_after` in seconds). A correct PIN resets the counter.

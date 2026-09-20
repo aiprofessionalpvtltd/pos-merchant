@@ -26,25 +26,9 @@ class DatabaseSeeder extends Seeder
             MerchantSeeder::class,
         ]);
 
-        $this->createPersonalAccessClient();
 
         $this->runPermissionUpdateCommand();
 
-    }
-
-    /**
-     * Create a personal access client for Passport.
-     *
-     * @return void
-     */
-    private function createPersonalAccessClient()
-    {
-        $clientRepository = new ClientRepository();
-        $clientRepository->createPersonalAccessClient(
-            null, 'POS', env('APP_URL')
-        );
-
-        $this->command->info('Personal access client created successfully.');
     }
 
     /**

@@ -90,7 +90,7 @@ class PassportAuthController extends BaseController
             }
 
             $user = $merchant->user;
-            $token = $user->createToken('PassportAuth')->accessToken;
+            $token = $user->createToken('PassportAuth')->plainTextToken;
             $merchant->load(['currentSubscription.subscriptionPlan']); // Load both subscription and subscriptionPlan relationships
 
             $currentSubscription = $merchant->currentSubscription;
@@ -313,7 +313,7 @@ class PassportAuthController extends BaseController
 
         // Revoke all tokens for the authenticated user
         $user->tokens->each(function ($token) {
-            $token->revoke();
+            $token->delete();
         });
 
         // Optionally, if you are using a refresh token or personal access tokens

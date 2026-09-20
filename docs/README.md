@@ -24,7 +24,7 @@ migration steps and rollout phases live in [`../unified-api-plan.md`](../unified
 | [Dashboard & reports](dashboard.md) | KPIs, revenue series, sales/inventory/product reports |
 | [NFC & device keys](nfc.md) | Tag registration, encryption keys (replaces Firestore) |
 | [Sync](sync.md) | Delta pull, offline mutation replay, health |
-| [Merchant profile](merchant.md) | Business details, wallet numbers |
+| [Merchant profile](merchant.md) | Business details, payout wallets, shop settings |
 | [Errors](errors.md) | Full error code catalogue |
 | [Legacy mapping](legacy-mapping.md) | Every old route → its replacement |
 

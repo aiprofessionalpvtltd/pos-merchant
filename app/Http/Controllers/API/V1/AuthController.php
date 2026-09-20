@@ -57,7 +57,7 @@ class AuthController extends Controller
             $request->user(),
             $request->validated('current_pin'),
             $request->validated('pin'),
-            $request->user()->token()?->id,
+            $request->user()->currentAccessToken()?->id,
         );
 
         return ApiResponse::success($data, 'PIN updated');
@@ -104,7 +104,7 @@ class AuthController extends Controller
     {
         $revoked = $this->auth->logout(
             $request->user(),
-            $request->user()->token()?->id,
+            $request->user()->currentAccessToken()?->id,
             $request->boolean('all_devices'),
         );
 

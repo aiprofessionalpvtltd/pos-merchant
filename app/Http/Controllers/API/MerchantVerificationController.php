@@ -143,7 +143,7 @@ class MerchantVerificationController extends BaseController
             $user->save();
 
             // Generate the access token
-            $token = $user->createToken('PassportAuth')->accessToken;
+            $token = $user->createToken('PassportAuth')->plainTextToken;
 
             // Load the merchant's current subscription with the subscription plan
             $merchant->load(['currentSubscription.subscriptionPlan']);

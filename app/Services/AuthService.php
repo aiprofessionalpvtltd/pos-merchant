@@ -107,7 +107,7 @@ class AuthService
         $this->storePin($user, $newPin);
 
         $revoked = $this->revokeTokens(
-            $user->tokens()->where('revoked', false)->when($currentTokenId, fn ($query) => $query->where('id', '!=', $currentTokenId))
+            $user->tokens()->when($currentTokenId, fn ($query) => $query->where('id', '!=', $currentTokenId))
         );
 
         return [
@@ -261,7 +261,7 @@ class AuthService
 
         Cache::forget('pin-reset-token:'.$resetToken);
         $this->storePin($user, $pin);
-        $this->revokeTokens($user->tokens()->where('revoked', false));
+        $this->revokeTokens($user->tokens());
 
         return $this->issueSession($user, $deviceId);
     }
@@ -273,7 +273,7 @@ class AuthService
 
     public function logout(User $user, ?string $currentTokenId, bool $isAllDevices): int
     {
-        $tokens = $user->tokens()->where('revoked', false);
+        $tokens = $user->tokens();
 
         if (! $isAllDevices) {
             $tokens->where('id', $currentTokenId);
@@ -423,13 +423,14 @@ class AuthService
     {
         $tokenName = 'device:'.$deviceId;
 
-        $this->revokeTokens($user->tokens()->where('name', $tokenName)->where('revoked', false));
+        $this->revokeTokens($user->tokens()->where('name', $tokenName));
 
-        $result = $user->createToken($tokenName);
+        $expiresAt = now()->addMonths(6);
+        $result = $user->createToken($tokenName, ['*'], $expiresAt);
 
         return [
-            'token' => $result->accessToken,
-            'expires_at' => ApiResponse::iso($result->token->expires_at),
+            'token' => $result->plainTextToken,
+            'expires_at' => ApiResponse::iso($expiresAt),
         ] + (new SessionResource($user))->resolve();
     }
 
@@ -437,7 +438,7 @@ class AuthService
     {
         $tokens = $query->get();
 
-        $tokens->each->revoke();
+        $tokens->each->delete();
 
         return $tokens->count();
     }

@@ -318,14 +318,14 @@ class RegistrationService
                 }
 
                 $invoice->update(['consumed_at' => now(), 'merchant_id' => $merchant->id]);
+                app(MerchantProfileService::class)->markPendingWalletsVerified($merchant);
             });
         }
 
-        $wallets = collect(['zaad_number', 'edahab_number', 'golis_number', 'evc_number'])
-            ->mapWithKeys(fn (string $column) => [$column => [
-                'number' => $merchant->{$column},
-                'status' => $merchant->{$column} ? 'verified' : 'not_set',
-            ]]);
+        $wallets = collect(app(MerchantProfileService::class)->wallets($merchant)['wallets'])
+            ->mapWithKeys(fn (array $entry) => [
+                $entry['rail'].'_number' => ['number' => $merchant->{$entry['rail'].'_number'}, 'status' => $entry['status']],
+            ]);
 
         return [
             'verified' => $wallets->contains(fn (array $wallet) => $wallet['status'] === 'verified'),

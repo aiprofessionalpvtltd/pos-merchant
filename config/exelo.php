@@ -5,6 +5,26 @@ return [
 
     'alt_currency' => 'SLSH',
 
+    // A typo of one extra zero would misprice every till; changes outside this range are refused.
+    'exchange_rate_range' => [
+        'min' => (int) env('EXCHANGE_RATE_MIN', 5000),
+        'max' => (int) env('EXCHANGE_RATE_MAX', 15000),
+    ],
+
+    'payments' => [
+        // One combined fee on wallet payments. Gold shops pass it to the customer, other plans absorb it.
+        'wallet_fee_rate' => (float) env('EXELO_WALLET_FEE_RATE', 0.0285),
+        'quote_ttl_seconds' => 900,
+        'card' => ['enabled' => (bool) env('EXELO_CARD_ENABLED', false), 'environment' => env('BRAINTREE_ENVIRONMENT', 'sandbox')],
+        'nfc' => ['enabled' => (bool) env('EXELO_NFC_ENABLED', false)],
+    ],
+
+    'preference_defaults' => [
+        'receipt' => ['footer' => null, 'show_logo' => true, 'print_automatically' => false],
+        'register' => ['allow_price_override' => true, 'require_customer_on_hold' => true, 'scan_sound' => true],
+        'alerts' => ['default_alarm_limit' => 4, 'default_stock_limit' => 10],
+    ],
+
     'default_subscription_plan_id' => (int) env('SUBSCRIPTION_ID', 2),
 
     'pin' => [

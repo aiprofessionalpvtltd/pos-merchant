@@ -64,7 +64,7 @@ class SessionResource extends JsonResource
 
     private function merchantBlock(Merchant $merchant): array
     {
-        $rate = config('exelo.conversion_rate');
+        $rate = $merchant->effectiveExchangeRate();
 
         $block = [
             'id' => $merchant->id,

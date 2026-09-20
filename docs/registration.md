@@ -491,7 +491,7 @@ same `data` shape.
   "success": true,
   "message": "PIN created",
   "data": {
-    "token": "eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9…",
+    "token": "18|vJ2kQx9fR7pLmN3sT6wY0aB4cD8eF1gH",
     "expires_at": "2027-03-19T06:55:42Z",
     "user": {
       "id": 109,

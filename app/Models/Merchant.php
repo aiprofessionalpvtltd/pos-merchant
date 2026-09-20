@@ -31,8 +31,33 @@ class Merchant extends Model
         'confirmation_status',
         'otp',
         'otp_expires_at',
-        'user_id'
+        'user_id',
+        'version',
+        'default_rail',
+        'wallet_states',
+        'exchange_rate',
+        'exchange_rate_updated_at',
+        'vat_rate',
+        'is_vat_inclusive',
+        'timezone',
+        'language',
+        'preferences',
     ];
+
+    public const RAILS = ['zaad', 'edahab', 'golis', 'evc'];
+
+    protected $casts = [
+        'wallet_states' => 'array',
+        'preferences' => 'array',
+        'exchange_rate_updated_at' => 'datetime',
+        'vat_rate' => 'float',
+        'is_vat_inclusive' => 'boolean',
+    ];
+
+    public function effectiveExchangeRate(): int
+    {
+        return (int) ($this->exchange_rate ?: config('exelo.conversion_rate'));
+    }
 
 
     protected static function boot()
