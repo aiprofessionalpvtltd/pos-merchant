@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 
 use App\Models\InventoryHistory;
 use App\Models\Merchant;
@@ -28,6 +28,11 @@ function till(): array
     app('auth')->forgetGuards();
 
     return [$owner, $token, $rice, $tea];
+}
+
+function orders()
+{
+    return Order::where('merchant_id', Merchant::where('phone_number', PHONE)->value('id'));
 }
 
 function shelf(int $productId): int
@@ -93,7 +98,7 @@ it('does not sell twice when the pay request is retried', function () {
     $first = test()->withToken($token)->postJson('/api/v1/cart/pay', $body)->assertOk()->json('data.order.id');
     test()->withToken($token)->postJson('/api/v1/cart/pay', $body)->assertOk()->assertJsonPath('data.order.id', $first);
 
-    expect(Order::count())->toBe(1)->and(shelf($rice['id']))->toBe(22);
+    expect(orders()->count())->toBe(1)->and(shelf($rice['id']))->toBe(22);
 });
 
 it('refuses a payment that is wrong for the ticket', function () {
@@ -113,7 +118,7 @@ it('refuses a payment that is wrong for the ticket', function () {
     payCart($token, ['rail' => 'zaad'])->assertStatus(422)->assertJsonPath('error.code', 'payment.rail_unavailable');
     payCart($token, ['rail' => 'bitcoin'])->assertStatus(422)->assertJsonPath('error.code', 'validation.failed');
 
-    expect(Order::count())->toBe(0)->and(shelf($rice['id']))->toBe(24)->and(ticket($token)['is_empty'])->toBeFalse();
+    expect(orders()->count())->toBe(0)->and(shelf($rice['id']))->toBe(24)->and(ticket($token)['is_empty'])->toBeFalse();
 });
 
 it('takes a wallet payment: the sale waits for the customer, then completes when they approve', function () {
@@ -128,7 +133,7 @@ it('takes a wallet payment: the sale waits for the customer, then completes when
 
     $chargeId = $pending->json('data.charge_id');
     expect($pending->json('data.poll'))->toBe('/api/v1/payments/charges/'.$chargeId)
-        ->and(Order::count())->toBe(0)->and(shelf($rice['id']))->toBe(24)->and(ticket($token)['is_empty'])->toBeFalse();
+        ->and(orders()->count())->toBe(0)->and(shelf($rice['id']))->toBe(24)->and(ticket($token)['is_empty'])->toBeFalse();
 
     Cache::put('test-edahab-status', 'Pending');
     test()->withToken($token)->getJson('/api/v1/payments/charges/'.$chargeId)
@@ -141,8 +146,8 @@ it('takes a wallet payment: the sale waits for the customer, then completes when
 
     test()->withToken($token)->getJson('/api/v1/payments/charges/'.$chargeId)->assertJsonPath('data.order.id', $paid->json('data.order.id'));
 
-    expect(Order::count())->toBe(1)->and(shelf($rice['id']))->toBe(22)->and(ticket($token)['is_empty'])->toBeTrue()
-        ->and(Order::first()->payment_method)->toBe('edahab');
+    expect(orders()->count())->toBe(1)->and(shelf($rice['id']))->toBe(22)->and(ticket($token)['is_empty'])->toBeTrue()
+        ->and(orders()->first()->payment_method)->toBe('edahab');
 });
 
 it('stops a second payment starting while one is waiting for the customer', function () {
@@ -177,7 +182,7 @@ it('passes the wallet fee to the customer on Gold', function () {
     test()->withToken($token)->getJson('/api/v1/payments/charges/'.$chargeId)
         ->assertJsonPath('data.status', 'paid')->assertJsonPath('data.amount.amount', 319680);
 
-    expect((float) Order::first()->exelo_amount)->toBe(1.11)->and((float) Order::first()->total_price)->toBe(38.85);
+    expect((float) orders()->first()->exelo_amount)->toBe(1.11)->and((float) orders()->first()->total_price)->toBe(38.85);
 });
 
 it('holds a ticket as a pending order without touching stock', function () {
@@ -192,11 +197,11 @@ it('holds a ticket as a pending order without touching stock', function () {
         ->assertJsonPath('data.order.total.amount', 3885)
         ->assertJsonPath('data.cart.is_empty', true);
 
-    expect(shelf($rice['id']))->toBe(24)->and(Order::first()->paid_at)->toBeNull()->and(Order::first()->note)->toBe('Collecting Thursday')
+    expect(shelf($rice['id']))->toBe(24)->and(orders()->first()->paid_at)->toBeNull()->and(orders()->first()->note)->toBe('Collecting Thursday')
         ->and(ticket($token)['version'])->toBeGreaterThan($version);
 
     test()->withToken($token)->postJson('/api/v1/cart/hold', $body)->assertCreated()->assertJsonPath('data.order.id', $held->json('data.order.id'));
-    expect(Order::count())->toBe(1);
+    expect(orders()->count())->toBe(1);
 
     test()->withToken($token)->postJson('/api/v1/cart/hold', ['idempotency_key' => freshKey()] + ['customer' => ['name' => 'X', 'mobile_number' => '1']])
         ->assertStatus(422)->assertJsonPath('error.code', 'cart.empty');
@@ -360,7 +365,7 @@ it('saves an order composed offline, once', function () {
         ->assertJsonPath('data.created_at', '2026-09-18T11:02:00Z');
 
     test()->withToken($token)->postJson('/api/v1/orders', $body)->assertOk()->assertJsonPath('data.id', $created->json('data.id'))->assertJsonPath('message', 'Order already saved');
-    expect(Order::count())->toBe(1);
+    expect(orders()->count())->toBe(1);
 
     test()->withToken($token)->postJson('/api/v1/orders', ['client_order_id' => 'x', 'status' => 'complete', 'items' => [['product_id' => $rice['id'], 'quantity' => 1]]])->assertStatus(422);
     test()->withToken($token)->postJson('/api/v1/orders', ['client_order_id' => 'y', 'items' => [['product_id' => 999999, 'quantity' => 1]]])->assertStatus(404)->assertJsonPath('error.code', 'product.not_found');
@@ -412,7 +417,7 @@ it('starts a charge directly for a ticket, locking a quote and refusing a change
     $charge(['quote_id' => $cashQuote, 'customer' => ['name' => 'Amina']])->assertOk()->assertJsonPath('data.status', 'paid')->assertJsonPath('data.order.order_status', 'Complete')
         ->assertJsonPath('data.customer_charge.amount', 3885);
 
-    expect(Order::count())->toBe(1);
+    expect(orders()->count())->toBe(1);
 });
 
 it('settles an order through the charge endpoint too', function () {
@@ -422,7 +427,7 @@ it('settles an order through the charge endpoint too', function () {
     test()->withToken($token)->postJson('/api/v1/payments/charges', ['rail' => 'cash', 'purpose' => 'order_settlement', 'amount' => ['amount' => 3885, 'currency' => 'USD'], 'order_id' => $id, 'idempotency_key' => freshKey()])
         ->assertOk()->assertJsonPath('data.purpose', 'order_settlement')->assertJsonPath('data.status', 'paid');
 
-    expect(Order::find($id)->paid_at)->not->toBeNull()->and(Order::count())->toBe(1);
+    expect(Order::find($id)->paid_at)->not->toBeNull()->and(orders()->count())->toBe(1);
 });
 
 it('limits the till to what each permission allows', function () {

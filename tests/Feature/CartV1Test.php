@@ -1,7 +1,8 @@
-<?php
+﻿<?php
 
 use App\Models\Cart;
 use App\Models\CartItem;
+use App\Models\Merchant;
 use Database\Seeders\PlanCatalogueSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Str;
@@ -109,7 +110,7 @@ it('does not add a scanned line twice when the request is retried', function () 
     test()->withToken($token)->postJson('/api/v1/cart/items', ['quantity' => 2] + $body)
         ->assertStatus(409)->assertJsonPath('error.code', 'idempotency.key_reused');
 
-    expect(CartItem::first()->quantity)->toBe(1);
+    expect(CartItem::latest('id')->first()->quantity)->toBe(1);
 });
 
 it('lets the shopkeeper override a line price in either currency', function () {
@@ -169,7 +170,7 @@ it('keeps a separate ticket for each till', function () {
     app('auth')->forgetGuards();
     test()->withToken($token)->getJson('/api/v1/cart')->assertJsonPath('data.items.0.quantity', 2);
 
-    expect(Cart::where('cart_type', 'shop')->pluck('device_id')->sort()->values()->all())->toBe(['dev-1', 'till-2']);
+    expect(Cart::where('merchant_id', Merchant::where('phone_number', PHONE)->value('id'))->where('cart_type', 'shop')->pluck('device_id')->sort()->values()->all())->toBe(['dev-1', 'till-2']);
 });
 
 it('sells the back room from a stock ticket', function () {

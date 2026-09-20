@@ -116,6 +116,36 @@
                 </li>
 
             @endcan
+            @can('view-employee')
+                <li class="sidebar-item {{ request()->routeIs('admin.employees.*') ? 'active' : '' }}">
+                    <a class="sidebar-link" href="{{ route('admin.employees.index') }}">
+                        <i class="fas fa-users"></i>
+                        <span class="align-middle">Employees</span>
+                    </a>
+                </li>
+            @endcan
+            @can('view-product')
+                <li class="sidebar-item {{ request()->routeIs('admin.products.*') ? 'active' : '' }}">
+                    <a class="sidebar-link" href="{{ route('admin.products.index') }}">
+                        <i class="fas fa-box"></i>
+                        <span class="align-middle">Products</span>
+                    </a>
+                </li>
+                <li class="sidebar-item {{ request()->routeIs('admin.categories.*') ? 'active' : '' }}">
+                    <a class="sidebar-link" href="{{ route('admin.categories.index') }}">
+                        <i class="fas fa-tags"></i>
+                        <span class="align-middle">Categories</span>
+                    </a>
+                </li>
+            @endcan
+            @can('view-cart')
+                <li class="sidebar-item {{ request()->routeIs('admin.carts.*') ? 'active' : '' }}">
+                    <a class="sidebar-link" href="{{ route('admin.carts.index') }}">
+                        <i class="fas fa-shopping-cart"></i>
+                        <span class="align-middle">Open Tickets</span>
+                    </a>
+                </li>
+            @endcan
             @can('view-transaction')
                 <li class="sidebar-item  ">
                     <a class="sidebar-link" href="{{ route('admin.transactions.show') }}">

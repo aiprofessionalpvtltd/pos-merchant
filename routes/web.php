@@ -2,11 +2,14 @@
 
 use App\Http\Controllers\Admin\AdminController;
 use App\Http\Controllers\Admin\Dashboard\SuperAdminDashboardController;
+use App\Http\Controllers\Admin\CartController;
 use App\Http\Controllers\Admin\DashboardController;
+use App\Http\Controllers\Admin\EmployeeController;
 use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\MerchantController;
 use App\Http\Controllers\Admin\MerchantSubscriptionController;
 use App\Http\Controllers\Admin\OrderController;
+use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\UserController;
@@ -67,6 +70,15 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/orders', [OrderController::class, 'show'])->name('admin.orders.show');
     Route::get('/admin/orders/{id}/view', [OrderController::class, 'view'])->name('admin.orders.view');
 
+
+    //Inventory and cart records (read only)
+    Route::get('/admin/products', [ProductController::class, 'index'])->name('admin.products.index');
+    Route::get('/admin/products/{id}', [ProductController::class, 'show'])->whereNumber('id')->name('admin.products.view');
+    Route::get('/admin/categories', [ProductController::class, 'categories'])->name('admin.categories.index');
+    Route::get('/admin/employees', [EmployeeController::class, 'index'])->name('admin.employees.index');
+    Route::get('/admin/employees/{id}', [EmployeeController::class, 'show'])->whereNumber('id')->name('admin.employees.view');
+    Route::get('/admin/carts', [CartController::class, 'index'])->name('admin.carts.index');
+    Route::get('/admin/carts/{id}', [CartController::class, 'show'])->whereNumber('id')->name('admin.carts.view');
 
     //Transaction Controllers
     Route::get('/admin/transactions', [TransactionController::class, 'show'])->name('admin.transactions.show');
