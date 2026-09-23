@@ -25,6 +25,7 @@ class Product extends Model
         'bar_code',
         'version',
         'client_uuid',
+        'image_file_id',
     ];
 
     public function category()
@@ -51,6 +52,4 @@ class Product extends Model
     {
         return $this->hasMany(OrderItem::class);
     }
-
-
 }

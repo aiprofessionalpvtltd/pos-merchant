@@ -8,9 +8,8 @@ endpoints here are shaped to make that mirror correct: delta pulls, tombstones, 
 client-supplied identity for products created offline.
 
 > **Status: implemented.** All eleven endpoints are live and tested, and every
-> response below is captured from the running API. Product images are the one open
-> item: `image_file_id` is accepted but ignored until the Files module exists, and
-> `image` shows only pictures uploaded through the legacy app.
+> response below is captured from the running API, including product photos via
+> [`image_file_id`](files.md#1-post-apiv1files--upload-a-file).
 
 | Method | Path | Auth |
 | --- | --- | --- |
@@ -213,7 +212,7 @@ SQLite, then keeps it fresh with delta pulls. Replaces `GET /api/products/mercha
 | `client_uuid` | The device id it was created with; `null` for products created in the legacy app |
 | `quantities` | On hand in each location |
 | `limits` | `alarm_limit` warns when the **shelf** runs low, `stock_limit` when the **back room** does; `0` switches an alert off |
-| `image` | `null` unless the legacy app uploaded a picture; then `{ id, url, thumb_url }` with absolute URLs |
+| `image` | `null` unless `image_file_id` is set or the legacy app uploaded a picture; then `{ id, url, thumb_url }` with absolute URLs |
 | `total_sold` | Units sold across all orders |
 
 ### Delta pull and tombstones
@@ -373,7 +372,7 @@ permission.
 | `type` | enum | yes | `shop` \| `stock`: where the opening quantity sits |
 | `limits.stock_limit` | int | no | Restock threshold for the back room. Default `0` (off) |
 | `limits.alarm_limit` | int | no | Low-stock alarm for the shelf. Default `0` (off) |
-| `image_file_id` | string | no | Accepted and ignored until the Files module exists |
+| `image_file_id` | string | no | From [`POST /files`](files.md#1-post-apiv1files--upload-a-file), `purpose: product_image` |
 | `created_at` | timestamp | no | When it was really created offline |
 | `idempotency_key` | string | no | Optional here: `client_uuid` already identifies the request |
 
@@ -893,7 +892,10 @@ How it behaves:
 - **Validation messages** are the standard Laravel wording (for example `The
   quantity field is required.`) under `error.details`, keyed by field. Branch on
   `error.code`, not on the text.
-- **Not built yet:** image upload (`image_file_id`, waits for the Files module).
+- **Images.** `image_file_id` resolves through the
+  [Files module](files.md#1-post-apiv1files--upload-a-file); a product with
+  none shows `image: null` unless the legacy app already uploaded one, in
+  which case that path is used as a fallback.
 - **Error codes** are listed in [errors.md](errors.md): `product.not_found`,
   `product.barcode_unknown`, `product.barcode_taken`, `product.in_active_cart`,
   `category.name_taken`, `inventory.insufficient_quantity`.

@@ -11,6 +11,17 @@ return [
         'max' => (int) env('EXCHANGE_RATE_MAX', 15000),
     ],
 
+    'files' => [
+        'disk' => env('EXELO_FILES_DISK', 'public'),
+        // Unattached uploads older than this are swept by prune:files.
+        'orphan_ttl_hours' => 24,
+        'purposes' => [
+            'product_image' => ['max_bytes' => 5 * 1024 * 1024, 'mimes' => ['image/jpeg', 'image/png', 'image/webp'], 'max_dimension' => 1200, 'thumb_dimension' => 200, 'encode' => 'webp'],
+            'signature' => ['max_bytes' => 512 * 1024, 'mimes' => ['image/png'], 'max_dimension' => null, 'thumb_dimension' => null, 'encode' => 'png'],
+            'merchant_logo' => ['max_bytes' => 2 * 1024 * 1024, 'mimes' => ['image/jpeg', 'image/png'], 'max_dimension' => 512, 'thumb_dimension' => null, 'encode' => null],
+        ],
+    ],
+
     'payments' => [
         // One combined fee on wallet payments. Gold shops pass it to the customer, other plans absorb it.
         'wallet_fee_rate' => (float) env('EXELO_WALLET_FEE_RATE', 0.0285),

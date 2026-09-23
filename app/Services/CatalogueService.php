@@ -20,6 +20,8 @@ use Illuminate\Support\Facades\DB;
 
 class CatalogueService
 {
+    public function __construct(private readonly FileService $files) {}
+
     /**
      * @param  array<string, mixed>  $filters  validated list query
      * @return array{items: array<int, array<string, mixed>>, pagination: array<string, mixed>, sync_cursor: string}
@@ -114,6 +116,7 @@ class CatalogueService
 
             $this->assertBarcodeFree($merchant, $data['bar_code'] ?? null);
             $this->assertCategory($merchant, $data['category_id'] ?? null);
+            $this->assertImage($merchant, $data['image_file_id'] ?? null);
 
             $vatRate = $data['vat_rate'] ?? $merchant->vat_rate;
             $usd = $this->usdMajor($merchant, $data['price']);
@@ -124,6 +127,7 @@ class CatalogueService
                 'product_name' => $data['product_name'],
                 'bar_code' => $data['bar_code'] ?? null,
                 'category_id' => $data['category_id'] ?? null,
+                'image_file_id' => $data['image_file_id'] ?? null,
                 'price' => $usd,
                 'price_sls' => round($usd * $merchant->effectiveExchangeRate(), 2),
                 'exchange_rate' => $merchant->effectiveExchangeRate(),
@@ -137,6 +141,8 @@ class CatalogueService
             if (isset($data['created_at'])) {
                 $product->forceFill(['created_at' => $data['created_at']])->save();
             }
+
+            $this->files->markAttached($data['image_file_id'] ?? null, $merchant);
 
             ProductInventory::create(['product_id' => $product->id, 'type' => $data['type'], 'quantity' => $data['quantity']]);
 
@@ -171,7 +177,12 @@ class CatalogueService
                 $this->assertCategory($merchant, $data['category_id']);
             }
 
-            $product->fill(array_intersect_key($data, array_flip(['product_name', 'bar_code', 'category_id'])));
+            if (array_key_exists('image_file_id', $data)) {
+                $this->assertImage($merchant, $data['image_file_id']);
+                $this->files->markAttached($data['image_file_id'], $merchant);
+            }
+
+            $product->fill(array_intersect_key($data, array_flip(['product_name', 'bar_code', 'category_id', 'image_file_id'])));
 
             if (isset($data['limits']['stock_limit'])) {
                 $product->stock_limit = $data['limits']['stock_limit'];
@@ -318,6 +329,19 @@ class CatalogueService
     {
         if ($categoryId !== null && ! Category::where('merchant_id', $merchant->id)->whereKey($categoryId)->exists()) {
             throw new ApiException('validation.failed', 'Please check the form', 422, ['category_id' => ['Choose one of your categories']], 'category_id');
+        }
+    }
+
+    private function assertImage(Merchant $merchant, ?string $fileId): void
+    {
+        if ($fileId === null) {
+            return;
+        }
+
+        $file = $this->files->find($merchant, $fileId);
+
+        if ($file->purpose !== 'product_image') {
+            throw new ApiException('validation.failed', 'Please check the form', 422, ['image_file_id' => ['That file was not uploaded as a product image']], 'image_file_id');
         }
     }
 

@@ -673,7 +673,7 @@ required.**
 | `customer.name` | string | yes | |
 | `customer.mobile_number` | string | yes | |
 | `note` | string | no | Up to 255 characters |
-| `signature_file_id` | string | no | Accepted and ignored until the Files module exists |
+| `signature_file_id` | string | no | From [`POST /files`](files.md#1-post-apiv1files--upload-a-file), `purpose: signature` |
 | `idempotency_key` | string | yes | UUID, one per attempt |
 
 **Response `201`**
@@ -704,9 +704,11 @@ completed. The held order is settled later through
 
 The legacy endpoint accepted the signature inline as a base64 data URL in the JSON
 body, which makes the request large and slow, and a failure loses the order along
-with the image. In v1 the signature will be uploaded separately to `POST /files`
-(retryable on its own) and only its id sent here. Until the Files module exists the
-field is ignored, so the order is saved without one.
+with the image. In v1 the signature is uploaded separately to
+[`POST /files`](files.md#1-post-apiv1files--upload-a-file) (retryable on its own)
+and only its id sent here. Sending no `signature_file_id` saves the order without
+one; sending one that was not uploaded with `purpose: signature` returns
+`422 validation.failed` on `signature_file_id`.
 
 **Errors**
 
@@ -841,6 +843,5 @@ stays `pending` until the provider reports it paid.
   the payment started, so a new sale begun in the meantime is never wiped.
 - **Validation messages** are the standard Laravel wording under `error.details`,
   keyed by field. Branch on `error.code`, not the text.
-- **Not built yet:** `cart.has_held_lines`, signatures on `hold`, the `card` and
-  `nfc` rails.
+- **Not built yet:** `cart.has_held_lines`, the `card` and `nfc` rails.
 - **Legacy routes** (`/api/cart/*`) keep working alongside.

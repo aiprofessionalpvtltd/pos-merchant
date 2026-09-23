@@ -13,6 +13,8 @@ class MerchantProfileService
 {
     private const RAIL_LABELS = ['zaad' => 'Zaad', 'edahab' => 'eDahab', 'golis' => 'Golis', 'evc' => 'EVC'];
 
+    public function __construct(private readonly FileService $files) {}
+
     public function profile(Merchant $merchant): array
     {
         return (new MerchantProfileResource($merchant))->resolve();
@@ -38,6 +40,19 @@ class MerchantProfileService
             $merchant->fill(array_intersect_key($data, array_flip([
                 'business_name', 'first_name', 'last_name', 'email', 'merchant_code', 'other_merchant_code', 'city',
             ])));
+
+            if (array_key_exists('logo_file_id', $data)) {
+                if ($data['logo_file_id'] !== null) {
+                    $logo = $this->files->find($merchant, $data['logo_file_id']);
+
+                    if ($logo->purpose !== 'merchant_logo') {
+                        throw new ApiException('validation.failed', 'Please check the form', 422, ['logo_file_id' => ['That file was not uploaded as a logo']], 'logo_file_id');
+                    }
+                }
+
+                $merchant->logo_file_id = $data['logo_file_id'];
+                $this->files->markAttached($data['logo_file_id'], $merchant);
+            }
 
             if (isset($data['state'])) {
                 $state = collect(config('exelo.states'))->firstWhere('code', $data['state']);

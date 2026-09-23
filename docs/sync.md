@@ -214,7 +214,7 @@ This replaces three separate ad-hoc mechanisms:
 | `inventory.transfer` | [`POST /inventory/transfers`](inventory.md#post-inventorytransfers) |
 | `inventory.adjust` | [`PATCH /inventory/{id}/quantities`](inventory.md#patch-inventoryproduct_idquantities) |
 | `shift.start` / `shift.end` | [Shifts](employees.md#post-shiftsstart) |
-| `order.create` | [`POST /orders`](orders.md#post-orders) |
+| `order.create` | [`POST /orders`](orders.md#3-post-apiv1orders--save-an-order-composed-offline) |
 
 Held cart lines are **not** replayed here — they go through
 [`POST /cart/sync`](cart.md#post-cartsync), which reconciles the whole ticket

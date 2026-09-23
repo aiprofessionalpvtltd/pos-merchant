@@ -15,17 +15,19 @@ use App\Http\Controllers\API\ProductController;
 use App\Http\Controllers\API\ProductInventoryController;
 use App\Http\Controllers\API\SaleController;
 use App\Http\Controllers\API\V1\AuthController;
-use App\Http\Controllers\API\V1\EmployeeController as V1EmployeeController;
-use App\Http\Controllers\API\V1\PaymentChargeController;
-use App\Http\Controllers\API\V1\RegistrationController as V1RegistrationController;
-use App\Http\Controllers\API\V1\ShiftController;
-use App\Http\Controllers\API\V1\MerchantController as V1MerchantController;
 use App\Http\Controllers\API\V1\CartController as V1CartController;
 use App\Http\Controllers\API\V1\CategoryController as V1CategoryController;
+use App\Http\Controllers\API\V1\DashboardController as V1DashboardController;
+use App\Http\Controllers\API\V1\EmployeeController as V1EmployeeController;
+use App\Http\Controllers\API\V1\FileController as V1FileController;
 use App\Http\Controllers\API\V1\InventoryController as V1InventoryController;
+use App\Http\Controllers\API\V1\MerchantController as V1MerchantController;
 use App\Http\Controllers\API\V1\OrderController as V1OrderController;
+use App\Http\Controllers\API\V1\PaymentChargeController;
 use App\Http\Controllers\API\V1\PaymentController as V1PaymentController;
 use App\Http\Controllers\API\V1\ProductController as V1ProductController;
+use App\Http\Controllers\API\V1\RegistrationController as V1RegistrationController;
+use App\Http\Controllers\API\V1\ShiftController;
 use App\Http\Controllers\API\V1\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 
@@ -130,6 +132,21 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::patch('settings', [V1MerchantController::class, 'updateSettings'])->name('settings.update');
     });
 
+    Route::middleware(['auth:api', 'throttle:v1-files'])->prefix('files')->name('files.')->group(function () {
+        Route::post('/', [V1FileController::class, 'store'])->name('store');
+        Route::get('{id}', [V1FileController::class, 'show'])->name('show');
+        Route::delete('{id}', [V1FileController::class, 'destroy'])->name('destroy');
+    });
+
+    Route::middleware(['auth:api', 'throttle:v1-dashboard'])->get('dashboard', [V1DashboardController::class, 'index'])->name('dashboard.show');
+
+    Route::middleware(['auth:api', 'throttle:v1-reports', 'pos.permission:reports'])->prefix('reports')->name('reports.')->group(function () {
+        Route::get('sales', [V1DashboardController::class, 'sales'])->name('sales');
+        Route::get('inventory', [V1DashboardController::class, 'inventory'])->name('inventory');
+        Route::get('products', [V1DashboardController::class, 'products'])->name('products');
+        Route::get('catalogue', [V1DashboardController::class, 'catalogue'])->name('catalogue');
+    });
+
     Route::middleware(['auth:api', 'throttle:v1-staff'])->group(function () {
         Route::get('permissions', [V1EmployeeController::class, 'permissions'])->name('permissions.index');
 
@@ -153,6 +170,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
     Route::middleware('auth:api')->post('merchants/{id}/verification/complete', [V1RegistrationController::class, 'completeVerification'])
         ->whereNumber('id')
         ->name('merchants.verification.complete');
+
+    Route::get('files/{file}/raw', [V1FileController::class, 'raw'])->name('files.raw')->withoutMiddleware('throttle:v1-files');
 });
 
 Route::post('login', [PassportAuthController::class, 'login']);

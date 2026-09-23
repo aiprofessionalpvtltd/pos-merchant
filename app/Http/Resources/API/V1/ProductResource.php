@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\API\V1;
 
+use App\Models\File;
 use App\Models\Product;
 use App\Support\ApiResponse;
 use App\Support\Money;
@@ -45,10 +46,12 @@ class ProductResource extends JsonResource
             'category' => $product->category ? ['id' => $product->category->id, 'name' => $product->category->name] : null,
         ];
 
+        $file = $this->imageFile($product);
+
         if ($this->mode === self::LOOKUP) {
             return $data + [
                 'quantities' => ['in_shop' => $quantities['in_shop'], 'in_stock' => $quantities['in_stock']],
-                'image' => ['thumb_url' => $this->imageUrl($product)],
+                'image' => ['thumb_url' => $file ? ($file->thumbUrl() ?? $file->url()) : $this->legacyImageUrl($product)],
             ];
         }
 
@@ -56,7 +59,7 @@ class ProductResource extends JsonResource
             'client_uuid' => $product->client_uuid,
             'quantities' => $quantities,
             'limits' => ['stock_limit' => $product->stock_limit, 'alarm_limit' => $product->alarm_limit],
-            'image' => $product->image ? ['id' => null, 'url' => $this->imageUrl($product), 'thumb_url' => $this->imageUrl($product)] : null,
+            'image' => $this->imageBlock($product, $file),
             'total_sold' => (int) ($product->order_items_sum_quantity ?? 0),
             'created_at' => ApiResponse::iso($product->created_at),
             'updated_at' => ApiResponse::iso($product->updated_at),
@@ -78,7 +81,28 @@ class ProductResource extends JsonResource
         ];
     }
 
-    private function imageUrl(Product $product): ?string
+    private function imageFile(Product $product): ?File
+    {
+        return $product->image_file_id ? File::where('public_id', $product->image_file_id)->first() : null;
+    }
+
+    /**
+     * @return array{id: ?string, url: ?string, thumb_url: ?string}|null
+     */
+    private function imageBlock(Product $product, ?File $file): ?array
+    {
+        if ($file) {
+            return ['id' => $file->public_id, 'url' => $file->url(), 'thumb_url' => $file->thumbUrl()];
+        }
+
+        if ($product->image) {
+            return ['id' => null, 'url' => $this->legacyImageUrl($product), 'thumb_url' => $this->legacyImageUrl($product)];
+        }
+
+        return null;
+    }
+
+    private function legacyImageUrl(Product $product): ?string
     {
         return $product->image ? Storage::disk('public')->url($product->image) : null;
     }

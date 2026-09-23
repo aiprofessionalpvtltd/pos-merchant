@@ -18,7 +18,7 @@ is a field, not a different endpoint.
 > | `confirm`, `cancel`, `payouts`, `card/session`, webhooks | **Specified, not built yet.** The examples are the **contract to build against**, not captured output. |
 >
 > Sales are also taken through [`POST /cart/pay`](cart.md#post-cartpay) and
-> [`POST /orders/{id}/pay`](orders.md#post-ordersidpay), which use the same charge.
+> [`POST /orders/{id}/pay`](orders.md#5-post-apiv1ordersidpay--take-payment-for-a-pending-order), which use the same charge.
 > See [Implementation notes](#implementation-notes) for how a charge works and what
 > is still open.
 
@@ -325,7 +325,7 @@ required.** Needs the `pos` permission.
 | `customer.name` | string | no | Recorded on the receipt |
 | `customer.mobile_number` | string | no | Recorded on the order |
 | `cart_version` | int | no | The ticket `version` you saw; `409 payment.cart_changed` if it moved |
-| `amount_tendered` | Money | no | Cash only, through [`/cart/pay`](cart.md#post-cartpay) and [`/orders/{id}/pay`](orders.md#post-ordersidpay): checked against the amount due (`422 payment.tender_too_low`) |
+| `amount_tendered` | Money | no | Cash only, through [`/cart/pay`](cart.md#post-cartpay) and [`/orders/{id}/pay`](orders.md#5-post-apiv1ordersidpay--take-payment-for-a-pending-order): checked against the amount due (`422 payment.tender_too_low`) |
 | `cart_id` | int | For `pos_sale` | The cart being settled |
 | `order_id` | int | For `order_settlement` | The order being settled |
 | `payment_nonce` | string | For `card` | Braintree nonce from the client SDK |

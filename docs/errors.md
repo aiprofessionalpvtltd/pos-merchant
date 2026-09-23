@@ -205,10 +205,11 @@ A `from` equal to `to` on a transfer is an ordinary `422 validation.failed` on `
 
 | Code | Status | `details` |
 | --- | --- | --- |
-| `file.too_large` | 413 | `max_bytes`, `received_bytes` |
+| `file.too_large` | 413 | `max_bytes` |
 | `file.type_unsupported` | 415 | `accepted` |
 | `file.corrupt` | 422 | |
-| `file.in_use` | 409 | `attached_to` |
+| `file.not_found` | 404 | |
+| `file.in_use` | 409 | `attached_to` (`{ type: "product"\|"order"\|"merchant", id }`) |
 
 ---
 

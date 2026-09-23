@@ -2,6 +2,7 @@
 
 namespace App\Http\Resources\API\V1;
 
+use App\Models\File;
 use App\Models\Merchant;
 use App\Services\SubscriptionService;
 use App\Support\ApiResponse;
@@ -42,7 +43,7 @@ class MerchantProfileResource extends JsonResource
                 'city' => $merchant->city,
                 'location' => $merchant->location,
             ],
-            'logo' => null,
+            'logo' => $this->logo($merchant),
             'currency' => 'USD',
             'alt_currency' => config('exelo.alt_currency'),
             'exchange_rate' => $merchant->effectiveExchangeRate(),
@@ -51,5 +52,16 @@ class MerchantProfileResource extends JsonResource
             'subscription' => ['plan_id' => $state->plan->id, 'plan' => $state->plan->key, 'status' => $state->status],
             'created_at' => ApiResponse::iso($merchant->created_at),
         ];
+    }
+
+    private function logo(Merchant $merchant): ?array
+    {
+        if (! $merchant->logo_file_id) {
+            return null;
+        }
+
+        $file = File::where('merchant_id', $merchant->id)->where('public_id', $merchant->logo_file_id)->first();
+
+        return $file ? ['id' => $file->public_id, 'url' => $file->url()] : null;
     }
 }

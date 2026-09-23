@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Exceptions\ApiException;
 use App\Models\Employee;
+use App\Models\File;
 use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Models\Order;
@@ -149,6 +150,7 @@ class OrderService
         $order = Order::create($attributes + [
             'merchant_id' => $merchant->id,
             'user_id' => $actor->id,
+            'version' => 1,
             'name' => $customer['name'] ?? null,
             'mobile_number' => $customer['mobile_number'] ?? null,
             'sub_total' => $subtotal / 100,
@@ -301,7 +303,7 @@ class OrderService
                 'line_total' => Money::usd(Money::toMinor((float) $item->price, 'USD') * $item->quantity),
             ])->all(),
             'totals' => $totals + ['vat_label' => $vatLabel],
-            'signature_url' => null,
+            'signature_url' => $this->signatureUrl($order),
             'charge' => $charge,
             'footer' => $preferences['receipt']['footer'] ?? 'Thank you for shopping with '.$merchant->business_name,
         ];
@@ -337,7 +339,7 @@ class OrderService
                 ];
             })->all(),
             'totals' => $this->totals($order, $rate),
-            'signature' => null,
+            'signature' => $this->signatureBlock($order),
             'charge' => $this->latestCharge($order),
             'note' => $order->note,
             'employee' => $this->employee($order),
@@ -471,6 +473,26 @@ class OrderService
     private function alt(int $usdCents, int $rate): array
     {
         return Money::of((int) round($usdCents * $rate / 100), config('exelo.alt_currency'));
+    }
+
+    private function signatureFile(Order $order): ?File
+    {
+        return $order->signature_file_id ? File::where('public_id', $order->signature_file_id)->first() : null;
+    }
+
+    private function signatureUrl(Order $order): ?string
+    {
+        return $this->signatureFile($order)?->url();
+    }
+
+    /**
+     * @return array{file_id: string, url: string}|null
+     */
+    private function signatureBlock(Order $order): ?array
+    {
+        $file = $this->signatureFile($order);
+
+        return $file ? ['file_id' => $file->public_id, 'url' => $file->url()] : null;
     }
 
     private function display($date, Merchant $merchant): ?string

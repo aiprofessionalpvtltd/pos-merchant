@@ -31,6 +31,7 @@ class Order extends Model
         'client_order_id',
         'cancel_reason',
         'stock_deducted_at',
+        'signature_file_id',
     ];
 
     protected $casts = [

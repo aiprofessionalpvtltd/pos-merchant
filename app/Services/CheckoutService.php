@@ -20,6 +20,7 @@ class CheckoutService
         private readonly CartService $carts,
         private readonly ChargeService $charges,
         private readonly OrderService $orders,
+        private readonly FileService $files,
     ) {}
 
     /**
@@ -104,11 +105,24 @@ class CheckoutService
                 'vat_percent' => (int) ($item->product->vat ?? 0),
             ])->all();
 
+            $signatureFileId = $data['signature_file_id'] ?? null;
+
+            if ($signatureFileId) {
+                $signature = $this->files->find($merchant, $signatureFileId);
+
+                if ($signature->purpose !== 'signature') {
+                    throw new ApiException('validation.failed', 'Please check the form', 422, ['signature_file_id' => ['That file was not uploaded as a signature']], 'signature_file_id');
+                }
+            }
+
             $order = $this->orders->createFromLines($user, $merchant, $lines, $data['customer'], [
                 'order_status' => 'Pending',
                 'order_type' => $type,
                 'note' => $data['note'] ?? null,
+                'signature_file_id' => $signatureFileId,
             ]);
+
+            $this->files->markAttached($signatureFileId, $merchant);
 
             $cart->items()->delete();
             $cart->forceFill(['version' => $cart->version + 1])->save();

@@ -2,8 +2,8 @@
 
 The shop's own details, payout wallets and preferences.
 
-> **Status: implemented**, except the shop logo (`logo` is always `null` and
-> `logo_file_id` is accepted but ignored until the Files module exists). See
+> **Status: implemented**, including the shop logo via
+> [`logo_file_id`](files.md#post-apiv1files--upload-a-file). See
 > [Implementation notes](#implementation-notes) for where the data is stored.
 
 Employees can read this module; only the shop owner can write to it.
@@ -155,7 +155,7 @@ the owner, address, logo, currency settings and current plan.
 }
 ```
 
-`logo` is `null` until one is uploaded. Employees receive the same object.
+`logo` is `null` until `logo_file_id` is set. Employees receive the same object.
 
 ## 2. PATCH `/api/v1/merchant` — Edit the shop profile
 
@@ -186,7 +186,7 @@ Owner only.
 | `city` | string | no | Free text |
 | `merchant_code` | string | no | eDahab agent code; must be unique |
 | `other_merchant_code` | string | no | Zaad agent code; must be unique |
-| `logo_file_id` | string | no | From [`POST /files`](files.md#post-files) |
+| `logo_file_id` | string \| null | no | From [`POST /files`](files.md#1-post-apiv1files--upload-a-file), `purpose: merchant_logo`. `null` clears the logo. |
 
 The phone number is **not** editable here — it is the login identity. Changing it
 needs OTP verification on both the old and new number, which is a separate flow
@@ -513,7 +513,8 @@ Behaviour worth knowing:
   gets `403 auth.merchant_only`, never a `422`.
 - **Profile edits** also update the owner's login name and email, and rebuild
   `address.location` as `"City, State"`.
-- **Logo.** Waiting on the Files module; `logo` is `null`.
+- **Logo.** `logo_file_id` resolves through the [Files module](files.md);
+  send `null` to clear it. `logo` is `null` until one is set.
 - **Legacy routes** (`PUT /api/update-merchants`, `GET /api/merchants/getPhoneNumbersStatus`,
   `POST /api/merchants/verificationComplete`) keep working alongside.
 
