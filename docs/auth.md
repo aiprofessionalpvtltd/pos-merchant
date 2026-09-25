@@ -114,10 +114,16 @@ Exchanges phone + PIN for a session token. Replaces
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `phone_number` | string | yes | |
+| `phone_number` | string | yes | The owner's number, or the number of any of their shops |
 | `pin` | string | yes | 4 digits |
+| `shop_id` | int | no | Sign straight into this shop (owners with several shops). `403 shop.not_a_member` if it isn't theirs |
 
-`X-EXELO-Device-Id` is required; the token is bound to it.
+`X-EXELO-Device-Id` is required; the token is bound to it, and to **one shop**:
+`merchant` in the response is that active shop, and every call made with the token
+acts for it. The response also lists `shops`, everything this person can switch
+to with [`POST /shops/{id}/select`](multiple-shop.md#4-post-shopsidselect--switch-shop).
+The same `shops` list is in [`GET /auth/session`](#get-authsession). See
+[multiple-shop.md](multiple-shop.md).
 
 **Response `200`**
 

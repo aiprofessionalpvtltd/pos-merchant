@@ -93,6 +93,17 @@ merchant out mid-sale.
 | `registration.state_unknown` | 422 | `state` is not a valid code |
 | `quote.expired` | 410 | Fetch a fresh quote |
 
+## Shops
+
+See [multiple-shop.md](multiple-shop.md).
+
+| Code | Status | Meaning |
+| --- | --- | --- |
+| `shop.not_a_member` | 403 | Login `shop_id` isn't one of this person's shops |
+| `shop.not_found` | 404 | No such shop for this person, or it was closed |
+| `shop.last_shop` | 409 | The owner's only shop can't be closed |
+| `shop.payments_pending` | 409 | The shop still has a payment waiting |
+
 ---
 
 ## Payments

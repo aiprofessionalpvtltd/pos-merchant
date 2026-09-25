@@ -13,6 +13,7 @@ migration steps and rollout phases live in [`../unified-api-plan.md`](../unified
 | Module | Covers |
 | --- | --- |
 | [Auth & session](auth.md) | Phone lookup, PIN login, PIN reset, session, logout |
+| [Multiple shops](multiple-shop.md) | One owner, several shops: list, switch, open, edit, close |
 | [Registration](registration.md) | Signup fee, merchant creation, wallet verification |
 | [Subscription](subscription.md) | Plans, current subscription, upgrade/downgrade |
 | [Payments](payments.md) | Quotes, charges on every rail, payouts, webhooks |

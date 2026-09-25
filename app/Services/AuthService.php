@@ -58,7 +58,10 @@ class AuthService
         ];
     }
 
-    public function loginWithPin(string $phoneNumber, string $pin, string $deviceId): array
+    /**
+     * @param  int|null  $shopId  Sign straight into this shop (multi-shop owners)
+     */
+    public function loginWithPin(string $phoneNumber, string $pin, string $deviceId, ?int $shopId = null): array
     {
         $account = $this->resolveAccount($phoneNumber);
 
@@ -74,7 +77,7 @@ class AuthService
 
         $this->assertPinCorrect($user, $pin);
 
-        return $this->issueSession($user, $deviceId);
+        return $this->issueSession($user, $deviceId, $shopId, $account['merchant']);
     }
 
     public function createPin(string $phoneNumber, string $pin, string $deviceId): array
@@ -96,7 +99,7 @@ class AuthService
         $this->assertPinStrong($pin);
         $this->storePin($user, $pin);
 
-        return $this->issueSession($user, $deviceId);
+        return $this->issueSession($user, $deviceId, typedShop: $account['merchant']);
     }
 
     public function changePin(User $user, string $currentPin, string $newPin, ?string $currentTokenId): array
@@ -419,19 +422,50 @@ class AuthService
         ])->save();
     }
 
-    private function issueSession(User $user, string $deviceId): array
+    /**
+     * One token per person per device, acting for one shop (docs/multiple-shop.md).
+     *
+     * @param  int|null  $requestedShopId  Shop asked for at login; must be one of the user's
+     * @param  Merchant|null  $typedShop  Shop whose phone number was used to sign in
+     */
+    private function issueSession(User $user, string $deviceId, ?int $requestedShopId = null, ?Merchant $typedShop = null): array
     {
         $tokenName = 'device:'.$deviceId;
+        $previousShopId = $user->tokens()->where('name', $tokenName)->latest('id')->value('merchant_id');
+
+        $shop = $this->chooseShop($user, $requestedShopId, $previousShopId, $typedShop);
 
         $this->revokeTokens($user->tokens()->where('name', $tokenName));
 
         $expiresAt = now()->addMonths(6);
         $result = $user->createToken($tokenName, ['*'], $expiresAt);
+        $result->accessToken->forceFill(['merchant_id' => $shop?->id])->save();
+
+        // The session below is built for the new token's shop.
+        $user->withAccessToken($result->accessToken);
 
         return [
             'token' => $result->plainTextToken,
             'expires_at' => ApiResponse::iso($expiresAt),
         ] + (new SessionResource($user))->resolve();
+    }
+
+    /**
+     * The shop a new session acts for: the one asked for, else the one this device used
+     * last, else the one whose number was typed, else the first.
+     */
+    private function chooseShop(User $user, ?int $requestedShopId, ?int $previousShopId, ?Merchant $typedShop): ?Merchant
+    {
+        $shops = $user->accessibleShops();
+
+        if ($requestedShopId !== null) {
+            return $shops->firstWhere('id', $requestedShopId)
+                ?? throw new ApiException('shop.not_a_member', 'You do not have access to that shop', 403, [], 'shop_id');
+        }
+
+        return $shops->firstWhere('id', $previousShopId)
+            ?? $shops->firstWhere('id', $typedShop?->id)
+            ?? $shops->first();
     }
 
     private function revokeTokens($query): int

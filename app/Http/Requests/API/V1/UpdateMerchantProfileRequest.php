@@ -17,9 +17,17 @@ class UpdateMerchantProfileRequest extends FormRequest
         return true;
     }
 
+    /**
+     * The shop being edited; unique rules ignore its own values.
+     */
+    protected function merchantId(): ?int
+    {
+        return $this->user()->actingMerchant()?->id;
+    }
+
     public function rules(): array
     {
-        $merchantId = $this->user()->actingMerchant()?->id;
+        $merchantId = $this->merchantId();
 
         return [
             'business_name' => ['sometimes', 'string', 'max:100'],

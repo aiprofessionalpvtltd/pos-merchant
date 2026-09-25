@@ -33,6 +33,7 @@ class AuthController extends Controller
             $request->validated('phone_number'),
             $request->validated('pin'),
             $request->header('X-EXELO-Device-Id'),
+            $request->filled('shop_id') ? (int) $request->validated('shop_id') : null,
         );
 
         $name = $data['user']['first_name'] ?: $data['user']['short_name'];

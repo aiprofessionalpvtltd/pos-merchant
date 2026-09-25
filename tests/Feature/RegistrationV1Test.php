@@ -8,7 +8,14 @@ use Illuminate\Support\Facades\Http;
 
 uses(DatabaseTransactions::class);
 
-beforeEach(fn () => (new Database\Seeders\PlanCatalogueSeeder)->run());
+beforeEach(function () {
+    (new Database\Seeders\PlanCatalogueSeeder)->run();
+
+    // Fees an admin saved locally must not change what these tests expect.
+    App\Models\Setting::query()->update(['registration_fee' => null, 'registration_fee_charge' => null, 'verification_fee' => null, 'verification_fee_charge' => null]);
+    Cache::forget('settings:payment-fees');
+    config(['exelo.registration.fees.registration' => ['base' => 500, 'fee' => 50]]);
+});
 
 const NEW_PHONE = '+252654990010';
 

@@ -22,6 +22,7 @@ use App\Http\Controllers\API\V1\EmployeeController as V1EmployeeController;
 use App\Http\Controllers\API\V1\FileController as V1FileController;
 use App\Http\Controllers\API\V1\InventoryController as V1InventoryController;
 use App\Http\Controllers\API\V1\MerchantController as V1MerchantController;
+use App\Http\Controllers\API\V1\ShopController;
 use App\Http\Controllers\API\V1\OrderController as V1OrderController;
 use App\Http\Controllers\API\V1\PaymentChargeController;
 use App\Http\Controllers\API\V1\PaymentController as V1PaymentController;
@@ -130,6 +131,16 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::patch('wallets', [V1MerchantController::class, 'updateWallets'])->name('wallets.update');
         Route::get('settings', [V1MerchantController::class, 'settings'])->name('settings.show');
         Route::patch('settings', [V1MerchantController::class, 'updateSettings'])->name('settings.update');
+    });
+
+    // One owner, several shops — docs/multiple-shop.md
+    Route::middleware(['auth:api', 'throttle:v1-merchant'])->prefix('shops')->name('shops.')->group(function () {
+        Route::get('/', [ShopController::class, 'index'])->name('index');
+        Route::post('/', [ShopController::class, 'store'])->name('store');
+        Route::get('{id}', [ShopController::class, 'show'])->whereNumber('id')->name('show');
+        Route::patch('{id}', [ShopController::class, 'update'])->whereNumber('id')->name('update');
+        Route::delete('{id}', [ShopController::class, 'destroy'])->whereNumber('id')->name('destroy');
+        Route::post('{id}/select', [ShopController::class, 'select'])->whereNumber('id')->name('select');
     });
 
     Route::middleware(['auth:api', 'throttle:v1-files'])->prefix('files')->name('files.')->group(function () {

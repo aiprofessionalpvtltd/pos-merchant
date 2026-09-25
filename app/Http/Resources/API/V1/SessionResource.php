@@ -6,6 +6,7 @@ use App\Models\Merchant;
 use App\Models\POSPermission;
 use App\Models\Shift;
 use App\Models\User;
+use App\Services\ShopService;
 use App\Services\SubscriptionService;
 use App\Support\ApiResponse;
 use Illuminate\Http\Request;
@@ -40,6 +41,9 @@ class SessionResource extends JsonResource
             $data['shift'] = $this->shiftBlock($user);
             $data['server_time'] = ApiResponse::iso(now());
         }
+
+        // Every shop this person can switch to (docs/multiple-shop.md).
+        $data['shops'] = app(ShopService::class)->summaries($user);
 
         return $data;
     }

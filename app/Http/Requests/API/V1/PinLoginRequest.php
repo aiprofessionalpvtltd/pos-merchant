@@ -16,6 +16,7 @@ class PinLoginRequest extends FormRequest
         return [
             'phone_number' => ['required', 'string', 'regex:/^\+?[\d\s\-]{7,20}$/'],
             'pin' => ['required', 'string', 'regex:/^\d{4}$/'],
+            'shop_id' => ['nullable', 'integer', 'min:1'],
         ];
     }
 }

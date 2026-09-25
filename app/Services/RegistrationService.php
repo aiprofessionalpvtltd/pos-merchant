@@ -193,41 +193,13 @@ class RegistrationService
         $email = $input['email'] ?? substr($phone, 1).'@email.com';
 
         return DB::transaction(function () use ($input, $phone, $state, $email) {
-            $invoice = Invoice::where('public_id', $input['invoice_id'])
-                ->where('type', self::TYPES['registration'])
-                ->lockForUpdate()
-                ->first();
-
-            if (! $invoice) {
-                throw new ApiException('validation.failed', 'Please check the form', 422, ['invoice_id' => ['Unknown payment']], 'invoice_id');
-            }
-
-            if ($invoice->consumed_at) {
-                throw new ApiException('registration.invoice_consumed', 'That payment already created an account', 409);
-            }
-
-            if ($invoice->status !== 'Paid') {
-                throw new ApiException('registration.invoice_unpaid', 'The signup fee has not been paid', 402);
-            }
-
-            if ($phone !== PhoneNumber::normalize($invoice->mobile_number)) {
-                throw new ApiException('validation.failed', 'Please check the form', 422, ['phone_number' => ['This number does not match the payment']], 'phone_number');
-            }
+            $invoice = $this->lockedRegistrationInvoice($input['invoice_id'], $phone);
 
             if ($this->completedMerchant($phone)) {
                 throw new ApiException('registration.phone_taken', 'This number already has an EXELO account', 409);
             }
 
-            $merchant = Merchant::whereIn('phone_number', PhoneNumber::variants($phone))->first() ?? new Merchant;
-
-            foreach (['merchant_code', 'other_merchant_code'] as $codeField) {
-                $isTaken = ! empty($input[$codeField])
-                    && Merchant::where($codeField, $input[$codeField])->where('id', '!=', $merchant->id ?? 0)->exists();
-
-                if ($isTaken) {
-                    throw new ApiException('validation.failed', 'Please check the form', 422, [$codeField => ['This code is already registered']], $codeField);
-                }
-            }
+            $this->assertCodesFree($input, Merchant::whereIn('phone_number', PhoneNumber::variants($phone))->value('id'));
 
             if (User::withTrashed()->where('email', $email)->exists()) {
                 throw new ApiException('validation.failed', 'Please check the form', 422, ['email' => ['This email is already in use']], 'email');
@@ -246,38 +218,8 @@ class RegistrationService
                 $user->assignRole($role);
             }
 
-            $merchant = Merchant::whereIn('phone_number', PhoneNumber::variants($phone))->first() ?? new Merchant;
-
-            $merchant->fill([
-                'user_id' => $user->id,
-                'first_name' => $input['first_name'],
-                'last_name' => $input['last_name'],
-                'dob' => $input['dob'],
-                'email' => $input['email'] ?? null,
-                'phone_number' => $phone,
-                'business_name' => $input['business_name'],
-                'state' => $state['name'],
-                'state_code' => $state['code'],
-                'city' => $input['city'],
-                'location' => $input['city'].', '.$state['name'],
-                'merchant_code' => $input['merchant_code'] ?? null,
-                'other_merchant_code' => $input['other_merchant_code'] ?? null,
-                'is_approved' => true,
-            ])->save();
-
-            $plan = SubscriptionPlan::default()->orderBy('id')->first() ?? SubscriptionPlan::find(config('exelo.default_subscription_plan_id'));
+            ['merchant' => $merchant, 'plan' => $plan] = $this->createShop($user, $invoice, $input, $phone, $state, $input);
             $planId = $plan->id;
-
-            // The default plan never expires, so it has no end date.
-            MerchantSubscription::create([
-                'merchant_id' => $merchant->id,
-                'subscription_plan_id' => $planId,
-                'start_date' => now(),
-                'end_date' => $plan->is_default ? null : now()->addMonth(),
-                'transaction_status' => 'Paid',
-            ]);
-
-            $invoice->update(['consumed_at' => now(), 'merchant_id' => $merchant->id]);
 
             return [
                 'merchant' => [
@@ -291,10 +233,127 @@ class RegistrationService
                     'created_at' => ApiResponse::iso($merchant->created_at),
                 ],
                 'user' => ['id' => $user->id, 'type' => 'merchant', 'has_pin' => false],
-                'subscription' => ['plan_id' => $planId, 'plan' => $planId === 1 ? 'gold' : 'silver', 'status' => 'active'],
+                'subscription' => ['plan_id' => $planId, 'plan' => $plan->key, 'status' => 'active'],
                 'next_step' => 'set_pin',
             ];
         });
+    }
+
+    /**
+     * An owner who is already signed in opens another shop, paid for by a registration
+     * invoice for the new shop's phone number (docs/multiple-shop.md).
+     *
+     * @param  array{invoice_id: string, business_name: string, phone_number: string, state: string, city: string, email?: ?string, merchant_code?: ?string, other_merchant_code?: ?string}  $input
+     * @param  array{first_name: ?string, last_name: ?string, dob: ?string}  $person  The owner's details, copied onto the shop
+     * @return array{merchant: Merchant, plan: SubscriptionPlan}
+     */
+    public function openShop(User $owner, array $input, array $person): array
+    {
+        $phone = PhoneNumber::normalize($input['phone_number']);
+        $state = collect(config('exelo.states'))->firstWhere('code', $input['state']);
+
+        return DB::transaction(function () use ($owner, $input, $person, $phone, $state) {
+            $invoice = $this->lockedRegistrationInvoice($input['invoice_id'], $phone);
+
+            // A closed shop keeps its number, so check deleted shops too.
+            $isTaken = Merchant::withTrashed()
+                ->whereIn('phone_number', PhoneNumber::variants($phone))
+                ->where(fn ($query) => $query->whereNotNull('user_id')->orWhereNotNull('deleted_at'))
+                ->exists();
+
+            if ($isTaken) {
+                throw new ApiException('registration.phone_taken', 'This number already belongs to a shop', 409, [], 'phone_number');
+            }
+
+            $this->assertCodesFree($input, Merchant::whereIn('phone_number', PhoneNumber::variants($phone))->value('id'));
+
+            return $this->createShop($owner, $invoice, $input, $phone, $state, $person);
+        });
+    }
+
+    /**
+     * The paid, unused registration invoice for this phone, locked for the rest of the transaction.
+     */
+    private function lockedRegistrationInvoice(string $publicId, string $phone): Invoice
+    {
+        $invoice = Invoice::where('public_id', $publicId)
+            ->where('type', self::TYPES['registration'])
+            ->lockForUpdate()
+            ->first();
+
+        if (! $invoice) {
+            throw new ApiException('validation.failed', 'Please check the form', 422, ['invoice_id' => ['Unknown payment']], 'invoice_id');
+        }
+
+        if ($invoice->consumed_at) {
+            throw new ApiException('registration.invoice_consumed', 'That payment already created an account', 409);
+        }
+
+        if ($invoice->status !== 'Paid') {
+            throw new ApiException('registration.invoice_unpaid', 'The signup fee has not been paid', 402);
+        }
+
+        if ($phone !== PhoneNumber::normalize($invoice->mobile_number)) {
+            throw new ApiException('validation.failed', 'Please check the form', 422, ['phone_number' => ['This number does not match the payment']], 'phone_number');
+        }
+
+        return $invoice;
+    }
+
+    private function assertCodesFree(array $input, ?int $ignoreMerchantId): void
+    {
+        foreach (['merchant_code', 'other_merchant_code'] as $codeField) {
+            $isTaken = ! empty($input[$codeField])
+                && Merchant::where($codeField, $input[$codeField])->where('id', '!=', $ignoreMerchantId ?? 0)->exists();
+
+            if ($isTaken) {
+                throw new ApiException('validation.failed', 'Please check the form', 422, [$codeField => ['This code is already registered']], $codeField);
+            }
+        }
+    }
+
+    /**
+     * Creates (or completes an unfinished) shop for this owner on the default plan and uses up the invoice.
+     *
+     * @param  array{name: string, code: string}  $state
+     * @param  array{first_name: ?string, last_name: ?string, dob: ?string}  $person
+     * @return array{merchant: Merchant, plan: SubscriptionPlan}
+     */
+    private function createShop(User $owner, Invoice $invoice, array $input, string $phone, array $state, array $person): array
+    {
+        $merchant = Merchant::whereIn('phone_number', PhoneNumber::variants($phone))->first() ?? new Merchant;
+
+        $merchant->fill([
+            'user_id' => $owner->id,
+            'first_name' => $person['first_name'],
+            'last_name' => $person['last_name'],
+            'dob' => $person['dob'],
+            'email' => $input['email'] ?? null,
+            'phone_number' => $phone,
+            'business_name' => $input['business_name'],
+            'state' => $state['name'],
+            'state_code' => $state['code'],
+            'city' => $input['city'],
+            'location' => $input['city'].', '.$state['name'],
+            'merchant_code' => $input['merchant_code'] ?? null,
+            'other_merchant_code' => $input['other_merchant_code'] ?? null,
+            'is_approved' => true,
+        ])->save();
+
+        $plan = SubscriptionPlan::default()->orderBy('id')->first() ?? SubscriptionPlan::find(config('exelo.default_subscription_plan_id'));
+
+        // The default plan never expires, so it has no end date.
+        MerchantSubscription::create([
+            'merchant_id' => $merchant->id,
+            'subscription_plan_id' => $plan->id,
+            'start_date' => now(),
+            'end_date' => $plan->is_default ? null : now()->addMonth(),
+            'transaction_status' => 'Paid',
+        ]);
+
+        $invoice->update(['consumed_at' => now(), 'merchant_id' => $merchant->id]);
+
+        return ['merchant' => $merchant, 'plan' => $plan];
     }
 
     public function completeVerification(User $user, int $merchantId, ?string $publicInvoiceId): array

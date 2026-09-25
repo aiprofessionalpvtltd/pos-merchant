@@ -22,6 +22,9 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Tokens remember the shop they act for.
+        \Laravel\Sanctum\Sanctum::usePersonalAccessTokenModel(\App\Models\PersonalAccessToken::class);
+
         // Separate counters per group; the throttle:N,1 shorthand shares one counter per IP.
         foreach (['v1-lookup' => 30, 'v1-credentials' => 20, 'v1-otp' => 10, 'v1-registration' => 60, 'v1-merchant-create' => 20, 'v1-subscription' => 30, 'v1-staff' => 60, 'v1-merchant' => 60, 'v1-payments' => 120, 'v1-inventory' => 240, 'v1-cart' => 300, 'v1-orders' => 240, 'v1-files' => 60, 'v1-dashboard' => 60, 'v1-reports' => 60] as $name => $perMinute) {
             RateLimiter::for($name, fn (Request $request) => Limit::perMinute($perMinute)->by($name.'|'.$request->ip()));
