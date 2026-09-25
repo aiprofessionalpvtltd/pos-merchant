@@ -125,7 +125,7 @@ class InvoicePaymentService
                 'next_action' => $invoice->rail === 'cash' ? 'await_cash_confirmation' : 'await_customer_approval',
                 'poll_after' => config('exelo.registration.poll_after_seconds'),
                 'expires_at' => ApiResponse::iso($invoice->expires_at),
-            ];
+            ] + ($invoice->isPromptDeclined() ? ['prompt' => 'declined'] : []);
         } elseif ($status === 'paid') {
             $payload['paid_at'] = ApiResponse::iso($invoice->paid_at);
 

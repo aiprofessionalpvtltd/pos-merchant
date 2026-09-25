@@ -247,9 +247,9 @@ class ChargeService
         }
 
         $shillings = (int) round($chargeCents * $merchant->effectiveExchangeRate() / 100);
-        $issued = $this->gateway->issue($rail, $wallet, $shillings, config('exelo.alt_currency'));
+        $issued = $this->gateway->issue($rail, $wallet, $shillings, config('exelo.alt_currency'), 'EXELO sale');
 
-        $invoice = $this->record($actor, $merchant, $data, $sale, $meta, [
+        $invoice = $this->record($actor, $merchant, $data, $sale, $meta + Invoice::issuedMeta($issued), [
             'invoice_id' => $issued['invoice_id'], 'transaction_id' => $issued['transaction_id'], 'hash' => $issued['hash'],
             'mobile_number' => $wallet, 'wallet_number' => $wallet, 'amount' => $shillings, 'currency' => config('exelo.alt_currency'),
             'expires_at' => now()->addSeconds(config('exelo.registration.invoice_ttl_seconds')),

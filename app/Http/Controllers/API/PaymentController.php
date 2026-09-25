@@ -131,7 +131,7 @@ class PaymentController extends BaseController
         $responses['waafiResponse'] = $waafiResponse;
 
 
-        if ($waafiResponse['success'] = false) {
+        if ($waafiResponse['success'] === false) {
             return response()->json([
                 'error' => $waafiResponse['error'],
                 'message' => 'Failed to call Waafi API for Pre Authorize'
@@ -294,9 +294,9 @@ class PaymentController extends BaseController
     {
 
         // Fetch api_key and agent_code from .env
-        $apiKey = env('EXELO_API_KEY');
-        $agentCode = env('EXELO_AGENT_CODE');
-        $secret = env('SECRET_KEY');
+        $apiKey = config('exelo.providers.edahab.api_key');
+        $agentCode = config('exelo.providers.edahab.agent_code');
+        $secret = config('exelo.providers.edahab.secret');
 
         $firstName = '';
         $lastName = '';
@@ -350,7 +350,7 @@ class PaymentController extends BaseController
             DB::beginTransaction();
 
             // Make API request to issue invoice
-            $response = Http::timeout(env('API_TIMEOUT'))->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
+            $response = Http::timeout(config('exelo.providers.timeout'))->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
 
             // Log the API response
             $this->logApiResponse($url, $payload, $response);
@@ -415,8 +415,8 @@ class PaymentController extends BaseController
     public function checkInvoiceStatus(Request $request)
     {
         // Get api_key from the request and secret from .env
-        $apiKey = env('EXELO_API_KEY'); // From .env
-        $secret = env('SECRET_KEY'); // Secret from .env
+        $apiKey = config('exelo.providers.edahab.api_key'); // From .env
+        $secret = config('exelo.providers.edahab.secret'); // Secret from .env
         $invoiceId = $request->input('invoice_id');
         $maxAttempts = 8; // Max attempts (8 attempts * 5 seconds = 40 seconds)
         $attempts = 0; // Initialize attempt counter
@@ -436,7 +436,7 @@ class PaymentController extends BaseController
 
             while ($attempts < $maxAttempts) {
                 // Send the API request
-                $response = Http::timeout(env('API_TIMEOUT'))->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
+                $response = Http::timeout(config('exelo.providers.timeout'))->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
 
                 // Log the API response
                 $this->logApiResponse($url, $payload, $response);
@@ -526,7 +526,7 @@ class PaymentController extends BaseController
             $merchant = Merchant::where('phone_number', $phoneNo)->first();
         } else {
 
-            $apiKey = env('EXELO_API_KEY'); // From .env
+            $apiKey = config('exelo.providers.edahab.api_key'); // From .env
             $authUser = auth()->user();
 
             if ($authUser->user_type == 'employee') {
@@ -560,12 +560,12 @@ class PaymentController extends BaseController
         ];
 
         $bodyStr = json_encode($payload);
-        $secret = env('SECRET_KEY');
+        $secret = config('exelo.providers.edahab.secret');
 
         $hashValue = $this->generateHash($bodyStr, $secret);
         $url = "https://edahab.net/api/api/agentPayment?hash=$hashValue";
 
-        $response = Http::timeout(env('API_TIMEOUT'))->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
+        $response = Http::timeout(config('exelo.providers.timeout'))->withHeaders(['Content-Type' => 'application/json'])->post($url, $payload);
 
 
         // Log the API response
@@ -646,9 +646,9 @@ class PaymentController extends BaseController
             "channelName" => "WEB",
             "serviceName" => "API_PREAUTHORIZE",
             "serviceParams" => [
-                "merchantUid" => env('WAAFI_MERCHANT_UID', 'M0912269'),
-                "apiUserId" => env('WAAFI_API_USER_ID', '1000297'),
-                "apiKey" => env('WAAFI_API_KEY', 'API-1901083745AHX'),
+                "merchantUid" => config('exelo.providers.waafi.merchant_uid'),
+                "apiUserId" => config('exelo.providers.waafi.api_user_id'),
+                "apiKey" => config('exelo.providers.waafi.api_key'),
                 "paymentMethod" => "MWALLET_ACCOUNT",
                 "payerInfo" => [
                     "accountNo" => str_replace('+', '', $accountNo),
@@ -668,7 +668,7 @@ class PaymentController extends BaseController
 //        dd($payload);
         try {
             // Send the API request using Guzzle (Http facade)
-            $response = Http::timeout(env('API_TIMEOUT'))
+            $response = Http::timeout(config('exelo.providers.timeout'))
                 ->withHeaders([
                     'Content-Type' => 'application/json',
                 ])
@@ -757,9 +757,9 @@ class PaymentController extends BaseController
         $timestamp = now()->toIso8601String(); // Current timestamp in ISO format
 
         // Fetch the required values from environment or input
-        $merchantUid = env('WAAFI_MERCHANT_UID', 'M0913698');
-        $apiUserId = env('WAAFI_API_USER_ID', '1007586');
-        $apiKey = env('WAAFI_API_KEY', 'API-282358994AHX');
+        $merchantUid = config('exelo.providers.waafi.merchant_uid');
+        $apiUserId = config('exelo.providers.waafi.api_user_id');
+        $apiKey = config('exelo.providers.waafi.api_key');
         $referenceId = $request->input('reference_id');
         $transactionId = $request->input('transactionId');
         $invoiceId = $request->input('invoice_id');
@@ -795,7 +795,7 @@ class PaymentController extends BaseController
             // Keep checking the transaction status until it's approved or max attempts are reached
             while ($attempts < $maxAttempts) {
                 // Make the API request
-                $response = Http::timeout(env('API_TIMEOUT'))
+                $response = Http::timeout(config('exelo.providers.timeout'))
                     ->withHeaders(['Content-Type' => 'application/json'])
                     ->post($url, $payload);
 
@@ -884,9 +884,9 @@ class PaymentController extends BaseController
         $timestamp = now()->toIso8601String(); // Current timestamp in ISO format
 
         // Fetch required values from environment or request input
-        $merchantUid = env('WAAFI_MERCHANT_UID', 'M0913698');
-        $apiUserId = env('WAAFI_API_USER_ID', '1007586');
-        $apiKey = env('WAAFI_API_KEY', 'API-282358994AHX'); // API Key if needed for security
+        $merchantUid = config('exelo.providers.waafi.merchant_uid');
+        $apiUserId = config('exelo.providers.waafi.api_user_id');
+        $apiKey = config('exelo.providers.waafi.api_key'); // API Key if needed for security
         $referenceId = $request->input('reference_id');
         $invoiceId = $request->input('invoice_id');
         $amount = $request->input('amount');
@@ -919,7 +919,7 @@ class PaymentController extends BaseController
             DB::beginTransaction();
 
             // Make the API request to Waafi API
-            $response = Http::timeout(env('API_TIMEOUT'))
+            $response = Http::timeout(config('exelo.providers.timeout'))
                 ->withHeaders([
                     'Content-Type' => 'application/json',
                 ])
@@ -988,9 +988,9 @@ class PaymentController extends BaseController
         $timestamp = now()->toIso8601String(); // Current timestamp in ISO format
 
         // Fetch the required values from environment or input
-        $merchantUid = env('WAAFI_MERCHANT_UID', 'M0913698');
-        $apiUserId = env('WAAFI_API_USER_ID', '1007586');
-        $apiKey = env('WAAFI_API_KEY', 'API-282358994AHX');
+        $merchantUid = config('exelo.providers.waafi.merchant_uid');
+        $apiUserId = config('exelo.providers.waafi.api_user_id');
+        $apiKey = config('exelo.providers.waafi.api_key');
 
         $transactionId = 'zaad_' . round(microtime(true) * 1000);
         $amount = $request->input('amount_sent_to_merchant');
@@ -1070,7 +1070,7 @@ class PaymentController extends BaseController
             // Keep checking the transaction status until it's approved or max attempts are reached
             while ($attempts < $maxAttempts) {
                 // Make the API request
-                $response = Http::timeout(env('API_TIMEOUT'))
+                $response = Http::timeout(config('exelo.providers.timeout'))
                     ->withHeaders(['Content-Type' => 'application/json'])
                     ->post($url, $payload);
 
@@ -1081,7 +1081,8 @@ class PaymentController extends BaseController
                 // If the API call was successful
                 if ($response->successful()) {
                     $responseData = $response->json();
-                    $apiResponse = $responseData['params'];
+                    // A refused call carries no params, only errorCode and responseMsg.
+                    $apiResponse = $responseData['params'] ?? [];
 
                     // Check for success and if transaction is approved
                     if ($responseData['errorCode'] == 0) {

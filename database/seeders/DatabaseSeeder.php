@@ -4,14 +4,11 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Artisan;
-use Laravel\Passport\ClientRepository;
 
 class DatabaseSeeder extends Seeder
 {
     /**
      * Run the database seeds.
-     *
-     * @return void
      */
     public function run(): void
     {
@@ -22,10 +19,11 @@ class DatabaseSeeder extends Seeder
             SettingSeeder::class,
             PermissionsSeeder::class,
             SubscriptionPlanSeeder::class,
+            // Gives the plans their keys, features, SLSH prices and the default plan the v1 API needs.
+            PlanCatalogueSeeder::class,
             POSPermissionsTableSeeder::class,
             MerchantSeeder::class,
         ]);
-
 
         $this->runPermissionUpdateCommand();
 

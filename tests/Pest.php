@@ -46,3 +46,11 @@ function something()
 {
     // ..
 }
+
+/**
+ * A captured provider response from tests/Fixtures, decoded.
+ */
+function fixture(string $path): array
+{
+    return json_decode(file_get_contents(__DIR__.'/Fixtures/'.$path), true, flags: JSON_THROW_ON_ERROR);
+}

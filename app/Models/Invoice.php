@@ -2,9 +2,13 @@
 
 namespace App\Models;
 
+use App\Observers\InvoiceObserver;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
+#[ObservedBy(InvoiceObserver::class)]
 class Invoice extends Model
 {
     use HasFactory;
@@ -76,6 +80,32 @@ class Invoice extends Model
     public function merchant()
     {
         return $this->belongsTo(Merchant::class)->withDefault();
+    }
+
+    /**
+     * The customer turned the wallet prompt down. The payment is still pending: eDahab keeps the invoice open.
+     */
+    public function isPromptDeclined(): bool
+    {
+        return ($this->meta['provider_prompt'] ?? null) === 'declined';
+    }
+
+    /**
+     * Meta to store for a freshly issued wallet invoice.
+     *
+     * @param  array{prompt?: ?string}  $issued
+     */
+    public static function issuedMeta(array $issued): array
+    {
+        return isset($issued['prompt']) ? ['provider_prompt' => $issued['prompt']] : [];
+    }
+
+    /**
+     * Every eDahab / WaafiPay call made for this payment, oldest first.
+     */
+    public function apiLogs(): HasMany
+    {
+        return $this->hasMany(ApiLog::class)->oldest('id');
     }
 
     public function transactions()

@@ -9,6 +9,8 @@ use App\Http\Controllers\Admin\InvoiceController;
 use App\Http\Controllers\Admin\MerchantController;
 use App\Http\Controllers\Admin\MerchantSubscriptionController;
 use App\Http\Controllers\Admin\OrderController;
+use App\Http\Controllers\Admin\PaymentSettingController;
+use App\Http\Controllers\Admin\SubscriptionPlanController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\RoleController;
 use App\Http\Controllers\Admin\TransactionController;
@@ -89,6 +91,15 @@ Route::middleware(['auth'])->group(function () {
     Route::put('update-subscriptions{id}', [MerchantSubscriptionController::class, 'update'])->name('update-subscriptions');
 
     Route::get('merchant_subscriptions/getSubscriptions', [MerchantSubscriptionController::class, 'getSubscriptions'])->name('admin.subscriptions.getSubscriptions');
+
+    //Subscription plan catalogue
+    Route::resource('admin/subscription-plans', SubscriptionPlanController::class)
+        ->except('show')
+        ->names('admin.subscription-plans');
+
+    //Settings
+    Route::get('/admin/settings/payment-fees', [PaymentSettingController::class, 'edit'])->name('admin.settings.payment-fees.edit');
+    Route::put('/admin/settings/payment-fees', [PaymentSettingController::class, 'update'])->name('admin.settings.payment-fees.update');
 
 });
 

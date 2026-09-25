@@ -16,6 +16,9 @@ migration steps and rollout phases live in [`../unified-api-plan.md`](../unified
 | [Registration](registration.md) | Signup fee, merchant creation, wallet verification |
 | [Subscription](subscription.md) | Plans, current subscription, upgrade/downgrade |
 | [Payments](payments.md) | Quotes, charges on every rail, payouts, webhooks |
+| [Payment flows](payment-flows.md) | Registration, verification, subscription, request for payment and checkout across eDahab, Zaad and cash |
+| [eDahab provider](edahab.md) | Server-side eDahab calls: invoices, status, agent payouts, hosted page |
+| [WaafiPay (Zaad) provider](waafipay.md) | Server-side WaafiPay calls: pre-authorise, commit, cancel, credit account |
 | [Cart & checkout](cart.md) | The register: lines, totals, offline reconcile, pay |
 | [Orders](orders.md) | Pending and complete orders, receipts |
 | [Inventory](inventory.md) | Products, barcode lookup, categories, transfers, alerts |

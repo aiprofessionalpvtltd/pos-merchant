@@ -234,17 +234,39 @@ Optional query: `?purpose=registration` (default) or `verification`.
   "success": true,
   "data": {
     "purpose": "registration",
-    "base": { "amount": 500, "currency": "SLSH", "display": "500 SLSH" },
-    "customer_charge": { "amount": 550, "currency": "SLSH", "display": "550 SLSH" },
-    "fee": { "amount": 50, "currency": "SLSH", "display": "50 SLSH" },
-    "amount_in_usd": { "amount": 5, "currency": "USD", "display": "$0.05" },
+    "base": {
+      "slsh": { "amount": 500, "currency": "SLSH", "display": "500 SLSH" },
+      "usd": { "amount": 5, "currency": "USD", "display": "$0.05" }
+    },
+    "exelo_fee": {
+      "slsh": { "amount": 50, "currency": "SLSH", "display": "50 SLSH" },
+      "usd": { "amount": 0, "currency": "USD", "display": "$0.00" }
+    },
+    "total": {
+      "slsh": { "amount": 550, "currency": "SLSH", "display": "550 SLSH" },
+      "usd": { "amount": 5, "currency": "USD", "display": "$0.05" }
+    },
     "quote_id": "qte_0G0JFHNLJF",
     "expires_at": "2026-09-19T07:10:42Z"
   }
 }
 ```
 
-USD amounts are in cents.
+| Field | Meaning |
+| --- | --- |
+| `base` | The registration (or verification) price, set by an admin |
+| `exelo_fee` | EXELO's fee on top, set by an admin |
+| `total` | What the wallet is billed: `base` + `exelo_fee`. Show this as the price |
+| `*.slsh` | The amount in SLSH, whole shillings. **The wallet is billed in SLSH** |
+| `*.usd` | The same amount in USD, in cents, at the configured conversion rate. For display only |
+
+Each USD amount is converted from its own SLSH amount, so `total.usd` can differ
+from `base.usd` + `exelo_fee.usd` by a cent. The same fields come back for
+`?purpose=verification`.
+
+> **Changed 2026-09-25.** Replaces the flat `base`, `fee`, `customer_charge` and
+> `amount_in_usd` fields. Read `base.slsh`, `exelo_fee.slsh` and `total.slsh`
+> (was `customer_charge`) instead.
 
 ### 4. POST `/api/v1/registration/invoices` — Request the signup payment
 
@@ -318,6 +340,13 @@ USD amounts are in cents.
   }
 }
 ```
+
+**`prompt: "declined"`**: on eDahab, when the customer turned down the payment
+prompt on their phone, the pending response (here and on
+`POST /registration/invoices`) also carries `"prompt": "declined"`. The payment
+**stays `pending`**, because eDahab keeps the invoice open and it could still be
+paid. Tell the user the prompt was declined, so they aren't left watching a
+spinner. The field is absent otherwise.
 
 **Response `200` — paid**
 
@@ -929,7 +958,8 @@ Branch on `data`:
 
 `GET /registration/quote` (optionally `?purpose=registration`)
 
-Show `customer_charge.display` (for example `550 SLSH`) and keep `quote_id`. The
+Show `total.slsh.display` (for example `550 SLSH`), optionally with `total.usd.display`
+and the split into `base` and `exelo_fee`, and keep `quote_id`. The
 quote is valid for 15 minutes; after that step 4 returns `410 quote.expired`
 and the app fetches a new one.
 
@@ -1083,10 +1113,18 @@ that reaches EXELO. Replaces the registration use of
   "success": true,
   "data": {
     "purpose": "registration",
-    "base": { "amount": 500, "currency": "SLSH", "display": "500 SLSH" },
-    "customer_charge": { "amount": 550, "currency": "SLSH", "display": "550 SLSH" },
-    "fee": { "amount": 50, "currency": "SLSH", "display": "50 SLSH" },
-    "amount_in_usd": { "amount": 7, "currency": "USD", "display": "$0.07" },
+    "base": {
+      "slsh": { "amount": 500, "currency": "SLSH", "display": "500 SLSH" },
+      "usd": { "amount": 5, "currency": "USD", "display": "$0.05" }
+    },
+    "exelo_fee": {
+      "slsh": { "amount": 50, "currency": "SLSH", "display": "50 SLSH" },
+      "usd": { "amount": 0, "currency": "USD", "display": "$0.00" }
+    },
+    "total": {
+      "slsh": { "amount": 550, "currency": "SLSH", "display": "550 SLSH" },
+      "usd": { "amount": 5, "currency": "USD", "display": "$0.05" }
+    },
     "quote_id": "qte_01JBXR2K8M",
     "expires_at": "2026-09-18T14:18:11Z"
   }
@@ -1428,9 +1466,19 @@ number alongside so the payment screen does not need a second call.
 Implemented in `RegistrationController` / `RegistrationService`, served under
 `/api/v1`. Wallet calls live in `WalletGateway`.
 
-- **Fees.** `config/exelo.php` (`REGISTRATION_FEE`, `REGISTRATION_FEE_CHARGE`,
-  `VERIFICATION_FEE`, `VERIFICATION_FEE_CHARGE`; defaults 500 + 50 SLSH).
-  Quotes live in the cache for 15 minutes. **Confirm the verification fee.**
+- **Fees are set by an admin** in the admin panel, **Payment Fees**
+  (`/admin/settings/payment-fees`, permissions `view-setting` / `edit-setting`).
+  Each purpose has a **base price** and an **EXELO fee**, stored in the `settings`
+  table (`registration_fee`, `registration_fee_charge`, `verification_fee`,
+  `verification_fee_charge`, whole SLSH). The quote returns them separately as
+  `base`, `exelo_fee` and `total` (base + EXELO fee), each in SLSH and USD. A fee
+  left empty falls back
+  to `config/exelo.php` (`REGISTRATION_FEE`, `REGISTRATION_FEE_CHARGE`,
+  `VERIFICATION_FEE`, `VERIFICATION_FEE_CHARGE`; defaults 500 + 50 SLSH). Code:
+  `PaymentSettingsService` (cached; cleared on save). A change applies to new quotes
+  at once; quotes live in the cache for 15 minutes, and an issued invoice keeps the
+  amount it was quoted. The invoice also records the split in
+  `meta.base` / `meta.exelo_fee`.
 - **Invoices.** `invoices` gained `public_id` (`inv_...`), `rail`,
   `wallet_number`, `expires_at`, `paid_at`, `consumed_at`, `error_reason`.
   Legacy paid invoices get a `public_id` the first time

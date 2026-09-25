@@ -487,6 +487,12 @@ charges belonging to the caller's shop are visible; anything else returns
 }
 ```
 
+On eDahab, if the customer turned the payment prompt down, this response (and the
+`202` from `POST /subscription/change`) also carries `"prompt": "declined"`. The
+payment stays `pending`, because eDahab keeps the invoice open. A new plan change
+is still refused while it is pending, until it expires; see
+[payments.md](payments.md#3-post-apiv1paymentscharges--start-a-payment).
+
 **Response `200` — paid** (the plan is now active)
 
 ```json
@@ -615,9 +621,23 @@ unchanged, including `POST /api/merchants/subscriptions`, which still grants a
 plan without payment.
 
 - **Plans.** `subscription_plans` gained `key`, `features`, `is_default` and
-  `price_slsh`. Load the catalogue with
-  `php artisan db:seed --class=PlanCatalogueSeeder` (safe to re-run): Silver is
-  free and the default plan; Gold is 92,000 SLSH / $11.50.
+  `price_slsh`. `PlanCatalogueSeeder` (part of `DatabaseSeeder`, safe to re-run)
+  loads the starting catalogue: Silver is free and the default plan; Gold is
+  92,000 SLSH / $11.50.
+- **Admins manage plans** in the admin panel, **Subscription Plans**
+  (`/admin/subscription-plans`, permissions `view`/`create`/`edit`/`delete-subscription`;
+  code `Admin\SubscriptionPlanController`, `SubscriptionPlanService`). Changes show
+  in `GET /plans` at once. Rules:
+  - The **key** is set on create and can't change, because the app gates on it.
+    A key is never reused, not even from a deleted plan.
+  - **Features** are picked from `SubscriptionPlan::FEATURES`.
+  - **Exactly one default plan.** Making a plan the default moves it there; the
+    default can't be unticked or deleted.
+  - **Billing is monthly** for every plan (`SubscriptionPlan::DURATION`).
+  - A **price change** applies to the next payment; merchants who already paid keep
+    their period. A **removed feature** is taken away at once.
+  - A plan can't be **deleted** while a merchant is on it, has it scheduled, or has a
+    payment for it pending. Deleting is a soft delete, so history keeps the name.
 - **The default plan never expires.** Its row has no `end_date`. A shop with no
   row is on the default plan; `GET /subscription` never creates one (the legacy
   `current` endpoint did).

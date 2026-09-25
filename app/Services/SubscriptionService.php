@@ -401,9 +401,10 @@ class SubscriptionService
                     'expires_at' => now()->addHours(config('exelo.subscription.cash_ttl_hours')),
                 ];
             } else {
-                $issued = $this->gateway->issue($rail, $wallet, $amount, $attributes['currency']);
+                $issued = $this->gateway->issue($rail, $wallet, $amount, $attributes['currency'], 'EXELO subscription');
 
                 $attributes += [
+                    'meta' => Invoice::issuedMeta($issued) ?: null,
                     'invoice_id' => $issued['invoice_id'],
                     'transaction_id' => $issued['transaction_id'],
                     'hash' => $issued['hash'],
@@ -498,7 +499,7 @@ class SubscriptionService
                 'poll_after' => config('exelo.registration.poll_after_seconds'),
                 'expires_at' => ApiResponse::iso($invoice->expires_at),
                 'applies_on_payment' => true,
-            ],
+            ] + ($invoice->isPromptDeclined() ? ['prompt' => 'declined'] : []),
         ];
     }
 

@@ -93,6 +93,21 @@
                         <span class="align-middle">Subscription</span>
                     </a>
                 </li>
+                <li class="sidebar-item {{ request()->routeIs('admin.subscription-plans.*') ? 'active' : '' }}">
+                    <a class="sidebar-link" href="{{ route('admin.subscription-plans.index') }}">
+                        <i class="fas fa-layer-group"></i>
+                        <span class="align-middle">Subscription Plans</span>
+                    </a>
+                </li>
+            @endcan
+
+            @can('view-setting')
+                <li class="sidebar-item {{ request()->routeIs('admin.settings.*') ? 'active' : '' }}">
+                    <a class="sidebar-link" href="{{ route('admin.settings.payment-fees.edit') }}">
+                        <i class="fas fa-cog"></i>
+                        <span class="align-middle">Payment Fees</span>
+                    </a>
+                </li>
             @endcan
 
 

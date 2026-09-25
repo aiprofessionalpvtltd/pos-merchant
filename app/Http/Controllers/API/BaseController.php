@@ -145,7 +145,7 @@ class BaseController extends Controller
         // Save log to the database
         ApiLog::create([
             'url' => $url,
-            'payload' => json_encode($payload), // Convert payload array to JSON
+            'payload' => ApiLog::redact($payload),
             'status_code' => $statusCode,
             'response_body' => json_decode($responseBody, true), // Decode response body to array
         ]);

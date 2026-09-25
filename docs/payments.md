@@ -359,6 +359,20 @@ required.** Needs the `pos` permission.
 | `confirm` | Ask for the customer's code, then call [`/confirm`](#5-post-apiv1paymentschargescharge_idconfirm--confirm-a-payment) |
 | `none` | Already final; read `status` |
 
+**`prompt: "declined"`** (eDahab only). If the customer turned the payment prompt
+down on their phone, a pending charge also carries `"prompt": "declined"`, on this
+`202` and on every poll of
+[`GET /payments/charges/{charge_id}`](#4-get-apiv1paymentschargescharge_id--check-a-payment)
+while it stays pending. The charge **stays `pending`**: eDahab keeps the invoice
+open, so it could still be paid. Show "The customer declined on their phone" so
+the shopkeeper isn't left guessing. The field is absent otherwise. See
+[edahab.md](edahab.md).
+
+A second charge for the same ticket or order still returns `409
+payment.charge_pending` until the declined one expires (10 minutes), because
+[cancel](#6-post-apiv1paymentschargescharge_idcancel--cancel-a-pending-payment) is
+not built yet. Allowing a new charge would risk the customer paying both.
+
 **Response `200`: cash, settled immediately**
 
 ```json

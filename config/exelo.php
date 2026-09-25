@@ -80,6 +80,8 @@ return [
             'agent_code' => env('EXELO_AGENT_CODE'),
             'secret' => env('SECRET_KEY'),
             'base_url' => 'https://edahab.net/api/api',
+            // IssueInvoice answers only once the customer has approved or declined the prompt.
+            'timeout' => (int) env('EDAHAB_TIMEOUT', 90),
         ],
         'waafi' => [
             'merchant_uid' => env('WAAFI_MERCHANT_UID'),

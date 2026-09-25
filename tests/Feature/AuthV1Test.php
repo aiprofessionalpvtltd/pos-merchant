@@ -10,6 +10,8 @@ use Illuminate\Support\Facades\Hash;
 
 uses(DatabaseTransactions::class);
 
+beforeEach(fn () => (new Database\Seeders\PlanCatalogueSeeder)->run());
+
 const PHONE = '+252634990001';
 
 function device(string $id = 'dev-1'): array

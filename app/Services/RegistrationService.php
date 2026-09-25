@@ -20,7 +20,11 @@ class RegistrationService
 {
     private const TYPES = ['registration' => 'Registration', 'verification' => 'Verification'];
 
-    public function __construct(private readonly WalletGateway $gateway, private readonly InvoicePaymentService $payments) {}
+    public function __construct(
+        private readonly WalletGateway $gateway,
+        private readonly InvoicePaymentService $payments,
+        private readonly PaymentSettingsService $settings,
+    ) {}
 
     public function states(): array
     {
@@ -29,21 +33,26 @@ class RegistrationService
 
     public function quote(string $purpose): array
     {
-        $fees = config('exelo.registration.fees.'.$purpose);
+        $fees = $this->settings->fees($purpose);
         $currency = config('exelo.alt_currency');
         $expiresAt = now()->addSeconds(config('exelo.registration.quote_ttl_seconds'));
         $quoteId = 'qte_'.Str::upper(Str::random(10));
 
         $charge = $fees['base'] + $fees['fee'];
 
-        Cache::put('registration-quote:'.$quoteId, ['purpose' => $purpose, 'amount' => $charge, 'currency' => $currency], $expiresAt);
+        Cache::put('registration-quote:'.$quoteId, [
+            'purpose' => $purpose,
+            'amount' => $charge,
+            'base' => $fees['base'],
+            'fee' => $fees['fee'],
+            'currency' => $currency,
+        ], $expiresAt);
 
         return [
             'purpose' => $purpose,
-            'base' => $this->money($fees['base'], $currency),
-            'customer_charge' => $this->money($charge, $currency),
-            'fee' => $this->money($fees['fee'], $currency),
-            'amount_in_usd' => $this->usd($fees['base']),
+            'base' => $this->inBoth($fees['base'], $currency),
+            'exelo_fee' => $this->inBoth($fees['fee'], $currency),
+            'total' => $this->inBoth($charge, $currency),
             'quote_id' => $quoteId,
             'expires_at' => ApiResponse::iso($expiresAt),
         ];
@@ -117,9 +126,12 @@ class RegistrationService
                 return $this->pendingPayload($existing);
             }
 
-            $issued = $this->gateway->issue($rail, $wallet, $quote['amount'], $quote['currency']);
+            $issued = $this->gateway->issue($rail, $wallet, $quote['amount'], $quote['currency'], 'EXELO '.$purpose);
 
             $invoice = Invoice::create([
+                // The split of the amount, as quoted: what the service costs and EXELO's fee on top.
+                'meta' => array_filter(['base' => $quote['base'] ?? null, 'exelo_fee' => $quote['fee'] ?? null], fn ($value) => $value !== null)
+                    + Invoice::issuedMeta($issued) ?: null,
                 'public_id' => $this->newPublicId(),
                 'invoice_id' => $issued['invoice_id'],
                 'transaction_id' => $issued['transaction_id'],
@@ -158,7 +170,7 @@ class RegistrationService
                 'status' => 'pending',
                 'poll_after' => config('exelo.registration.poll_after_seconds'),
                 'expires_at' => ApiResponse::iso($invoice->expires_at),
-            ]],
+            ] + ($invoice->isPromptDeclined() ? ['prompt' => 'declined'] : [])],
             'Paid' => ['message' => 'Payment received', 'data' => [
                 'invoice_id' => $invoice->public_id,
                 'status' => 'paid',
@@ -371,7 +383,7 @@ class RegistrationService
                 'next_action' => 'await_customer_approval',
                 'poll_after' => config('exelo.registration.poll_after_seconds'),
                 'expires_at' => ApiResponse::iso($invoice->expires_at),
-            ],
+            ] + ($invoice->isPromptDeclined() ? ['prompt' => 'declined'] : []),
         ];
     }
 
@@ -400,6 +412,17 @@ class RegistrationService
     private function money(int $amount, string $currency): array
     {
         return ['amount' => $amount, 'currency' => $currency, 'display' => $amount.' '.$currency];
+    }
+
+    /**
+     * One SLSH amount with its USD equivalent. Each is converted on its own, so the USD
+     * total can differ from the sum of the USD parts by a cent.
+     *
+     * @return array{slsh: array, usd: array}
+     */
+    private function inBoth(int $slsh, string $currency): array
+    {
+        return ['slsh' => $this->money($slsh, $currency), 'usd' => $this->usd($slsh)];
     }
 
     private function usd(int $slsh): array

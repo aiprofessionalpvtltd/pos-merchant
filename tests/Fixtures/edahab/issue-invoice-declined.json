@@ -1,0 +1,9 @@
+{
+    "InvoiceStatus": "Unpaid",
+    "TransactionId": "MP260925.1148.A17068",
+    "InvoiceId": "35917256c9d0459cacbe4852e6594e8e",
+    "StatusCode": 7,
+    "RequestId": 1728197,
+    "StatusDescription": "User declined",
+    "ValidationErrors": null
+}

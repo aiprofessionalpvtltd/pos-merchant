@@ -8,6 +8,8 @@ use Illuminate\Support\Facades\Http;
 
 uses(DatabaseTransactions::class);
 
+beforeEach(fn () => (new Database\Seeders\PlanCatalogueSeeder)->run());
+
 const NEW_PHONE = '+252654990010';
 
 function fakeEdahab(string $status = 'Paid'): void
@@ -62,10 +64,19 @@ it('quotes the signup fee', function () {
     $this->getJson('/api/v1/registration/quote')
         ->assertOk()
         ->assertJsonPath('data.purpose', 'registration')
-        ->assertJsonPath('data.base.amount', 500)
-        ->assertJsonPath('data.customer_charge.amount', 550)
-        ->assertJsonPath('data.fee.amount', 50)
-        ->assertJsonStructure(['data' => ['amount_in_usd' => ['display'], 'quote_id', 'expires_at']]);
+        ->assertJsonPath('data.base.slsh.amount', 500)
+        ->assertJsonPath('data.exelo_fee.slsh.amount', 50)
+        ->assertJsonPath('data.total.slsh.amount', 550)
+        ->assertJsonPath('data.total.slsh.display', '550 SLSH')
+        ->assertJsonStructure(['data' => [
+            'base' => ['slsh', 'usd' => ['amount', 'currency', 'display']],
+            'exelo_fee' => ['slsh', 'usd'],
+            'total' => ['slsh', 'usd'],
+            'quote_id', 'expires_at',
+        ]])
+        ->assertJsonMissingPath('data.fee')
+        ->assertJsonMissingPath('data.customer_charge')
+        ->assertJsonMissingPath('data.amount_in_usd');
 });
 
 it('says a fresh number is available and needs an invoice', function () {
@@ -161,6 +172,27 @@ it('rejects an expired quote and a wallet on the wrong rail', function () {
         'phone_number' => NEW_PHONE, 'wallet_number' => '+252634990011', 'rail' => 'edahab',
         'purpose' => 'registration', 'quote_id' => $quote, 'idempotency_key' => 'k2',
     ])->assertStatus(422)->assertJsonPath('error.code', 'payment.wallet_invalid');
+});
+
+it('keeps a declined eDahab prompt pending and says it was declined', function () {
+    Http::fake([
+        'edahab.net/api/api/IssueInvoice*' => Http::response(fixture('edahab/issue-invoice-declined.json')),
+        'edahab.net/api/api/checkInvoiceStatus*' => Http::response(fixture('edahab/check-invoice-pending.json')),
+    ]);
+
+    $invoiceId = issueInvoice('declined')
+        ->assertStatus(202)
+        ->assertJsonPath('data.status', 'pending')
+        ->assertJsonPath('data.prompt', 'declined')
+        ->json('data.invoice_id');
+
+    $this->getJson('/api/v1/registration/invoices/'.$invoiceId)
+        ->assertOk()
+        ->assertJsonPath('data.status', 'pending')
+        ->assertJsonPath('data.prompt', 'declined');
+
+    expect(Invoice::where('public_id', $invoiceId)->first()->apiLogs()->pluck('operation')->all())
+        ->toBe(['IssueInvoice', 'checkInvoiceStatus']);
 });
 
 it('reports provider outages as 502', function () {

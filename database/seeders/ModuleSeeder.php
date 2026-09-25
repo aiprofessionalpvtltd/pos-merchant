@@ -14,7 +14,7 @@ class ModuleSeeder extends Seeder
      */
     public function run()
     {
-        $modules = array (
+        $modules = [
             'Users',
             'Roles',
             'Merchant',
@@ -25,7 +25,8 @@ class ModuleSeeder extends Seeder
             'Product',
             'Cart',
             'Employee',
-        );
+            'Setting',
+        ];
 
         foreach ($modules as $row) {
             Module::firstOrCreate([

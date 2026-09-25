@@ -35,11 +35,12 @@ return [
         ],
     ],
 
+    // Legacy only (MerchantTransactionController). Payments use config('exelo.providers.edahab').
     'edahab' => [
-        'api_key' => env('API_KEY', 'eip8thzONw0sFHt8M7A53dnj8cWPDhL0tBfp57'),
-        'agent_code' => env('AGENT_CODE', '711674'),
+        'api_key' => env('API_KEY'),
+        'agent_code' => env('AGENT_CODE'),
         'currency' => env('CURRENCY', 'SLSH'),
-        'pin' => env('PIN', '1234'),
+        'pin' => env('PIN'),
     ],
 
 ];
