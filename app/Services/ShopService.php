@@ -183,7 +183,7 @@ class ShopService
         }
 
         $staffRemoved = DB::transaction(function () use ($owner, $shop, $fallback) {
-            $staff = Employee::active()->where('merchant_id', $shop->id)->get();
+            $staff = Employee::active()->where('shop_id', $shop->id)->get();
 
             foreach ($staff as $employee) {
                 $this->employees->remove($owner, $shop, $employee->id);

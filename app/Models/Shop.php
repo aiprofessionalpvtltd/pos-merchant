@@ -43,7 +43,7 @@ class Shop extends Merchant
 
     public function employees(): HasMany
     {
-        return $this->hasMany(Employee::class, 'merchant_id');
+        return $this->hasMany(Employee::class, 'shop_id');
     }
 
     public function activeEmployees(): HasMany

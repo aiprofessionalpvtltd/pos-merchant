@@ -282,7 +282,7 @@ it('reports employee accounts and blocks removed staff', function () {
 
     $user = User::create(['name' => 'Aisha Ali', 'email' => 'aisha-test@example.test', 'password' => Hash::make('x'), 'user_type' => 'employee']);
     $employee = App\Models\Employee::create([
-        'user_id' => $user->id, 'merchant_id' => $merchant->id, 'phone_number' => '+252634990002',
+        'user_id' => $user->id, 'shop_id' => $merchant->id, 'phone_number' => '+252634990002',
         'first_name' => 'Aisha', 'last_name' => 'Ali', 'dob' => '1995-05-05', 'location' => 'Hargeisa', 'role' => 'Cashier', 'salary' => 100, 'status' => 'active',
     ]);
 

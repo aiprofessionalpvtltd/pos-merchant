@@ -38,7 +38,7 @@ class EmployeeResource extends JsonResource
             'role' => $employee->role,
             'phone_number' => $employee->phone_number,
             // The shop this person works in (merchants → shops → employees).
-            'shop' => ['id' => $employee->merchant_id, 'business_name' => $employee->shop?->business_name],
+            'shop' => ['id' => $employee->shop_id, 'business_name' => $employee->shop?->business_name],
             'dob' => $employee->dob,
             'salary' => $employee->salary === null
                 ? null

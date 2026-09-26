@@ -39,7 +39,7 @@ it('shows phone, shop, plan and PIN status for app users, and never a PIN', func
     // an employee with no PIN yet
     $employeeUser = User::create(['name' => 'Aisha Ali', 'email' => 'aisha-list@example.test', 'password' => Hash::make('x'), 'user_type' => 'employee']);
     Employee::create([
-        'user_id' => $employeeUser->id, 'merchant_id' => $owner->merchant->id, 'phone_number' => '+252634990002',
+        'user_id' => $employeeUser->id, 'shop_id' => $owner->merchant->id, 'phone_number' => '+252634990002',
         'first_name' => 'Aisha', 'last_name' => 'Ali', 'dob' => '1995-05-05', 'location' => 'Hargeisa', 'role' => 'Cashier', 'salary' => 100, 'status' => 'active',
     ]);
 

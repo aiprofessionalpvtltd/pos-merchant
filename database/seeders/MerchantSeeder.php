@@ -42,9 +42,9 @@ class MerchantSeeder extends Seeder
     private function createMerchant(string $phoneNumber, string $pin, string $firstName, string $lastName): Merchant
     {
         $user = User::updateOrCreate(
-            ['email' => $phoneNumber . '@email.com'],
+            ['email' => $phoneNumber.'@email.com'],
             [
-                'name' => $firstName . ' ' . $lastName,
+                'name' => $firstName.' '.$lastName,
                 'password' => Hash::make($pin),
                 'pin' => $pin,
                 'user_type' => 'merchant',
@@ -57,7 +57,7 @@ class MerchantSeeder extends Seeder
             [
                 'first_name' => $firstName,
                 'last_name' => $lastName,
-                'business_name' => $firstName . ' ' . $lastName . ' Shop',
+                'business_name' => $firstName.' '.$lastName.' Shop',
                 'merchant_code' => 'MER-DEMO-0001',
                 'is_approved' => true,
                 'confirmation_status' => true,
@@ -69,7 +69,7 @@ class MerchantSeeder extends Seeder
     private function createEmployee(Merchant $merchant, string $phoneNumber, string $pin, string $role): Employee
     {
         $user = User::updateOrCreate(
-            ['email' => $phoneNumber . '@email.com'],
+            ['email' => $phoneNumber.'@email.com'],
             [
                 'name' => $role,
                 'password' => Hash::make($pin),
@@ -79,7 +79,7 @@ class MerchantSeeder extends Seeder
         );
 
         return Employee::updateOrCreate(
-            ['phone_number' => $phoneNumber, 'merchant_id' => $merchant->id],
+            ['phone_number' => $phoneNumber, 'shop_id' => $merchant->id],
             [
                 'first_name' => $role,
                 'last_name' => 'Demo',

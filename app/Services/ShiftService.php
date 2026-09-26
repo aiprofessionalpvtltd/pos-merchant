@@ -154,7 +154,7 @@ class ShiftService
         }
 
         $merchant = $actor->actingMerchant() ?? throw new ApiException('merchant.not_found', 'We could not find that shop', 404);
-        $userIds = Employee::where('merchant_id', $merchant->id)->pluck('user_id')->push($actor->id);
+        $userIds = Employee::where('shop_id', $merchant->id)->pluck('user_id')->push($actor->id);
 
         return DB::transaction(function () use ($shiftId, $userIds, $merchant, $data, $actor) {
             $shift = Shift::whereIn('user_id', $userIds)->forShop($merchant->id)->lockForUpdate()->find($shiftId)
@@ -194,7 +194,7 @@ class ShiftService
         }
 
         $merchant = $actor->actingMerchant() ?? throw new ApiException('merchant.not_found', 'We could not find that shop', 404);
-        $employee = Employee::where('merchant_id', $merchant->id)->find($employeeId)
+        $employee = Employee::where('shop_id', $merchant->id)->find($employeeId)
             ?? throw new ApiException('employee.not_found', 'We could not find that staff member', 404);
 
         // A removed employee's login is soft-deleted, but their shift history stays readable

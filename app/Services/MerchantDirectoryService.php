@@ -67,7 +67,7 @@ class MerchantDirectoryService
                 ->latest('id')
                 ->limit(10)
                 ->get(),
-            'employees' => Employee::where('merchant_id', $merchant->id)->orderBy('first_name')->get(),
+            'employees' => Employee::where('shop_id', $merchant->id)->orderBy('first_name')->get(),
             'pending_cash' => Invoice::where('merchant_id', $merchant->id)
                 ->where('type', 'Subscription')
                 ->where('rail', 'cash')

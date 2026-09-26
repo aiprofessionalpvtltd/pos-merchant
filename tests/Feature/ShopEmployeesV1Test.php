@@ -58,7 +58,7 @@ function teamMember(Shop $shop, string $phone, array $keys = ['pos'], string $fi
     $user = User::create(['name' => $firstName, 'email' => "team{$phone}@example.test", 'password' => Hash::make('2580'), 'user_type' => 'employee', 'pin_set_at' => now()]);
 
     $employee = Employee::create([
-        'user_id' => $user->id, 'merchant_id' => $shop->id, 'phone_number' => $phone, 'first_name' => $firstName, 'last_name' => 'Yusuf',
+        'user_id' => $user->id, 'shop_id' => $shop->id, 'phone_number' => $phone, 'first_name' => $firstName, 'last_name' => 'Yusuf',
         'dob' => '1998-04-12', 'role' => 'Cashier', 'status' => 'active',
     ]);
 
@@ -98,7 +98,7 @@ it('adds staff to another of the owner\'s shops without switching', function () 
         ->assertCreated()
         ->assertJsonPath('data.shop', ['id' => $berbera->id, 'business_name' => 'Hodan Berbera']);
 
-    expect(Employee::where('phone_number', '+252634660099')->value('merchant_id'))->toBe($berbera->id);
+    expect(Employee::where('phone_number', '+252634660099')->value('shop_id'))->toBe($berbera->id);
 
     // The session still works on the current shop, which has no staff yet.
     app('auth')->forgetGuards();
@@ -182,7 +182,7 @@ it('moves staff to another shop and ends their sessions', function () {
         ->assertJsonPath('message', 'Nasra now works in Hodan Berbera. They need to sign in again.')
         ->assertJsonPath('data.permissions.0.key', 'pos');
 
-    expect($employee->fresh()->merchant_id)->toBe($berbera->id);
+    expect($employee->fresh()->shop_id)->toBe($berbera->id);
 
     app('auth')->forgetGuards();
     test()->withToken($staffToken)->getJson('/api/v1/auth/session')->assertUnauthorized();
@@ -212,7 +212,7 @@ it('refuses a transfer that cannot happen', function () {
     test()->withToken($token)->postJson("/api/v1/employees/{$employee->id}/transfer", ['shop_id' => $berbera->id])
         ->assertStatus(409)->assertJsonPath('error.code', 'employee.shift_open');
 
-    expect($employee->fresh()->merchant_id)->toBe($main->id);
+    expect($employee->fresh()->shop_id)->toBe($main->id);
 });
 
 it('shows each shop\'s staff on the merchant account', function () {
@@ -496,4 +496,13 @@ it('refuses an unknown include and keeps the extras from staff', function () {
     app('auth')->forgetGuards();
     test()->withToken($staff)->getJson('/api/v1/merchant?include=all')->assertForbidden()
         ->assertJsonPath('error.code', 'auth.merchant_only');
+});
+
+it('stores both the shop and its merchant on every employee', function () {
+    [$owner, $main, $berbera] = teamOwner();
+    $employee = teamMember($berbera, '+252634660123');
+
+    expect($employee->shop_id)->toBe($berbera->id)
+        ->and($employee->merchant_id)->toBe($berbera->merchant_id)
+        ->and($employee->merchantAccount->shops->pluck('id')->all())->toContain($main->id, $berbera->id);
 });

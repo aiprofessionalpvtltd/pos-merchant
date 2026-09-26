@@ -2,7 +2,6 @@
 
 namespace App\Http\Resources;
 
-use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
 class EmployeeResource extends JsonResource
@@ -16,7 +15,7 @@ class EmployeeResource extends JsonResource
     {
         return [
             'id' => $this->id,
-            'merchant_id' => $this->merchant_id,
+            'merchant_id' => $this->shop_id,
             'phone_number' => $this->phone_number,
             'first_name' => $this->first_name,
             'last_name' => $this->last_name,

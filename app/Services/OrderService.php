@@ -55,7 +55,7 @@ class OrderService
         }
 
         if (isset($filters['employee_id'])) {
-            $userId = Employee::where('merchant_id', $merchant->id)->whereKey($filters['employee_id'])->value('user_id');
+            $userId = Employee::where('shop_id', $merchant->id)->whereKey($filters['employee_id'])->value('user_id');
             $query->where('user_id', $userId ?? 0);
         }
 
@@ -427,7 +427,7 @@ class OrderService
         }
 
         // The seller's staff record in the order's shop (a person may work in several).
-        $employee = $user->employments()->where('merchant_id', $order->merchant_id)->first();
+        $employee = $user->employments()->where('shop_id', $order->merchant_id)->first();
 
         return [
             'id' => $employee?->id,

@@ -25,7 +25,7 @@ function makeStaff(User $owner, string $phone, array $keys = ['pos'], array $ove
     $user = User::create(['name' => 'Staff '.$phone, 'email' => "staff{$phone}@example.test", 'password' => Hash::make('2580'), 'user_type' => 'employee', 'pin_set_at' => now()]);
 
     $employee = Employee::create($overrides + [
-        'user_id' => $user->id, 'merchant_id' => $owner->merchant->id, 'phone_number' => $phone,
+        'user_id' => $user->id, 'shop_id' => $owner->merchant->id, 'phone_number' => $phone,
         'first_name' => 'Layla', 'last_name' => 'Ahmed', 'dob' => '1998-04-12', 'role' => 'Cashier',
         'salary' => 4.5, 'salary_currency' => 'USD', 'salary_period' => 'daily', 'status' => 'active',
     ]);
@@ -182,7 +182,7 @@ it('does not show another shop\'s employee', function () {
     goldFor($owner, 30);
     $other = Merchant::create(['phone_number' => '+252634990077', 'first_name' => 'Other']);
     $stranger = Employee::create([
-        'merchant_id' => $other->id, 'phone_number' => '+252634110099', 'first_name' => 'Zed', 'last_name' => 'Z', 'dob' => '1990-01-01', 'role' => 'x', 'status' => 'active',
+        'shop_id' => $other->id, 'phone_number' => '+252634110099', 'first_name' => 'Zed', 'last_name' => 'Z', 'dob' => '1990-01-01', 'role' => 'x', 'status' => 'active',
     ]);
     $token = ownerToken();
 

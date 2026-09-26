@@ -6,21 +6,17 @@ use App\Http\Resources\EmployeePermissionResource;
 use App\Http\Resources\EmployeeResource;
 use App\Http\Resources\MerchantPermissionResource;
 use App\Http\Resources\MerchantResource;
-use App\Http\Resources\POSPermissionResource;
 use App\Http\Resources\ShiftResource;
 use App\Http\Resources\UserResource;
 use App\Models\Employee;
 use App\Models\Invoice;
 use App\Models\Merchant;
-use App\Models\Order;
 use App\Models\Otp;
 use App\Models\POSPermission;
 use App\Models\Shift;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use App\Http\Controllers\API\BaseController;
-use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -31,11 +27,8 @@ class PassportAuthController extends BaseController
     /**
      * Handle login and return a token.
      *
-     * @param \Illuminate\Http\Request $request
      * @return \Illuminate\Http\Response
      */
-
-
     public function login(Request $request)
     {
 
@@ -46,15 +39,14 @@ class PassportAuthController extends BaseController
         $phoneNumber = str_replace(' ', '', $request->phone_number);
         $merchant = Merchant::with('currentSubscription')->where('phone_number', $phoneNumber)->first();
 
-        if (!$merchant) {
+        if (! $merchant) {
             return $this->sendError('Phone number not found.', 404);
         }
-
 
         $user = $merchant->user;
 
         // Check if the user has a PIN
-        $isPin = !is_null($user->pin);
+        $isPin = ! is_null($user->pin);
 
         // Return response
         return $this->sendResponse([
@@ -63,7 +55,7 @@ class PassportAuthController extends BaseController
             'phone_number' => $merchant->phone_number,
             'user_type' => $user->user_type,
             'is_pin' => $isPin,
-            'short_name' => $this->getInitials($user->name)
+            'short_name' => $this->getInitials($user->name),
         ], 'Enter the PIN Code');
 
     }
@@ -80,12 +72,12 @@ class PassportAuthController extends BaseController
             $phoneNumber = str_replace(' ', '', $request->phone_number);
             $merchant = Merchant::where('phone_number', $phoneNumber)->first();
 
-//            dd($phoneNumber);
-            if (!$merchant) {
+            //            dd($phoneNumber);
+            if (! $merchant) {
                 return $this->sendError('Phone number not found.', '', 404);
             }
 
-            if (!Hash::check($request->pin, $merchant->user->password)) {
+            if (! Hash::check($request->pin, $merchant->user->password)) {
                 return $this->sendError('Invalid PIN code.', '', 401);
             }
 
@@ -94,9 +86,9 @@ class PassportAuthController extends BaseController
             $merchant->load(['currentSubscription.subscriptionPlan']); // Load both subscription and subscriptionPlan relationships
 
             $currentSubscription = $merchant->currentSubscription;
-            $noSubscription = new \stdClass();
+            $noSubscription = new \stdClass;
             // If currentSubscription is null, set default values
-            if (!$currentSubscription) {
+            if (! $currentSubscription) {
                 // Create a new stdClass object
                 $noSubscription->subscription_plan_id = 1; // Default to Silver
                 $noSubscription->reSubscriptionEligible = true; // Eligible for re-subscription
@@ -121,7 +113,7 @@ class PassportAuthController extends BaseController
                     'business_name' => $merchant->business_name,
                     'merchant_code' => $merchant->merchant_code,
                     'location' => $merchant->location,
-                ]
+                ],
             ], 'Merchant Login successful.');
 
         } catch (\Exception $e) {
@@ -144,21 +136,20 @@ class PassportAuthController extends BaseController
             $authUser = auth()->user();
 
             // Ensure the authenticated user exists
-            if (!$authUser) {
+            if (! $authUser) {
                 return $this->sendError('User not authenticated.', '', 401);
             }
-
 
             if ($authUser->user_type == 'employee') {
 
                 $merchant = $authUser->employee->merchant;
 
-                $employee = Employee::where('phone_number', $phoneNumber)->where('merchant_id', $merchant->id)->first();
-                if (!$employee) {
+                $employee = Employee::where('phone_number', $phoneNumber)->where('shop_id', $merchant->id)->first();
+                if (! $employee) {
                     return $this->sendError('Phone number not found.', '', 404);
                 }
 
-                if (!Hash::check($request->pin, $employee->user->password)) {
+                if (! Hash::check($request->pin, $employee->user->password)) {
                     return $this->sendError('Invalid PIN code.', '', 401);
                 }
 
@@ -169,16 +160,16 @@ class PassportAuthController extends BaseController
                     'employee' => new EmployeeResource($employee),
                     'phone_number' => $phoneNumber,
                     'user_type' => $user->user_type,
-                    'short_name' => $this->getInitials($user->name)
+                    'short_name' => $this->getInitials($user->name),
                 ], 'Employee Pin Verified successful.');
             } else {
 
                 $merchant = Merchant::where('phone_number', $phoneNumber)->first();
-                if (!$merchant) {
+                if (! $merchant) {
                     return $this->sendError('Phone number not found.', '', 404);
                 }
 
-                if (!Hash::check($request->pin, $merchant->user->password)) {
+                if (! Hash::check($request->pin, $merchant->user->password)) {
                     return $this->sendError('Invalid PIN code.', '', 401);
                 }
 
@@ -189,7 +180,7 @@ class PassportAuthController extends BaseController
                     'merchant' => new MerchantResource($merchant),
                     'phone_number' => $merchant->phone_number,
                     'user_type' => $user->user_type,
-                    'short_name' => $this->getInitials($user->name)
+                    'short_name' => $this->getInitials($user->name),
                 ], 'Merchant Pin Verified successful.');
             }
 
@@ -197,7 +188,6 @@ class PassportAuthController extends BaseController
             return $this->sendError('An error occurred during the verification process.', ['error' => $e->getMessage()]);
         }
     }
-
 
     /**
      * Get the authenticated user information.
@@ -211,7 +201,7 @@ class PassportAuthController extends BaseController
             $authUser = auth()->user();
 
             // Ensure the authenticated user exists
-            if (!$authUser) {
+            if (! $authUser) {
                 return $this->sendError('User not authenticated.', '', 401);
             }
 
@@ -219,7 +209,7 @@ class PassportAuthController extends BaseController
             if ($authUser->user_type === 'employee') {
                 // Load merchant through employee relationship
                 $employee = $authUser->employee;
-                if (!$employee || !$employee->merchant) {
+                if (! $employee || ! $employee->merchant) {
                     return $this->sendError('Merchant not found for the authenticated employee.');
                 }
 
@@ -245,7 +235,7 @@ class PassportAuthController extends BaseController
                         'role' => $employee->role,
                         'salary' => $employee->salary,
                         'salary_in_usd' => convertShillingToUSD($employee->salary),
-                    ]
+                    ],
 
                 ], 'User Info retrieved successfully.');
             }
@@ -254,7 +244,7 @@ class PassportAuthController extends BaseController
             $merchant = $authUser->merchant;
 
             // Ensure the authenticated user has a merchant relation
-            if (!$merchant) {
+            if (! $merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -262,13 +252,13 @@ class PassportAuthController extends BaseController
             $merchant->load(['currentSubscription.subscriptionPlan']);
 
             // Handle missing subscription scenario by setting default values
-            $currentSubscription = $merchant->currentSubscription ?? (object)[
-                    'subscription_plan_id' => 1,  // Default to Silver
-                    'reSubscriptionEligible' => true,  // Eligible for re-subscription
-                ];
+            $currentSubscription = $merchant->currentSubscription ?? (object) [
+                'subscription_plan_id' => 1,  // Default to Silver
+                'reSubscriptionEligible' => true,  // Eligible for re-subscription
+            ];
 
             // If no subscription exists, attach the default one to the merchant
-            if (!$merchant->currentSubscription) {
+            if (! $merchant->currentSubscription) {
                 $merchant->currentSubscription = $currentSubscription;
             }
 
@@ -290,7 +280,7 @@ class PassportAuthController extends BaseController
                     'business_name' => $merchant->business_name,
                     'merchant_code' => $merchant->merchant_code,
                     'location' => $merchant->location,
-                ]
+                ],
             ], 'Merchant Info retrieved successfully.');
 
         } catch (\Exception $e) {
@@ -299,12 +289,11 @@ class PassportAuthController extends BaseController
         }
     }
 
-
     public function logout(Request $request)
     {
-//        return $this->sendResponse([], 'i m here');
+        //        return $this->sendResponse([], 'i m here');
         // Validate that the user is authenticated
-        if (!Auth::check()) {
+        if (! Auth::check()) {
             return $this->sendError('User not authenticated.', [], 401);
         }
 
@@ -323,7 +312,6 @@ class PassportAuthController extends BaseController
         return $this->sendResponse([], 'User logout successful.');
     }
 
-
     public function checkInvoiceAndRegisterMerchant(Request $request)
     {
         try {
@@ -340,18 +328,18 @@ class PassportAuthController extends BaseController
                 ->where('status', 'Paid')
                 ->first();
 
-//            dd($phoneNumber);
+            //            dd($phoneNumber);
             // Step 2: Check if a merchant exists for the phone number
             $existingMerchant = Merchant::where('phone_number', $phoneNumber)->first();
 
-//            dd($existingMerchant);
+            //            dd($existingMerchant);
             // Case 1: If boths invoice and merchant are found, block registration
             if ($registrationInvoice && $existingMerchant) {
                 return $this->sendError('Merchant already exists and registration invoice has already been generated for this phone number.', '', 403);
             }
 
             // Case 2: If invoice is found but merchant is not found, return invoice data
-            if ($registrationInvoice && !$existingMerchant) {
+            if ($registrationInvoice && ! $existingMerchant) {
                 return $this->sendResponse([
                     'is_invoice' => true,
                     'is_registration' => false,
@@ -359,13 +347,12 @@ class PassportAuthController extends BaseController
                     'type' => $registrationInvoice->type,
                     'invoice_amount' => $registrationInvoice->amount,
                     'invoice_date' => $registrationInvoice->created_at,
-                    'message' => 'Invoice found, but no merchant registered with this phone number.'
+                    'message' => 'Invoice found, but no merchant registered with this phone number.',
                 ], 'Invoice data found.');
             }
 
             // Case 3: If no invoice and no merchant, proceed to register the merchant
-            if (!$registrationInvoice && !$existingMerchant) {
-
+            if (! $registrationInvoice && ! $existingMerchant) {
 
                 return $this->sendResponse([
                     'is_invoice' => false,
@@ -394,8 +381,9 @@ class PassportAuthController extends BaseController
                 ? Merchant::where('phone_number', $phoneNumber)->first()
                 : Employee::where('phone_number', $phoneNumber)->first();
 
-            if (!$userProfile) {
+            if (! $userProfile) {
                 $errorMsg = $request->type === 'merchant' ? 'Merchant Phone number not found.' : 'Employee Phone number not found.';
+
                 return $this->sendError($errorMsg, 404);
             }
 
@@ -414,6 +402,7 @@ class PassportAuthController extends BaseController
             return $this->sendResponse(['phone_number' => $request->phone_number, 'otp' => $otpCode], 'OTP sent to your mobile number.', 200);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Failed to send OTP.', ['error' => $e->getMessage()], 500);
         }
     }
@@ -435,8 +424,9 @@ class PassportAuthController extends BaseController
                 ? Merchant::where('phone_number', $phoneNumber)->first()
                 : Employee::where('phone_number', $phoneNumber)->first();
 
-            if (!$userProfile) {
+            if (! $userProfile) {
                 $errorMsg = $request->type === 'merchant' ? 'Merchant Phone number not found.' : 'Employee Phone number not found.';
+
                 return $this->sendError($errorMsg, 404);
             }
 
@@ -448,7 +438,7 @@ class PassportAuthController extends BaseController
                 ->where('expires_at', '>', Carbon::now())
                 ->first();
 
-            if (!$otpRecord) {
+            if (! $otpRecord) {
                 return $this->sendError('Invalid or expired OTP.', ['error' => 'Invalid or expired OTP'], 401);
             }
 
@@ -460,6 +450,7 @@ class PassportAuthController extends BaseController
             return $this->sendResponse(new UserResource($user), 'OTP Verified successfully.', 200);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Failed to verify OTP.', ['error' => $e->getMessage()], 500);
         }
     }
@@ -486,8 +477,9 @@ class PassportAuthController extends BaseController
                 ? Merchant::where('phone_number', $phoneNumber)->first()
                 : Employee::where('phone_number', $phoneNumber)->first();
 
-            if (!$userProfile) {
+            if (! $userProfile) {
                 $errorMsg = $request->type === 'merchant' ? 'Merchant Phone number not found.' : 'Employee Phone number not found.';
+
                 return $this->sendError($errorMsg, 404);
             }
 
@@ -503,10 +495,10 @@ class PassportAuthController extends BaseController
             return $this->sendResponse(new UserResource($user), 'PIN Reset successfully.', 200);
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError('PIN change failed.', ['error' => $e->getMessage()], 500);
         }
     }
-
 
     public function saveShift(Request $request)
     {
@@ -519,7 +511,7 @@ class PassportAuthController extends BaseController
         $authUser = auth()->user();
 
         // Ensure the authenticated user exists
-        if (!$authUser) {
+        if (! $authUser) {
             return $this->sendError('User not authenticated.', '', 401);
         }
 
@@ -539,7 +531,7 @@ class PassportAuthController extends BaseController
 
         if ($request->start_time) {
             // Ensure no shift with start_time exists for today
-            if ($shift && !$shift->end_time) {
+            if ($shift && ! $shift->end_time) {
                 return $this->sendError('The previous shift is still open. Please close it before starting a new one.', '', 422);
             }
 
@@ -551,7 +543,7 @@ class PassportAuthController extends BaseController
             // Create a new shift for today
             $shift = Shift::create([
                 'user_id' => $authUser->id,
-                'start_time' => $currentDate . ' ' . $request->start_time,
+                'start_time' => $currentDate.' '.$request->start_time,
             ]);
 
             return $this->sendResponse(new ShiftResource($shift), 'Shift started successfully.');
@@ -559,7 +551,7 @@ class PassportAuthController extends BaseController
 
         if ($request->end_time) {
             // Ensure a shift exists for today with a start time
-            if (!$shift || !$shift->start_time) {
+            if (! $shift || ! $shift->start_time) {
                 return $this->sendError('Start time is required before setting an end time.', '', 422);
             }
 
@@ -570,7 +562,7 @@ class PassportAuthController extends BaseController
 
             // Update the end_time for the shift
             $shift->update([
-                'end_time' => $currentDate . ' ' . $request->end_time,
+                'end_time' => $currentDate.' '.$request->end_time,
             ]);
 
             return $this->sendResponse(new ShiftResource($shift), 'Shift ended successfully.');
@@ -586,7 +578,7 @@ class PassportAuthController extends BaseController
         $authUser = auth()->user();
 
         // Ensure the authenticated user exists
-        if (!$authUser) {
+        if (! $authUser) {
             return $this->sendError('User not authenticated.', '', 401);
         }
 
@@ -611,19 +603,19 @@ class PassportAuthController extends BaseController
         $authUser = auth()->user();
 
         // Ensure the authenticated user exists
-        if (!$authUser) {
+        if (! $authUser) {
             return $this->sendError('User not authenticated.', '', 401);
         }
 
         // Find the shift by ID and ensure it belongs to the authenticated user
         $shift = Shift::where('id', $shiftId)->where('user_id', $authUser->id)->first();
 
-        if (!$shift) {
+        if (! $shift) {
             return $this->sendError('Shift not found or does not belong to the authenticated user.', '', 404);
         }
 
         // Ensure there is something to update
-        if (!$request->start_time && !$request->end_time) {
+        if (! $request->start_time && ! $request->end_time) {
             return $this->sendError('At least one of start time or end time must be provided to update the shift.', '', 422);
         }
 
@@ -632,12 +624,12 @@ class PassportAuthController extends BaseController
 
         if ($request->start_time) {
 
-            $updates['start_time'] = currentDateInsert() . ' ' . $request->start_time;
+            $updates['start_time'] = currentDateInsert().' '.$request->start_time;
         }
 
         if ($request->end_time) {
 
-            $updates['end_time'] = currentDateInsert() . ' ' . $request->end_time;
+            $updates['end_time'] = currentDateInsert().' '.$request->end_time;
         }
 
         // Update the shift
@@ -645,6 +637,4 @@ class PassportAuthController extends BaseController
 
         return $this->sendResponse(new ShiftResource($shift), 'Shift updated successfully.');
     }
-
-
 }

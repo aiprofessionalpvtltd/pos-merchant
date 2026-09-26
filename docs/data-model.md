@@ -84,7 +84,7 @@ for the legacy API.
 ### Tables that belong to a shop
 
 `products`, `categories`, `carts`, `orders`, `invoices`, `sales`, `transactions`,
-`employees`, `files`, `merchant_subscriptions` and `personal_access_tokens` each
+`files`, `merchant_subscriptions` and `personal_access_tokens` each
 have a **`merchant_id` column that holds a shop id** (`shops.id`). The name comes
 from before shops had their own table. It stays until the legacy API is retired,
 then becomes `shop_id`.
@@ -92,14 +92,17 @@ then becomes `shop_id`.
 `personal_access_tokens.merchant_id` is the **current shop of that device's
 session** (see [multiple-shop.md](multiple-shop.md)).
 
+> `employees` no longer uses the legacy name: it has `shop_id` and `merchant_id` (a real merchant id).
+
 ### `employees`: a person's job in one shop
 
-One row per person **per shop** (`employees.merchant_id` is the shop id).
+One row per person **per shop**. It stores both links as foreign keys.
 
 | Column | Holds |
 | --- | --- |
-| `user_id` | The person's sign-in (`users.id`, `user_type = employee`). **Unique together with `merchant_id`** |
-| `merchant_id` | The shop they work in |
+| `user_id` | The person's sign-in (`users.id`, `user_type = employee`). Unique together with `shop_id` |
+| `shop_id` | **The shop they work in** (FK `shops.id`). Unique together with `user_id` |
+| `merchant_id` | **The merchant that owns that shop** (FK `merchants.id`), filled automatically from the shop |
 | `phone_number`, `first_name`, `last_name`, `dob` | Their details |
 | `role`, `salary`, `salary_currency`, `salary_period` | Their job and pay **in this shop** |
 | `status`, `removed_at`, `former_phone_number` | `active` / `inactive`; removal keeps history |
@@ -126,7 +129,7 @@ payroll and "on shift" are always calculated per shop.
 | A new shop gets the merchant's verified number as its payout wallet | `RegistrationService::openShop()` |
 | Closing a shop keeps its rows (soft delete) and reserves its number | `DELETE /shops/{id}` |
 | A shop's staff belong to that shop only; the owner can manage all of them | `GET /account/employees`, `POST /employees` with `shop_id`, `POST /employees/{id}/transfer` |
-| A person has at most one staff record per shop | Unique `employees(user_id, merchant_id)` |
+| A person has at most one staff record per shop | Unique `employees(user_id, shop_id)` |
 | A merchant's or a shop's number is never a staff number | `EmployeeService::phoneTaken()` |
 | Permissions, shifts and hours are per shop | `User::actingEmployee()`, `shifts.merchant_id` |
 
@@ -190,6 +193,8 @@ Full requests and responses: [merchant-onboarding.md](merchant-onboarding.md#f-t
 | `2026_09_26_000005_scope_shifts_and_staff_to_shops` | Adds `shifts.merchant_id` (backfilled) and the unique `employees(user_id, merchant_id)`. Refuses to run if a person already has two staff records in one shop |
 | `2026_09_26_000006_store_full_preferences_on_every_shop` | Fills `shops.preferences` with the full receipt, register and alert options for every existing shop, keeping anything already set. Rolls back to storing only differences |
 
-Both roll back. The renamed `shops` table keeps its old constraint names (for
+| `2026_09_26_000007_add_shop_id_and_merchant_id_to_employees_table` | Renames `employees.merchant_id` (a shop id) to `shop_id` (FK `shops`), adds a new `merchant_id` (FK `merchants`) backfilled from each shop's owner |
+
+All roll back. The renamed `shops` table keeps its old constraint names (for
 example `merchants_user_id_foreign`), so new constraints on either table must be
 named explicitly.

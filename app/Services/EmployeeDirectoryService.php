@@ -79,7 +79,7 @@ class EmployeeDirectoryService
         $open = $shifts->first(fn (Shift $shift) => $shift->start_time && ! $shift->end_time);
         $seconds = $shifts->sum(fn (Shift $shift) => $this->shifts->seconds($shift));
 
-        $orders = Order::where('user_id', $employee->user_id)->where('merchant_id', $employee->merchant_id);
+        $orders = Order::where('user_id', $employee->user_id)->where('merchant_id', $employee->shop_id);
         $paid = (clone $orders)->whereRaw("LOWER(order_status) IN ('complete','paid')");
 
         return [
@@ -141,7 +141,7 @@ class EmployeeDirectoryService
     {
         return DB::table('orders')->selectRaw($aggregate)
             ->whereColumn('orders.user_id', 'employees.user_id')
-            ->whereColumn('orders.merchant_id', 'employees.merchant_id')
+            ->whereColumn('orders.merchant_id', 'employees.shop_id')
             ->whereRaw("LOWER(orders.order_status) IN ('complete','paid')");
     }
 }

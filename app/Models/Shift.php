@@ -31,7 +31,7 @@ class Shift extends Model
             $user = User::withTrashed()->find($shift->user_id);
 
             $shift->merchant_id = $user?->actingMerchant()?->id
-                ?? Employee::where('user_id', $shift->user_id)->orderByRaw("status = 'active' desc")->orderBy('id')->value('merchant_id')
+                ?? Employee::where('user_id', $shift->user_id)->orderByRaw("status = 'active' desc")->orderBy('id')->value('shop_id')
                 ?? Shop::where('user_id', $shift->user_id)->orderBy('id')->value('id');
         });
     }

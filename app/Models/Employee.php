@@ -12,6 +12,7 @@ class Employee extends Model
 
     protected $fillable = [
         'user_id',
+        'shop_id',
         'merchant_id',
         'phone_number',
         'first_name',
@@ -37,24 +38,41 @@ class Employee extends Model
         'removed_at' => 'datetime',
     ];
 
+    protected static function booted(): void
+    {
+        static::creating(function (Employee $employee) {
+            if ($employee->shop_id && ! $employee->merchant_id) {
+                $employee->merchant_id = Shop::whereKey($employee->shop_id)->value('merchant_id');
+            }
+        });
+    }
+
     // Relationship to User
     public function user()
     {
         return $this->belongsTo(User::class);
     }
 
-    // Relationship to Merchant
+    // Legacy name: the shop this employee works in (see docs/data-model.md).
     public function merchant()
     {
-        return $this->belongsTo(Merchant::class);
+        return $this->belongsTo(Merchant::class, 'shop_id');
     }
 
     /**
-     * The shop this employee works in (`employees.merchant_id` holds a shop id).
+     * The merchant that owns the shop this employee works in (employees.merchant_id).
+     */
+    public function merchantAccount(): BelongsTo
+    {
+        return $this->belongsTo(MerchantAccount::class, 'merchant_id');
+    }
+
+    /**
+     * The shop this employee works in (`employees.shop_id`).
      */
     public function shop(): BelongsTo
     {
-        return $this->belongsTo(Shop::class, 'merchant_id');
+        return $this->belongsTo(Shop::class, 'shop_id');
     }
 
     // Relationship to Permissions

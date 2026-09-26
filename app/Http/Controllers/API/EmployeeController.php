@@ -2,32 +2,24 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Http\Controllers\Controller;
-use App\Http\Resources\CategoryResource;
 use App\Http\Resources\EmployeePermissionResource;
+use App\Http\Resources\EmployeeResource;
 use App\Http\Resources\MerchantResource;
 use App\Http\Resources\POSPermissionResource;
 use App\Http\Resources\UserResource;
-use App\Models\Category;
+use App\Models\Employee;
 use App\Models\EmployeePermission;
 use App\Models\Invoice;
 use App\Models\Merchant;
+use App\Models\Permission;
 use App\Models\POSPermission;
-use App\Models\Shift;
 use App\Models\Transaction;
 use App\Models\User;
 use Illuminate\Http\Request;
-
-
-use App\Http\Controllers\API\BaseController;
-use App\Models\Employee;
-use App\Models\Permission;
-use App\Http\Resources\EmployeeResource;
-use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Validator;
 
 class EmployeeController extends BaseController
 {
@@ -38,6 +30,7 @@ class EmployeeController extends BaseController
             if ($permissions->isEmpty()) {
                 return $this->sendResponse([], 'No permissions found.');
             }
+
             return $this->sendResponse(POSPermissionResource::collection($permissions), 'Categories retrieved successfully.');
         } catch (\Exception $e) {
             return $this->sendError('Error fetching permissions.', $e->getMessage());
@@ -51,7 +44,7 @@ class EmployeeController extends BaseController
             $employee = Employee::with('permissions.permission')->find($id);
 
             // Check if employee exists
-            if (!$employee) {
+            if (! $employee) {
                 return $this->sendError('Employee not found.', '', 404);
             }
 
@@ -86,7 +79,7 @@ class EmployeeController extends BaseController
         $authUser = auth()->user();
 
         // Check if the authenticated user has an associated merchant
-        if (!$authUser || !$authUser->merchant) {
+        if (! $authUser || ! $authUser->merchant) {
             return $this->sendError('Merchant not found for the authenticated user.');
         }
 
@@ -97,13 +90,13 @@ class EmployeeController extends BaseController
         // Get the merchant
         $merchant = $authUser->merchant;
 
-        if (!$merchant) {
+        if (! $merchant) {
             return $this->sendError('Merchant Not Found', 404);
         }
 
         // Check for duplicate employee with the same phone number
         $existingEmployee = Employee::where('phone_number', $request->phone_number)
-            ->where('merchant_id', $merchant->id)
+            ->where('shop_id', $merchant->id)
             ->first();
 
         if ($existingEmployee) {
@@ -116,7 +109,8 @@ class EmployeeController extends BaseController
         try {
             // Create a new employee
             $employee = Employee::create([
-                'merchant_id' => $merchant->id,
+                'shop_id' => $merchant->id,
+                'merchant_id' => $merchant->merchant_id,
                 'phone_number' => $request->phone_number,
                 'first_name' => $request->first_name,
                 'last_name' => $request->last_name,
@@ -141,8 +135,8 @@ class EmployeeController extends BaseController
 
             // Create a new user account linked to the employee
             $user = User::create([
-                'name' => $employee->first_name . ' ' . $employee->last_name,
-                'email' => $request->phone_number . '@email.com', // Set email based on phone number
+                'name' => $employee->first_name.' '.$employee->last_name,
+                'email' => $request->phone_number.'@email.com', // Set email based on phone number
                 'password' => Hash::make('1234'), // Default or random password
                 'user_type' => 'employee',
             ]);
@@ -167,7 +161,7 @@ class EmployeeController extends BaseController
             DB::rollBack();
 
             return response()->json([
-                'error' => 'Failed to create employee: ' . $e->getMessage(),
+                'error' => 'Failed to create employee: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -176,14 +170,14 @@ class EmployeeController extends BaseController
     {
         // Validate request data
         $validator = Validator::make($request->all(), [
-            'phone_number' => 'required|string|max:15|unique:employees,phone_number,' . $id,
+            'phone_number' => 'required|string|max:15|unique:employees,phone_number,'.$id,
             'first_name' => 'required|string|max:50',
             'last_name' => 'required|string|max:50',
             'dob' => 'required|date',
-//            'location' => 'required|string|max:100',
-//            'role' => 'required|string|max:50',
+            //            'location' => 'required|string|max:100',
+            //            'role' => 'required|string|max:50',
             'salary' => 'required|numeric|min:0',
-//            'permissions' => 'sometimes|array', // Expecting an array of permission IDs
+            //            'permissions' => 'sometimes|array', // Expecting an array of permission IDs
         ]);
 
         if ($validator->fails()) {
@@ -194,7 +188,7 @@ class EmployeeController extends BaseController
         $authUser = auth()->user();
 
         // Check if the authenticated user has an associated merchant
-        if (!$authUser || !$authUser->merchant) {
+        if (! $authUser || ! $authUser->merchant) {
             return $this->sendError('Merchant not found for the authenticated user.');
         }
 
@@ -204,14 +198,14 @@ class EmployeeController extends BaseController
         // Get the merchant
         $merchant = $authUser->merchant;
 
-        if (!$merchant) {
+        if (! $merchant) {
             return $this->sendError('Merchant Not Found', 404);
         }
 
         // Find the employee by ID
         $employee = Employee::find($id);
 
-        if (!$employee) {
+        if (! $employee) {
             return $this->sendError('Employee not found.', '', 404);
         }
 
@@ -227,7 +221,6 @@ class EmployeeController extends BaseController
                 'dob' => $request->dob,
                 'salary' => $request->salary,
             ]);
-
 
             if ($request->permissions) {
                 // Sync permissions: remove old and add new permissions
@@ -245,14 +238,13 @@ class EmployeeController extends BaseController
                 }
             }
 
-
             // Update the associated user account
             $user = $employee->user;
 
             if ($user) {
                 $user->update([
-                    'name' => $employee->first_name . ' ' . $employee->last_name,
-                    'email' => $request->phone_number . '@email.com', // Adjust as needed
+                    'name' => $employee->first_name.' '.$employee->last_name,
+                    'email' => $request->phone_number.'@email.com', // Adjust as needed
                 ]);
             }
 
@@ -260,6 +252,7 @@ class EmployeeController extends BaseController
 
             // Commit the transaction
             DB::commit();
+
             return response()->json([
                 'employee' => new EmployeeResource($employee),
                 'message' => 'Employee updated successfully.',
@@ -270,7 +263,7 @@ class EmployeeController extends BaseController
             DB::rollBack();
 
             return response()->json([
-                'error' => 'Failed to update employee: ' . $e->getMessage(),
+                'error' => 'Failed to update employee: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -284,7 +277,7 @@ class EmployeeController extends BaseController
             // Find the employee by ID
             $employee = Employee::find($id);
 
-            if (!$employee) {
+            if (! $employee) {
                 return response()->json(['error' => 'Employee not found.'], 404);
             }
 
@@ -316,7 +309,7 @@ class EmployeeController extends BaseController
             DB::rollBack();
 
             return response()->json([
-                'error' => 'Failed to delete employee: ' . $e->getMessage(),
+                'error' => 'Failed to delete employee: '.$e->getMessage(),
             ], 500);
         }
     }
@@ -328,7 +321,7 @@ class EmployeeController extends BaseController
         $authUser = auth()->user();
 
         // Check if the authenticated user has an associated merchant
-        if (!$authUser || !$authUser->merchant) {
+        if (! $authUser || ! $authUser->merchant) {
             return response()->json(['error' => 'Merchant not found for the authenticated user.'], 404);
         }
 
@@ -354,9 +347,8 @@ class EmployeeController extends BaseController
 
             return $this->sendResponse(EmployeeResource::collection($employees), 'Employees  retrieved successfully.');
 
-
         } catch (\Exception $e) {
-            return response()->json(['error' => 'Failed to retrieve employees: ' . $e->getMessage()], 500);
+            return response()->json(['error' => 'Failed to retrieve employees: '.$e->getMessage()], 500);
         }
     }
 
@@ -375,7 +367,7 @@ class EmployeeController extends BaseController
             $employee = Employee::where('phone_number', $phoneNumber)->first();
 
             // Return error if employee is not found
-            if (!$employee) {
+            if (! $employee) {
                 return $this->sendError('Phone number not found.', '', 404);
             }
 
@@ -384,14 +376,14 @@ class EmployeeController extends BaseController
             $user = $employee->user;
 
             // Check if the user has a PIN
-            $isPin = !is_null($user->pin);
+            $isPin = ! is_null($user->pin);
 
             // Prepare the response data
             $responseData = [
                 'employee' => new EmployeeResource($employee),
                 'merchant' => new MerchantResource($merchant),
-                'merchant_short_name' => $this->getInitials($merchant->first_name . ' ' . $merchant->last_name),
-                'employee_short_name' => $this->getInitials($employee->first_name . ' ' . $employee->last_name),
+                'merchant_short_name' => $this->getInitials($merchant->first_name.' '.$merchant->last_name),
+                'employee_short_name' => $this->getInitials($employee->first_name.' '.$employee->last_name),
                 'is_pin' => $isPin,
             ];
 
@@ -415,7 +407,7 @@ class EmployeeController extends BaseController
             $employee = Employee::where('phone_number', $phoneNumber)->first();
 
             // Check if the employee exists
-            if (!$employee) {
+            if (! $employee) {
                 return $this->sendError('Phone number not found.', '', 404);
             }
 
@@ -430,7 +422,7 @@ class EmployeeController extends BaseController
             }
 
             // Check if the provided PIN matches the user's password
-            if (!Hash::check($request->pin, $employee->user->password)) {
+            if (! Hash::check($request->pin, $employee->user->password)) {
                 return $this->sendError('Invalid PIN code.', '', 401);
             }
 
@@ -447,9 +439,9 @@ class EmployeeController extends BaseController
             $merchant->load(['currentSubscription.subscriptionPlan']); // Load both subscription and subscriptionPlan relationships
 
             $currentSubscription = $merchant->currentSubscription;
-            $noSubscription = new \stdClass();
+            $noSubscription = new \stdClass;
             // If currentSubscription is null, set default values
-            if (!$currentSubscription) {
+            if (! $currentSubscription) {
                 // Create a new stdClass object
                 $noSubscription->subscription_plan_id = 1; // Default to Silver
                 $noSubscription->reSubscriptionEligible = true; // Eligible for re-subscription
@@ -466,7 +458,7 @@ class EmployeeController extends BaseController
                 'token' => $token,
                 'phone_number' => $employee->phone_number,
                 'user_type' => $user->user_type,
-                'short_name' => $this->getInitials($employee->first_name . ' ' . $employee->last_name),
+                'short_name' => $this->getInitials($employee->first_name.' '.$employee->last_name),
                 'profile' => [
                     'first_name' => $employee->first_name,
                     'last_name' => $employee->last_name,
@@ -476,7 +468,7 @@ class EmployeeController extends BaseController
                     'role' => $employee->role,
                     'salary' => $employee->salary,
                     'salary_in_usd' => convertShillingToUSD($employee->salary),
-                ]
+                ],
             ], 'Employee login successful.');
 
         } catch (\Exception $e) {
@@ -506,7 +498,7 @@ class EmployeeController extends BaseController
             // Check if the merchant exists
             $employee = Employee::where('phone_number', $phoneNumber)->first();
 
-            if (!$employee) {
+            if (! $employee) {
                 return $this->sendError('Employee mobile number is not registered', '');
             }
 
@@ -531,11 +523,12 @@ class EmployeeController extends BaseController
                 'merchant' => new MerchantResource($merchant),
                 'token' => $token,
                 'user_type' => $user->user_type,
-                'short_name' => $this->getInitials($employee->first_name . ' ' . $employee->last_name),
+                'short_name' => $this->getInitials($employee->first_name.' '.$employee->last_name),
             ], 'Employee Login successful.');
 
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError('An error occurred while storing the PIN code.', ['error' => $e->getMessage()]);
         }
     }
@@ -557,21 +550,19 @@ class EmployeeController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
             // Get the merchant's ID
             $merchantID = $authUser->merchant->id;
 
-
             // Get the date range (default to all data if not provided)
             $startDate = $request->start_date ? Carbon::parse($request->start_date)->startOfDay() : null;
             $endDate = $request->end_date ? Carbon::parse($request->end_date)->endOfDay() : null;
 
-
             // Fetch employees associated with the merchant
-            $employees = Employee::where('merchant_id', $merchantID)
+            $employees = Employee::where('shop_id', $merchantID)
                 ->with(['user.shifts' => function ($query) use ($startDate, $endDate) {
                     // Filter shifts by the date range
                     if ($startDate && $endDate) {
@@ -598,6 +589,7 @@ class EmployeeController extends BaseController
                             $end = \Carbon\Carbon::parse($shift->end_time);
                             $carry += $start->diffInHours($end); // Add working hours
                         }
+
                         return $carry;
                     }, 0);
 
@@ -638,7 +630,7 @@ class EmployeeController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -646,11 +638,11 @@ class EmployeeController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Fetch the specific employee and their related user and shifts
-            $employee = Employee::where('merchant_id', $merchantID)
+            $employee = Employee::where('shop_id', $merchantID)
                 ->with('user.shifts') // Load shifts related to the user
                 ->find($id);
 
-            if (!$employee) {
+            if (! $employee) {
                 return $this->sendError('Employee not found for the given ID.');
             }
 
@@ -663,6 +655,7 @@ class EmployeeController extends BaseController
                     $end = \Carbon\Carbon::parse($shift->end_time);
                     $carry += $start->diffInHours($end);
                 }
+
                 return $carry;
             }, 0);
 
@@ -679,7 +672,7 @@ class EmployeeController extends BaseController
 
             // Return combined data for the specific employee
             return $this->sendResponse([
-                 'total_sale' => $totalTransactionAmount,
+                'total_sale' => $totalTransactionAmount,
                 'total_sale_in_usd' => convertShillingToUSD($totalTransactionAmount),
                 'total_working_hours' => round($totalWorkingHours),
                 'salary' => $employee->salary,
@@ -689,5 +682,4 @@ class EmployeeController extends BaseController
             return $this->sendError('An error occurred while fetching the employee details.', ['error' => $e->getMessage()]);
         }
     }
-
 }

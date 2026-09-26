@@ -29,7 +29,7 @@ class EmployeeController extends Controller
                     ->where('business_name', 'like', "%{$keyword}%")
                     ->orWhere('first_name', 'like', "%{$keyword}%")
                     ->orWhere('last_name', 'like', "%{$keyword}%")))
-                ->orderColumn('merchant', 'employees.merchant_id $1')
+                ->orderColumn('merchant', 'employees.shop_id $1')
                 ->addColumn('name', fn (Employee $employee) => $this->employees->listRow($employee)['name'])
                 ->filterColumn('name', fn ($query, $keyword) => $query->whereRaw("CONCAT(employees.first_name, ' ', employees.last_name) LIKE ?", ["%{$keyword}%"]))
                 ->orderColumn('name', 'employees.first_name $1')

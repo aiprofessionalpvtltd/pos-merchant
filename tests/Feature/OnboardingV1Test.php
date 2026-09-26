@@ -164,7 +164,7 @@ it('shows one merchant with all their shops and each shop\'s details, from separ
 it('keeps staff out of the merchant account', function () {
     $shop = Merchant::create(['phone_number' => '+252634990150', 'business_name' => 'X', 'is_approved' => true]);
     $staff = User::create(['name' => 'Staff', 'email' => 'onb-staff@example.test', 'password' => 'x', 'user_type' => 'employee']);
-    App\Models\Employee::create(['user_id' => $staff->id, 'merchant_id' => $shop->id, 'phone_number' => '+252634990151', 'first_name' => 'S', 'last_name' => 'T', 'dob' => '1990-01-01', 'role' => 'Cashier', 'status' => 'active']);
+    App\Models\Employee::create(['user_id' => $staff->id, 'shop_id' => $shop->id, 'phone_number' => '+252634990151', 'first_name' => 'S', 'last_name' => 'T', 'dob' => '1990-01-01', 'role' => 'Cashier', 'status' => 'active']);
 
     test()->actingAs($staff, 'api')->getJson('/api/v1/account')->assertForbidden()->assertJsonPath('error.code', 'auth.merchant_only');
 });

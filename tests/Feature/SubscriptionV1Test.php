@@ -139,7 +139,7 @@ it('lets an employee read the shop plan but not change or cancel it', function (
 
     $user = User::create(['name' => 'Aisha Ali', 'email' => 'aisha-sub@example.test', 'password' => Hash::make('2580'), 'user_type' => 'employee', 'pin_set_at' => now()]);
     Employee::create([
-        'user_id' => $user->id, 'merchant_id' => $owner->merchant->id, 'phone_number' => '+252634990002',
+        'user_id' => $user->id, 'shop_id' => $owner->merchant->id, 'phone_number' => '+252634990002',
         'first_name' => 'Aisha', 'last_name' => 'Ali', 'dob' => '1995-05-05', 'location' => 'Hargeisa', 'role' => 'Cashier', 'salary' => 100, 'status' => 'active',
     ]);
 

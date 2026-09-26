@@ -50,7 +50,7 @@ class MerchantAccount extends Model
      */
     public function employees(): HasManyThrough
     {
-        return $this->hasManyThrough(Employee::class, Shop::class, 'merchant_id', 'merchant_id');
+        return $this->hasManyThrough(Employee::class, Shop::class, 'merchant_id', 'shop_id');
     }
 
     public function fullName(): string

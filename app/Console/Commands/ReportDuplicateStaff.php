@@ -34,7 +34,7 @@ class ReportDuplicateStaff extends Command
             $groups->map(fn ($rows, $phone) => [
                 $phone,
                 $rows->pluck('user_id')->unique()->implode(', '),
-                $rows->map(fn (Employee $employee) => ($employee->shop?->business_name ?? '#'.$employee->merchant_id).' (user '.$employee->user_id.')')->implode('; '),
+                $rows->map(fn (Employee $employee) => ($employee->shop?->business_name ?? '#'.$employee->shop_id).' (user '.$employee->user_id.')')->implode('; '),
             ])->values()->all(),
         );
 

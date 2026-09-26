@@ -51,7 +51,7 @@ class ShiftResource extends JsonResource
     {
         $user = $shift->user;
         // The person's staff record in the shift's shop (a person may work in several).
-        $employee = $user?->employments()->where('merchant_id', $shift->merchant_id)->first();
+        $employee = $user?->employments()->where('shop_id', $shift->merchant_id)->first();
         $merchant = $user?->merchant?->exists ? $user->merchant : null;
 
         if ($employee) {

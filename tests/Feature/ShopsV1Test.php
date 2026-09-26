@@ -72,7 +72,7 @@ function staffOf(Merchant $shop): User
     ]);
 
     Employee::create([
-        'user_id' => $user->id, 'merchant_id' => $shop->id, 'phone_number' => STAFF_PHONE,
+        'user_id' => $user->id, 'shop_id' => $shop->id, 'phone_number' => STAFF_PHONE,
         'first_name' => 'Cashier', 'last_name' => 'One', 'dob' => '1995-05-05', 'role' => 'Cashier', 'status' => 'active',
     ]);
 

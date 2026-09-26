@@ -142,7 +142,7 @@ class User extends Authenticatable
         $shopId = $this->actingMerchant()?->id;
 
         return $shopId === null ? null : $this->employments
-            ->first(fn (Employee $employee) => $employee->merchant_id === $shopId && $employee->status === 'active');
+            ->first(fn (Employee $employee) => $employee->shop_id === $shopId && $employee->status === 'active');
     }
 
     public function hasPosPermission(string $key): bool
@@ -186,7 +186,7 @@ class User extends Authenticatable
         }
 
         if ($this->isEmployee()) {
-            $shopIds = $this->employments->where('status', 'active')->pluck('merchant_id');
+            $shopIds = $this->employments->where('status', 'active')->pluck('shop_id');
 
             return $this->accessibleShopsCache = Shop::whereIn('id', $shopIds)->orderBy('id')->get();
         }

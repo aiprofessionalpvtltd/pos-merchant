@@ -48,7 +48,7 @@ it('adds someone who already works in another shop as the same person, keeping t
         ->assertJsonPath('data.existing_person', true)
         ->assertJsonPath('message', 'Ayaan now also works in Hodan Berbera. They sign in with their existing PIN.');
 
-    expect(Employee::where('user_id', $person->id)->where('status', 'active')->pluck('merchant_id')->sort()->values()->all())
+    expect(Employee::where('user_id', $person->id)->where('status', 'active')->pluck('shop_id')->sort()->values()->all())
         ->toBe([$main->id, $berbera->id])
         ->and(User::where('user_type', 'employee')->whereIn('id', Employee::where('phone_number', MULTI_STAFF_PHONE)->pluck('user_id'))->count())->toBe(1);
 
@@ -110,8 +110,8 @@ it('keeps shifts and hours separate per shop', function () {
     expect(Shift::open()->where('user_id', $person->id)->pluck('merchant_id')->sort()->values()->all())->toBe([$main->id, $berbera->id]);
 
     // The owner's staff list for Berbera shows them on shift there only.
-    $mainEmployee = Employee::where('user_id', $person->id)->where('merchant_id', $main->id)->first();
-    $berberaEmployee = Employee::where('user_id', $person->id)->where('merchant_id', $berbera->id)->first();
+    $mainEmployee = Employee::where('user_id', $person->id)->where('shop_id', $main->id)->first();
+    $berberaEmployee = Employee::where('user_id', $person->id)->where('shop_id', $berbera->id)->first();
 
     app('auth')->forgetGuards();
     $rows = collect(test()->withToken($owner)->getJson('/api/v1/account/employees')->assertOk()->json('data.employees'));
@@ -136,7 +136,7 @@ it('removes the person from one shop and keeps the other', function () {
     app('auth')->forgetGuards();
     $inBerbera = test()->postJson('/api/v1/auth/pin/login', ['phone_number' => MULTI_STAFF_PHONE, 'pin' => '2468', 'shop_id' => $berbera->id], ['X-EXELO-Device-Id' => 'berbera-till'])->json('data.token');
 
-    $mainEmployee = Employee::where('user_id', $person->id)->where('merchant_id', $main->id)->first();
+    $mainEmployee = Employee::where('user_id', $person->id)->where('shop_id', $main->id)->first();
 
     app('auth')->forgetGuards();
     test()->withToken($owner)->deleteJson("/api/v1/employees/{$mainEmployee->id}")
@@ -154,7 +154,7 @@ it('removes the person from one shop and keeps the other', function () {
 
     // Removed from the last shop: the person's sign-in goes. Staff endpoints act on the
     // session's current shop, so the owner switches to Berbera first.
-    $berberaEmployee = Employee::where('user_id', $person->id)->where('merchant_id', $berbera->id)->first();
+    $berberaEmployee = Employee::where('user_id', $person->id)->where('shop_id', $berbera->id)->first();
 
     app('auth')->forgetGuards();
     test()->withToken($owner)->postJson("/api/v1/shops/{$berbera->id}/select")->assertOk();

@@ -98,7 +98,7 @@ it('shows a merchant with plan, PIN, wallets, staff, history and pending cash', 
 
     $employeeUser = User::create(['name' => 'Aisha Ali', 'email' => 'aisha-merchant@example.test', 'password' => Hash::make('x'), 'user_type' => 'employee']);
     Employee::create([
-        'user_id' => $employeeUser->id, 'merchant_id' => $merchant->id, 'phone_number' => '+252634990002',
+        'user_id' => $employeeUser->id, 'shop_id' => $merchant->id, 'phone_number' => '+252634990002',
         'first_name' => 'Aisha', 'last_name' => 'Ali', 'dob' => '1995-05-05', 'location' => 'Hargeisa', 'role' => 'Cashier', 'salary' => 100, 'status' => 'active',
     ]);
 

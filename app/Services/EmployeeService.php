@@ -43,7 +43,7 @@ class EmployeeService
         $status = $filters['status'] ?? null;
         $search = trim($filters['q'] ?? '');
 
-        $query = Employee::where('merchant_id', $merchant->id)
+        $query = Employee::where('shop_id', $merchant->id)
             ->with(['user' => fn ($user) => $user->withTrashed(), 'permissions.permission', 'shop'])
             // Removed staff only show under status=disabled, so the everyday list stays clean
             ->where('status', $status === 'disabled' ? 'inactive' : 'active');
@@ -78,7 +78,7 @@ class EmployeeService
 
     public function find(Merchant $merchant, int $id): Employee
     {
-        return Employee::where('merchant_id', $merchant->id)
+        return Employee::where('shop_id', $merchant->id)
             ->with(['user' => fn ($user) => $user->withTrashed(), 'permissions.permission', 'shop'])
             ->find($id) ?? throw new ApiException('employee.not_found', 'We could not find that staff member', 404);
     }
@@ -121,18 +121,18 @@ class EmployeeService
 
         $search = trim($filters['q'] ?? '');
 
-        $query = Employee::whereIn('merchant_id', empty($filters['shop_id']) ? $shopIds : [(int) $filters['shop_id']])
+        $query = Employee::whereIn('shop_id', empty($filters['shop_id']) ? $shopIds : [(int) $filters['shop_id']])
             ->where('status', ($filters['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active')
             ->with(['user' => fn ($user) => $user->withTrashed(), 'permissions.permission', 'shop'])
             ->when($search !== '', fn ($inner) => $inner->where(fn ($match) => $match
                 ->whereRaw("concat_ws(' ', first_name, last_name) like ?", ["%{$search}%"])
                 ->orWhere('phone_number', 'like', "%{$search}%")));
 
-        $page = $query->orderBy('merchant_id')->orderBy('first_name')->orderBy('id')
+        $page = $query->orderBy('shop_id')->orderBy('first_name')->orderBy('id')
             ->paginate($filters['per_page'] ?? 50, ['*'], 'page', $filters['page'] ?? 1);
 
-        $counts = Employee::active()->whereIn('merchant_id', $shopIds)
-            ->selectRaw('merchant_id, count(*) as active')->groupBy('merchant_id')->pluck('active', 'merchant_id');
+        $counts = Employee::active()->whereIn('shop_id', $shopIds)
+            ->selectRaw('shop_id, count(*) as active')->groupBy('shop_id')->pluck('active', 'shop_id');
 
         return [
             'items' => $page->getCollection(),
@@ -162,31 +162,31 @@ class EmployeeService
 
         $shopIds = $owner->accessibleShops()->pluck('id');
 
-        $employee = Employee::active()->whereIn('merchant_id', $shopIds)->find($employeeId)
+        $employee = Employee::active()->whereIn('shop_id', $shopIds)->find($employeeId)
             ?? throw new ApiException('employee.not_found', 'We could not find that staff member', 404);
 
         $target = $owner->accessibleShop($shopId)
             ?? throw new ApiException('shop.not_found', 'We could not find that shop', 404, [], 'shop_id');
 
         // Already there, or has an earlier staff record there (one per person per shop).
-        $hasRecordThere = $employee->merchant_id === $target->id
-            || ($employee->user_id && Employee::where('user_id', $employee->user_id)->where('merchant_id', $target->id)->exists());
+        $hasRecordThere = $employee->shop_id === $target->id
+            || ($employee->user_id && Employee::where('user_id', $employee->user_id)->where('shop_id', $target->id)->exists());
 
         if ($hasRecordThere) {
             throw new ApiException('employee.already_in_shop', 'This staff member already has a record in '.$target->business_name.'. Add them there instead.', 409, [], 'shop_id');
         }
 
-        if ($employee->user_id && Shift::open()->where('user_id', $employee->user_id)->forShop($employee->merchant_id)->exists()) {
+        if ($employee->user_id && Shift::open()->where('user_id', $employee->user_id)->forShop($employee->shop_id)->exists()) {
             throw new ApiException('employee.shift_open', 'This staff member is clocked in. End their shift first.', 409);
         }
 
         $this->subscriptions->requireFeature($target, 'employees.manage');
 
-        $fromShopId = $employee->merchant_id;
+        $fromShopId = $employee->shop_id;
 
         // Sessions working in the old shop end; any in their other shops carry on.
         $revoked = DB::transaction(function () use ($employee, $target, $fromShopId) {
-            $employee->update(['merchant_id' => $target->id]);
+            $employee->update(['shop_id' => $target->id]);
 
             return $employee->user ? $employee->user->tokens()->where('merchant_id', $fromShopId)->delete() : 0;
         });
@@ -211,7 +211,7 @@ class EmployeeService
 
         return $employees
             ->mapWithKeys(fn (Employee $employee) => [$employee->id => $open->first(
-                fn (Shift $shift) => $shift->user_id === $employee->user_id && $shift->merchant_id === $employee->merchant_id,
+                fn (Shift $shift) => $shift->user_id === $employee->user_id && $shift->merchant_id === $employee->shop_id,
             )])
             ->filter();
     }
@@ -235,7 +235,7 @@ class EmployeeService
         // Someone who already works in another shop joins this one as the same person, with their own PIN.
         $person = $this->existingStaffPerson($phone);
 
-        if ($person && Employee::active()->where('user_id', $person->id)->where('merchant_id', $merchant->id)->exists()) {
+        if ($person && Employee::active()->where('user_id', $person->id)->where('shop_id', $merchant->id)->exists()) {
             throw new ApiException('employee.already_in_shop', 'This person already works in '.$merchant->business_name, 409, [], 'phone_number');
         }
 
@@ -275,12 +275,12 @@ class EmployeeService
             ] + $this->salaryAttributes($data);
 
             // One staff record per person per shop: a person removed from this shop earlier gets theirs back.
-            $employee = Employee::where('user_id', $user->id)->where('merchant_id', $merchant->id)->first();
+            $employee = Employee::where('user_id', $user->id)->where('shop_id', $merchant->id)->first();
 
             if ($employee) {
                 $employee->update($attributes);
             } else {
-                $employee = Employee::create(['user_id' => $user->id, 'merchant_id' => $merchant->id] + $attributes);
+                $employee = Employee::create(['user_id' => $user->id, 'shop_id' => $merchant->id] + $attributes);
             }
 
             $this->syncPermissions($employee, $permissions);
@@ -352,7 +352,7 @@ class EmployeeService
         $result = DB::transaction(function () use ($employee) {
             $user = $employee->user;
 
-            $openShifts = $user ? Shift::open()->where('user_id', $user->id)->forShop($employee->merchant_id)->get() : collect();
+            $openShifts = $user ? Shift::open()->where('user_id', $user->id)->forShop($employee->shop_id)->get() : collect();
             $openShifts->each(fn (Shift $shift) => $shift->update(['end_time' => now()->format('Y-m-d H:i:s')]));
 
             $employee->update([
@@ -367,7 +367,7 @@ class EmployeeService
             // Elsewhere: end only the sessions working in this shop. Nowhere: end them all.
             $tokens = match (true) {
                 $user === null => collect(),
-                $stillWorksElsewhere => $user->tokens()->where('merchant_id', $employee->merchant_id)->get(),
+                $stillWorksElsewhere => $user->tokens()->where('merchant_id', $employee->shop_id)->get(),
                 default => $user->tokens()->get(),
             };
             $tokens->each->delete();
@@ -396,7 +396,7 @@ class EmployeeService
      */
     public function metrics(Employee $employee, Carbon $from, Carbon $to): array
     {
-        $orders = Order::where('merchant_id', $employee->merchant_id)
+        $orders = Order::where('merchant_id', $employee->shop_id)
             ->where('user_id', $employee->user_id)
             ->whereIn('order_status', self::SALE_STATUSES)
             ->whereBetween('created_at', [$from, $to])
@@ -404,7 +404,7 @@ class EmployeeService
             ->first();
 
         $shifts = Shift::where('user_id', $employee->user_id)
-            ->forShop($employee->merchant_id)
+            ->forShop($employee->shop_id)
             ->whereNotNull('start_time')
             ->whereBetween('start_time', [$from->format('Y-m-d H:i:s'), $to->format('Y-m-d H:i:s')])
             ->get(['start_time', 'end_time']);
@@ -431,7 +431,7 @@ class EmployeeService
      */
     public function summary(Merchant $merchant, Carbon $from, Carbon $to): array
     {
-        $employees = Employee::where('merchant_id', $merchant->id)->active()->orderBy('first_name')->orderBy('id')->get();
+        $employees = Employee::where('shop_id', $merchant->id)->active()->orderBy('first_name')->orderBy('id')->get();
         $userIds = $employees->pluck('user_id')->filter();
 
         $shifts = Shift::whereIn('user_id', $userIds)->forShop($merchant->id)->whereNotNull('start_time')
