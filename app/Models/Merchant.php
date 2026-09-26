@@ -2,15 +2,21 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
-use Illuminate\Support\Str;
 
+/**
+ * Legacy name for a shop. Same `shops` table as App\Models\Shop, which new code uses.
+ * See docs/data-model.md.
+ */
 class Merchant extends Model
 {
     use SoftDeletes;
+
+    protected $table = 'shops';
+
     protected $fillable = [
+        'merchant_id',
         'first_name',
         'last_name',
         'dob',
@@ -59,14 +65,14 @@ class Merchant extends Model
         return (int) ($this->exchange_rate ?: config('exelo.conversion_rate'));
     }
 
-
     protected static function boot()
     {
         parent::boot();
 
+        // Every shop stores its own full set of receipt, register and alert preferences
+        // (config `exelo.preference_defaults` is the template for new shops).
         static::creating(function ($merchant) {
-//            $merchant->merchant_id = 'MER' . strtoupper(Str::random(10));
-//            $merchant->iccid_number = self::generateIccidNumber();
+            $merchant->preferences = array_replace_recursive(config('exelo.preference_defaults'), $merchant->preferences ?? []);
         });
     }
 
@@ -92,6 +98,7 @@ class Merchant extends Model
     {
         return $this->hasMany(MerchantSubscription::class);
     }
+
     public function sales()
     {
         return $this->hasMany(Sale::class);
@@ -133,13 +140,9 @@ class Merchant extends Model
             ->latest('id'); // Most recent row; id breaks ties between rows created in the same second
     }
 
-
-
     public function canceledSubscriptions()
     {
         return $this->hasMany(MerchantSubscription::class)
             ->where('is_canceled', true); // Only canceled subscriptions
     }
-
-
 }

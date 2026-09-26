@@ -25,11 +25,14 @@ with. Nothing else about those endpoints changes.
 
 ## Rules
 
-1. **Each shop has its own business phone number.** It is the shop's contact
-   number and must be new to EXELO. The owner still signs in with **their own**
-   number and PIN; signing in with any of their shops' numbers also works.
-2. **Each extra shop pays the registration fee** (the admin-set base price + EXELO
-   fee), through the same quote → invoice → pay flow as signing up.
+1. **The merchant and each shop have their own phone numbers.** The merchant signs
+   in with **their own** number and PIN. Each shop's number is its contact number,
+   different from the merchant's and new to EXELO. (Merchants registered before this
+   share one number between their account and first shop, and can still sign in with
+   any of their shops' numbers.)
+2. **Creating a shop is free**, the first one included. The only charges are the
+   merchant's registration fee and phone verification fee, once each. The first
+   shop needs a verified merchant phone (see [merchant-onboarding.md](merchant-onboarding.md)).
 3. **Each shop has its own subscription.** A new shop starts on the default (free)
    plan and is upgraded on its own.
 4. **Switching shop needs no PIN.** The same person is already signed in on this
@@ -51,10 +54,12 @@ calls with a body need `Content-Type: application/json`.
 | 2 | GET | [`/auth/session`](#2-get-authsession--current-session) | signed in | The active shop's session. **Changed:** `shops` |
 | 3 | GET | [`/shops`](#3-get-shops--list-my-shops) | signed in | The shops this person can act for |
 | 4 | POST | [`/shops/{id}/select`](#4-post-shopsidselect--switch-shop) | owner or staff of the shop | Make a shop the active one |
-| 5 | POST | [`/shops`](#5-post-shops--open-another-shop) | owner | Open another shop (after paying its fee) |
+| 5 | POST | [`/shops`](#5-post-shops--create-a-shop) | owner | Create a shop (free) |
 | 6 | GET | [`/shops/{id}`](#6-get-shopsid--shop-details) | owner or staff of the shop | One shop's profile |
 | 7 | PATCH | [`/shops/{id}`](#7-patch-shopsid--edit-a-shop) | owner of the shop | Edit a shop's business details |
 | 8 | DELETE | [`/shops/{id}`](#8-delete-shopsid--close-a-shop) | owner of the shop + PIN | Close a shop |
+| 9 | GET | [`/shops/{id}/settings`](merchant.md#settings-of-one-specific-shop-shopsidsettings) | owner or staff of the shop | One shop's settings (VAT, exchange rate, timezone, receipt, register, alerts) |
+| 10 | PATCH | [`/shops/{id}/settings`](merchant.md#settings-of-one-specific-shop-shopsidsettings) | owner of the shop | Change one shop's settings |
 
 Headers:
 
@@ -187,24 +192,16 @@ token itself doesn't change. Other devices stay on the shop they were using.
 | --- | --- | --- |
 | `404` | `shop.not_found` | No such shop for this person (or it was closed) |
 
-### 5. POST `/shops` — Open another shop
+### 5. POST `/shops` — Create a shop
 
-For an owner who is signed in. First pay the new shop's registration fee with the
-**new shop's phone number**, exactly as in signing up:
-
-```text
-GET  /registration/quote?purpose=registration                    → quote_id, total
-POST /registration/invoices { phone_number: <new shop phone>, wallet_number, rail,
-                              purpose: "registration", quote_id, idempotency_key }
-GET  /registration/invoices/{invoice_id}                          → poll until "paid"
-POST /shops { invoice_id, … }                                     → the shop is created
-```
+For a signed-in merchant. **Free**, no payment step. The first shop needs the
+merchant's phone to be verified first
+([merchant-onboarding.md, B](merchant-onboarding.md#b-verify-the-merchants-phone)).
 
 **Request**
 
 ```json
 {
-  "invoice_id": "inv_01M3C0A7Q2F9WJ3K8ZP4H6T1RD",
   "business_name": "Berbera Mart",
   "phone_number": "+252634220202",
   "state": "sahil",
@@ -217,16 +214,15 @@ POST /shops { invoice_id, … }                                     → the shop
 
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
-| `invoice_id` | string | yes | A **paid**, unused registration invoice for `phone_number` |
 | `business_name` | string | yes | |
-| `phone_number` | string | yes | The new shop's number. Must match the invoice and be new to EXELO |
+| `phone_number` | string | yes | The shop's own number. New to EXELO: not the merchant's, not another shop's |
 | `state` | string | yes | A code from [`GET /geo/states`](registration.md) |
 | `city` | string | yes | |
 | `email` | string | no | The shop's email |
 | `merchant_code` | string | no | The shop's eDahab agent code; unique |
 | `other_merchant_code` | string | no | The shop's Zaad merchant code; unique |
 
-The owner's name and date of birth are copied from the shop they're signed in to.
+The owner's name and date of birth are copied from the merchant account.
 
 **Response `201`**
 
@@ -236,21 +232,25 @@ The owner's name and date of birth are copied from the shop they're signed in to
   "message": "Berbera Mart is open. Switch to it to start selling.",
   "data": {
     "shop": { "id": 30, "business_name": "Berbera Mart", "phone_number": "+252634220202", "location": "Berbera, Sahil", "role": "owner", "plan": "silver", "is_active": false },
-    "subscription": { "plan": "silver", "status": "active" }
+    "subscription": { "plan": "silver", "status": "active" },
+    "payout_wallets": [ { "rail": "edahab", "number": "+252654110101", "status": "verified", "…": "…" }, "…" ]
   }
 }
 ```
 
-The active shop doesn't change; call [`POST /shops/{id}/select`](#4-post-shopsidselect--switch-shop)
-to start working in the new one.
+- **The first shop** becomes the active shop at once (`is_active: true`, message
+  "… is ready. You can start selling."). **Later shops** don't; call
+  [`POST /shops/{id}/select`](#4-post-shopsidselect--switch-shop) to work in them.
+- The merchant's **verified number becomes the shop's verified payout wallet**
+  (`payout_wallets`), so it takes wallet payments at once. Shops of the same merchant
+  may share a payout number.
 
 **Errors**
 
 | Status | Code | Meaning |
 | --- | --- | --- |
-| `402` | `registration.invoice_unpaid` | The fee isn't paid yet |
 | `403` | `auth.merchant_only` | Staff can't open shops |
-| `409` | `registration.invoice_consumed` | That payment already opened a shop |
+| `409` | `account.phone_unverified` | First shop: verify the merchant's phone first |
 | `409` | `registration.phone_taken` | The number already belongs to a shop |
 | `422` | `validation.failed` | Missing fields, unknown invoice, number doesn't match the payment, code already registered |
 
@@ -368,13 +368,10 @@ A closed shop's phone number stays reserved and can't open a new shop.
 
 ## Step by step
 
-### Open a second shop and start selling there
+### Create a second shop and start selling there
 
 ```text
-GET   /registration/quote?purpose=registration
-POST  /registration/invoices   { phone_number: "+252634220202", … }
-GET   /registration/invoices/{id}                 → "paid"
-POST  /shops                   { invoice_id, business_name, phone_number, state, city }
+POST  /shops                   { business_name, phone_number: "+252634220202", state, city }   (free)
                                                   → 201, shop 30
 POST  /shops/30/select                            → 200, session for Berbera Mart
 POST  /cart/items …                               → sells in Berbera Mart
@@ -414,11 +411,13 @@ POST  /auth/pin/login { phone_number, pin, shop_id: 30 }
 
 | Table | Change |
 | --- | --- |
-| `personal_access_tokens` | New nullable `merchant_id` (foreign key to `merchants`): the token's active shop. Tokens issued before this change have none and act for the owner's first shop, as today |
+| `shops` | The shops' own table (renamed from `merchants`, same rows and ids), with `merchant_id` → the owning merchant |
+| `merchants` | Now the merchants' own table: one row per merchant (own phone, name, verification) |
+| `personal_access_tokens` | Nullable `merchant_id` (a shop id): the session's current shop. Tokens issued before multi-shop have none and act for the owner's first shop |
 
-Nothing else changes. One person owning several shops already fits:
-`merchants.user_id` isn't unique, and each shop already has its own
-subscription, wallets, stock and orders.
+One merchant has many shops; each shop has its own subscription, wallets, stock
+and orders. The full layout, and why other tables' `merchant_id` columns hold a
+shop id, is in [data-model.md](data-model.md).
 
 ---
 
@@ -426,7 +425,7 @@ subscription, wallets, stock and orders.
 
 | Feature | Why it waits |
 | --- | --- |
-| **Staff in more than one shop** | Shifts and payroll are recorded per person with no shop column, so hours would count in every shop. Needs `shifts.merchant_id` first. Until then, adding staff whose number already belongs to an EXELO user returns `409 employee.phone_taken`, as today |
+| ~~Staff in more than one shop~~ | **Done (2026-09-26).** One person can work in several shops with separate permissions, shifts and hours in each. See [employees.md](employees.md#staff-in-several-shops) |
 | **Combined reports across shops** | Each shop's dashboard and reports stay separate |
 | **Moving stock between shops** | Transfers stay within one shop |
 | **Re-using a closed shop's number** | The number stays reserved |

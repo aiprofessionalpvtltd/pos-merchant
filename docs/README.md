@@ -12,6 +12,8 @@ migration steps and rollout phases live in [`../unified-api-plan.md`](../unified
 
 | Module | Covers |
 | --- | --- |
+| [Data model](data-model.md) | Merchants and shops in separate tables: one merchant, many shops |
+| [Merchant onboarding](merchant-onboarding.md) | **Start here:** the whole journey in one file, from signup and wallet verification to adding and managing shops |
 | [Auth & session](auth.md) | Phone lookup, PIN login, PIN reset, session, logout |
 | [Multiple shops](multiple-shop.md) | One owner, several shops: list, switch, open, edit, close |
 | [Registration](registration.md) | Signup fee, merchant creation, wallet verification |

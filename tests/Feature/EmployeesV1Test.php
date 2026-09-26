@@ -304,8 +304,9 @@ it('does not spend the PIN confirmation when the request is refused', function (
     $token = ownerToken();
     $confirm = confirmation($token);
 
+    // The number is already staff in this shop.
     $this->withToken($token)->withHeader('X-EXELO-Confirmation', $confirm)->postJson('/api/v1/employees', newStaffBody())
-        ->assertStatus(409)->assertJsonPath('error.code', 'employee.phone_taken');
+        ->assertStatus(409)->assertJsonPath('error.code', 'employee.already_in_shop');
 
     // the same confirmation still works for a corrected request
     $this->withToken($token)->withHeader('X-EXELO-Confirmation', $confirm)->postJson('/api/v1/employees', newStaffBody(['phone_number' => '+252634110305']))->assertCreated();

@@ -426,7 +426,8 @@ class OrderService
             return null;
         }
 
-        $employee = $user->employee->exists ? $user->employee : null;
+        // The seller's staff record in the order's shop (a person may work in several).
+        $employee = $user->employments()->where('merchant_id', $order->merchant_id)->first();
 
         return [
             'id' => $employee?->id,

@@ -26,6 +26,8 @@ class StoreEmployeeRequest extends FormRequest
             'pin' => ['nullable', 'string', 'regex:/^\d{4}$/', 'confirmed'],
             'permission_keys' => ['required', 'array', 'min:1'],
             'permission_keys.*' => ['string', 'max:50'],
+            // Owners may add staff to any of their shops; default is the session's current shop.
+            'shop_id' => ['nullable', 'integer', 'min:1'],
         ];
     }
 }

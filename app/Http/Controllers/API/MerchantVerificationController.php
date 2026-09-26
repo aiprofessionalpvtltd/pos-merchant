@@ -48,7 +48,7 @@ class MerchantVerificationController extends BaseController
     public function approveMerchant(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'merchant_id' => 'required|exists:merchants,id',
+            'merchant_id' => 'required|exists:shops,id',
             'is_approved' => 'required|boolean'
         ]);
 

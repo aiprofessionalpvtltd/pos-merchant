@@ -57,20 +57,10 @@ function shopsToken(string $phone = OWNER_PHONE, string $deviceId = 'till-1', ar
     return shopsLogin($phone, $deviceId, $extra)->assertOk()->json('data.token');
 }
 
-function paidShopInvoice(string $phone, string $status = 'Paid'): Invoice
-{
-    return Invoice::create([
-        'public_id' => Invoice::generatePublicId(), 'invoice_id' => 'shop-'.$phone, 'transaction_id' => 'txn-'.$phone, 'hash' => '0',
-        'mobile_number' => $phone, 'wallet_number' => '+252654770001', 'rail' => 'edahab',
-        'amount' => 550, 'currency' => 'SLSH', 'status' => $status, 'type' => 'Registration',
-    ]);
-}
-
-function newShopBody(Invoice $invoice, array $overrides = []): array
+function newShopBody(array $overrides = []): array
 {
     return $overrides + [
-        'invoice_id' => $invoice->public_id, 'business_name' => 'Berbera Mart', 'phone_number' => NEW_SHOP_PHONE,
-        'state' => 'sahil', 'city' => 'Berbera',
+        'business_name' => 'Berbera Mart', 'phone_number' => NEW_SHOP_PHONE, 'state' => 'sahil', 'city' => 'Berbera',
     ];
 }
 
@@ -176,12 +166,12 @@ it('lists the shops with the active one marked', function () {
         ->assertJsonPath('data.active_shop_id', $owner->ownedShops()->orderBy('id')->value('id'));
 });
 
-it('opens another shop paid for by a registration invoice for its number', function () {
+it('opens another shop for free, with its own number', function () {
     $owner = shopsOwner();
-    $invoice = paidShopInvoice(NEW_SHOP_PHONE);
     $token = shopsToken();
+    $invoicesBefore = Invoice::count();
 
-    $response = test()->withToken($token)->postJson('/api/v1/shops', newShopBody($invoice, ['merchant_code' => '740999']))
+    $response = test()->withToken($token)->postJson('/api/v1/shops', newShopBody(['merchant_code' => '740999']))
         ->assertCreated()
         ->assertJsonPath('data.shop.business_name', 'Berbera Mart')
         ->assertJsonPath('data.shop.role', 'owner')
@@ -194,31 +184,28 @@ it('opens another shop paid for by a registration invoice for its number', funct
         'user_id' => $owner->id, 'first_name' => 'Amina', 'last_name' => 'Yusuf', 'phone_number' => NEW_SHOP_PHONE,
         'location' => 'Berbera, Sahil', 'merchant_code' => '740999',
     ])->and((bool) $shop->is_approved)->toBeTrue()
-        ->and($invoice->fresh()->consumed_at)->not->toBeNull()
+        ->and(Invoice::count())->toBe($invoicesBefore)
         ->and(MerchantSubscription::where('merchant_id', $shop->id)->exists())->toBeTrue();
 
     app('auth')->forgetGuards();
     test()->withToken($token)->getJson('/api/v1/shops')->assertJsonCount(2, 'data.shops');
 });
 
-it('refuses to open a shop without a usable payment or with a taken number', function () {
-    shopsOwner();
+it('refuses a shop number that is already used on EXELO', function () {
+    $owner = shopsOwner();
+    App\Models\MerchantAccount::create(['user_id' => $owner->id, 'first_name' => 'Amina', 'phone_number' => '+252634770050']);
     $token = shopsToken();
 
-    test()->withToken($token)->postJson('/api/v1/shops', newShopBody(paidShopInvoice(NEW_SHOP_PHONE, 'Pending')))
-        ->assertStatus(402)->assertJsonPath('error.code', 'registration.invoice_unpaid');
-
-    $paid = paidShopInvoice('+252634770004');
-    test()->withToken($token)->postJson('/api/v1/shops', newShopBody($paid))
-        ->assertStatus(422)->assertJsonPath('error.details.phone_number.0', 'This number does not match the payment');
-
-    test()->withToken($token)->postJson('/api/v1/shops', newShopBody(paidShopInvoice(OWNER_PHONE), ['phone_number' => OWNER_PHONE]))
+    test()->withToken($token)->postJson('/api/v1/shops', newShopBody(['phone_number' => OWNER_PHONE]))
         ->assertStatus(409)->assertJsonPath('error.code', 'registration.phone_taken');
 
-    $used = paidShopInvoice('+252634770005');
-    test()->withToken($token)->postJson('/api/v1/shops', newShopBody($used, ['phone_number' => '+252634770005']))->assertCreated();
-    test()->withToken($token)->postJson('/api/v1/shops', newShopBody($used, ['phone_number' => '+252634770005']))
-        ->assertStatus(409)->assertJsonPath('error.code', 'registration.invoice_consumed');
+    // The merchant's own number is theirs alone: a shop needs its own.
+    test()->withToken($token)->postJson('/api/v1/shops', newShopBody(['phone_number' => '+252634770050']))
+        ->assertStatus(409)->assertJsonPath('error.code', 'registration.phone_taken');
+
+    test()->withToken($token)->postJson('/api/v1/shops', newShopBody(['phone_number' => '+252634770005']))->assertCreated();
+    test()->withToken($token)->postJson('/api/v1/shops', newShopBody(['phone_number' => '+252634770005']))
+        ->assertStatus(409)->assertJsonPath('error.code', 'registration.phone_taken');
 
     test()->withToken($token)->postJson('/api/v1/shops', [])->assertStatus(422);
 });
@@ -250,7 +237,7 @@ it('keeps staff to their own shop and away from shop management', function () {
         ->assertOk()->assertJsonCount(1, 'data.shops')->assertJsonPath('data.shops.0.role', 'staff');
 
     test()->withToken($token)->postJson("/api/v1/shops/{$second->id}/select")->assertNotFound();
-    test()->withToken($token)->postJson('/api/v1/shops', newShopBody(paidShopInvoice(NEW_SHOP_PHONE)))->assertForbidden();
+    test()->withToken($token)->postJson('/api/v1/shops', newShopBody())->assertForbidden();
     test()->withToken($token)->patchJson("/api/v1/shops/{$first->id}", ['business_name' => 'Mine now'])->assertForbidden();
     test()->withToken($token)->deleteJson("/api/v1/shops/{$first->id}")->assertForbidden();
 });
@@ -288,6 +275,27 @@ it('closes a shop: staff removed, tokens moved to another shop, hidden from the 
 
     app('auth')->forgetGuards();
     test()->withToken($token)->getJson('/api/v1/shops')->assertJsonCount(1, 'data.shops');
+});
+
+it('keeps a closed shop\'s number out of registration', function () {
+    $owner = shopsOwner();
+    $second = addShop($owner, SECOND_SHOP_PHONE, 'Berbera Mart');
+    $token = shopsToken();
+
+    test()->withToken($token)->withHeader('X-EXELO-Confirmation', closeConfirmation($token))
+        ->deleteJson("/api/v1/shops/{$second->id}")->assertOk();
+
+    test()->postJson('/api/v1/registration/phone/check', ['phone_number' => SECOND_SHOP_PHONE])
+        ->assertOk()
+        ->assertJsonPath('data.available', false)
+        ->assertJsonPath('message', 'This number belonged to a shop that was closed. Use a different number.');
+
+    $quote = test()->getJson('/api/v1/registration/quote')->json('data.quote_id');
+
+    test()->postJson('/api/v1/registration/invoices', [
+        'phone_number' => SECOND_SHOP_PHONE, 'wallet_number' => '+252654770001', 'rail' => 'edahab',
+        'purpose' => 'registration', 'quote_id' => $quote, 'idempotency_key' => 'closed-number',
+    ])->assertStatus(409)->assertJsonPath('error.code', 'registration.phone_taken');
 });
 
 it('refuses to close the only shop or one with a payment still waiting', function () {

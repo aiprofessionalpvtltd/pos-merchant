@@ -7,6 +7,7 @@ use App\Http\Resources\API\V1\SessionResource;
 use App\Models\Employee;
 use App\Models\Invoice;
 use App\Models\Merchant;
+use App\Models\MerchantAccount;
 use App\Models\Otp;
 use App\Models\User;
 use App\Services\Sms\SmsSender;
@@ -35,13 +36,13 @@ class AuthService
 
         $user = $account['user'];
         $merchant = $account['merchant'];
-        $profile = $account['employee'] ?? $merchant;
+        $profile = $account['employee'] ?? $user?->merchantAccount ?? $merchant;
 
         if ($account['employee']) {
             $isComplete = true;
             $isInvoiceRequired = false;
         } else {
-            $isComplete = $user !== null && $merchant->is_approved;
+            $isComplete = $user !== null && (! $merchant || $merchant->is_approved);
             $isInvoiceRequired = ! $isComplete && ! $this->hasPaidRegistrationInvoice($phoneNumber);
         }
 
@@ -300,7 +301,15 @@ class AuthService
             return ['user' => $user, 'merchant' => $merchant, 'employee' => null];
         }
 
-        $employee = Employee::whereIn('phone_number', $variants)->first();
+        // A merchant's own number (it may have no shop yet, or shops with their own numbers).
+        $owner = MerchantAccount::whereIn('phone_number', $variants)->first()?->user;
+
+        if ($owner) {
+            return ['user' => $owner, 'merchant' => $owner->accessibleShops()->first(), 'employee' => null];
+        }
+
+        // A person working in several shops has one staff record per shop; prefer an active one.
+        $employee = Employee::whereIn('phone_number', $variants)->orderByRaw("status = 'active' desc")->orderBy('id')->first();
 
         if ($employee) {
             return [
@@ -317,7 +326,11 @@ class AuthService
     {
         $employee = $account['employee'];
 
-        return $employee !== null && ($employee->status === 'inactive' || $account['user']?->trashed());
+        // Removed from every shop they worked in (removal from one shop leaves the others).
+        return $employee !== null && (
+            $account['user']?->trashed()
+            || ! $account['user']?->employments()->where('status', 'active')->exists()
+        );
     }
 
     private function assertCanSignIn(array $account): User
@@ -326,7 +339,8 @@ class AuthService
             throw new ApiException('auth.employee_disabled', 'This staff account was removed', 403);
         }
 
-        if (! $account['employee'] && (! $account['user'] || ! $account['merchant']->is_approved)) {
+        // A merchant account with no shop yet may sign in: its next step is to verify its phone and create one.
+        if (! $account['employee'] && (! $account['user'] || ($account['merchant'] && ! $account['merchant']->is_approved))) {
             throw new ApiException('auth.registration_incomplete', 'Finish registering to continue', 403);
         }
 

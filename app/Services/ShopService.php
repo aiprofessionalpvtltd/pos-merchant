@@ -80,30 +80,74 @@ class ShopService
     {
         $this->assertOwner($owner);
 
+        // The owner's details come from their merchants row, or from their shop if they have none.
         $current = $owner->actingMerchant() ?? $owner->accessibleShops()->first();
+        $account = $owner->merchantAccount;
 
         ['merchant' => $shop, 'plan' => $plan] = $this->registration->openShop($owner, $input, [
-            'first_name' => $current?->first_name,
-            'last_name' => $current?->last_name,
-            'dob' => $current?->dob,
+            'first_name' => $account?->first_name ?? $current?->first_name,
+            'last_name' => $account?->last_name ?? $current?->last_name,
+            'dob' => $account?->dob ?? $current?->dob,
         ]);
 
+        $isFirstShop = $current === null;
         $owner->forgetAccessibleShops();
 
-        Log::info('Shop opened', ['merchant_id' => $shop->id, 'owner_id' => $owner->id]);
+        // A merchant's first shop becomes the active one straight away.
+        $token = $owner->currentAccessToken();
+        if ($isFirstShop && $token instanceof PersonalAccessToken) {
+            $token->forceFill(['merchant_id' => $shop->id])->save();
+        }
+
+        Log::info('Shop opened', ['merchant_id' => $shop->id, 'owner_id' => $owner->id, 'is_first' => $isFirstShop]);
 
         return [
             'data' => [
-                'shop' => $this->summary($shop, 'owner', false),
+                'shop' => $this->summary($shop, 'owner', $isFirstShop),
                 'subscription' => ['plan' => $plan->key, 'status' => 'active'],
+                'payout_wallets' => $this->profiles->wallets($shop->fresh())['wallets'],
             ],
-            'message' => "{$shop->business_name} is open. Switch to it to start selling.",
+            'message' => $isFirstShop
+                ? "{$shop->business_name} is ready. You can start selling."
+                : "{$shop->business_name} is open. Switch to it to start selling.",
         ];
     }
 
     public function profile(User $user, int $shopId): array
     {
         return $this->profiles->profile($this->find($user, $shopId));
+    }
+
+    /**
+     * The settings (VAT, exchange rate, timezone, receipt, register, alerts) of one shop.
+     * They live on that shop's row in `shops`, so each shop has its own.
+     */
+    public function settings(User $user, int $shopId): array
+    {
+        $shop = $this->find($user, $shopId);
+
+        return ['shop' => $this->identity($shop)] + $this->profiles->settings($shop);
+    }
+
+    /**
+     * @param  array<string, mixed>  $data  validated UpdateMerchantSettingsRequest fields
+     */
+    public function updateSettings(User $owner, int $shopId, array $data): array
+    {
+        $this->assertOwner($owner);
+
+        $shop = $this->find($owner, $shopId);
+        $result = $this->profiles->updateSettings($shop, $data);
+
+        return ['data' => ['shop' => $this->identity($shop)] + $result['data'], 'message' => $result['message']];
+    }
+
+    /**
+     * @return array{id: int, business_name: ?string}
+     */
+    private function identity(Merchant $shop): array
+    {
+        return ['id' => $shop->id, 'business_name' => $shop->business_name];
     }
 
     /**

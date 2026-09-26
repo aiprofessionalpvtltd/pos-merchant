@@ -36,12 +36,12 @@ class UpdateMerchantProfileRequest extends FormRequest
             'email' => [
                 'sometimes', 'email', 'max:191',
                 Rule::unique('users', 'email')->ignore($this->user()->id),
-                Rule::unique('merchants', 'email')->ignore($merchantId)->whereNull('deleted_at'),
+                Rule::unique('shops', 'email')->ignore($merchantId)->whereNull('deleted_at'),
             ],
             'state' => ['sometimes', Rule::in(collect(config('exelo.states'))->pluck('code')->all())],
             'city' => ['sometimes', 'string', 'max:100'],
-            'merchant_code' => ['sometimes', 'string', 'max:50', Rule::unique('merchants', 'merchant_code')->ignore($merchantId)->whereNull('deleted_at')],
-            'other_merchant_code' => ['sometimes', 'string', 'max:50', Rule::unique('merchants', 'other_merchant_code')->ignore($merchantId)->whereNull('deleted_at')],
+            'merchant_code' => ['sometimes', 'string', 'max:50', Rule::unique('shops', 'merchant_code')->ignore($merchantId)->whereNull('deleted_at')],
+            'other_merchant_code' => ['sometimes', 'string', 'max:50', Rule::unique('shops', 'other_merchant_code')->ignore($merchantId)->whereNull('deleted_at')],
             'logo_file_id' => ['sometimes', 'nullable', 'string', 'max:64'],
         ];
     }

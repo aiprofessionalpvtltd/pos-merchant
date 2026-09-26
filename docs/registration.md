@@ -591,12 +591,18 @@ same `data` shape.
 
 ### 8. POST `/api/v1/merchants/{id}/verification/complete` — Confirm payout wallets
 
-**Purpose:** Reports which payout wallets (Zaad, eDahab, Golis, EVC) are on file for the shop, and marks a paid verification fee as used. Called from inside the app after registration.
+**Purpose:** Completes wallet verification with a paid **verification** invoice, and reports the shop's payout wallets. Verification is a separate payment from registration, usually made from the number the merchant registered with. **The wallet that paid becomes the shop's verified payout number** on its network (`edahab_number` or `zaad_number`), replacing any number there; it also becomes the default payout network if none is set. Other `pending` numbers stay pending until a verification payment is made from each. The payment is taken with `POST /registration/invoices` and `purpose: "verification"`, `phone_number` = the shop's number; a wallet that already belongs to another shop is refused there (`409 wallet.number_taken`) before anything is charged. The full flow is in [merchant-onboarding.md, part B](merchant-onboarding.md#b-verify-the-payout-wallet).
 
 **Headers:** `Authorization: Bearer <token>`
 
+**Path `{id}` is a shop id** (the route name predates shops): `shops[].id` from
+`GET /account` or `GET /shops`, **not** the merchant's own id. It can be **any shop the
+merchant owns**, not only the one the session is working in, so another shop's wallet
+can be verified without switching.
+
 **Request** — body is optional: `{ "invoice_id": "inv_…" }` when verification
-carries a fee.
+carries a fee. The invoice must have been issued for **that shop's** number
+(`phone_number` in `POST /registration/invoices`).
 
 **Response `200`**
 
@@ -616,9 +622,20 @@ carries a fee.
 }
 ```
 
-`status` is `verified` when a number is on file, otherwise `not_set`.
-`403 auth.merchant_only` for employees; `404 merchant.not_found` when `{id}` is
-not the caller's shop.
+`status` per network: `verified` (paid for), `pending` (saved with
+`PATCH /merchant/wallets`, not yet paid for) or `not_set`. `verified` is `true`
+when at least one network is verified. Without `invoice_id`, the call only reports
+the wallets.
+`403 auth.merchant_only` for employees. `404 merchant.not_found` when `{id}` is not one
+of the caller's shops; `error.details.your_shop_ids` lists the ids that are:
+
+```json
+{
+  "success": false,
+  "message": "We could not find that shop among yours",
+  "error": { "code": "merchant.not_found", "details": { "your_shop_ids": [1, 2] } }
+}
+```
 
 ### 9. POST `/api/v1/auth/lookup` — Identify a phone number
 
@@ -926,6 +943,18 @@ POST /auth/pin                      → set the PIN, receive a token
 Wallet verification (`/verification/complete`) happens later, from inside the
 app, once the merchant adds the numbers they want to be paid on.
 
+**Account first, shops after (2026-09-26).** `POST /merchants` now creates the
+**merchant account only**: send the personal fields and no shop fields. The
+merchant then sets a PIN, verifies their own phone with a separate verification
+payment (`POST /account/verification/complete`), and creates their first shop,
+with its **own** number and for free, via `POST /shops`. The merchant and each
+shop have their own phone numbers; the only charges are the registration fee and
+the phone verification fee. Sending shop fields to `POST /merchants` still works
+but is deprecated.
+
+The whole journey, with every request and response, is in one place:
+[merchant-onboarding.md](merchant-onboarding.md).
+
 ---
 
 ## Step by step: registering a merchant
@@ -950,7 +979,7 @@ Branch on `data`:
 
 | Result | Meaning | Client does |
 | --- | --- | --- |
-| `available: false` | Number already has an account | Send the user to login (`POST /auth/lookup`) |
+| `available: false` | Number already has an account, or belonged to a shop that was closed (see `message`) | Send the user to login (`POST /auth/lookup`), or ask for another number |
 | `available: true`, `invoice_required: true` | New number, fee not paid | Go to step 3 |
 | `available: true`, `invoice_required: false`, `pending_invoice` set | Fee already paid, account never created | **Skip to step 6** with `pending_invoice.invoice_id`. Do not charge again. |
 

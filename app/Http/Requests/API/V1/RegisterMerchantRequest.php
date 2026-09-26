@@ -21,9 +21,11 @@ class RegisterMerchantRequest extends FormRequest
             'dob' => ['required', 'date_format:Y-m-d', 'before:today'],
             'email' => ['nullable', 'email', 'max:255'],
             'phone_number' => ['required', 'string', 'regex:/^\+?[\d\s\-]{7,20}$/'],
-            'business_name' => ['required', 'string', 'max:255'],
-            'state' => ['required', Rule::in(array_column(config('exelo.states'), 'code'))],
-            'city' => ['required', 'string', 'max:255'],
+            // Shop fields are deprecated here: send none of them to create the merchant account only,
+            // then create its first shop with POST /shops (docs/merchant-onboarding.md).
+            'business_name' => ['nullable', 'required_with:state,city', 'string', 'max:255'],
+            'state' => ['nullable', 'required_with:business_name', Rule::in(array_column(config('exelo.states'), 'code'))],
+            'city' => ['nullable', 'required_with:business_name', 'string', 'max:255'],
             'merchant_code' => ['nullable', 'string', 'max:255'],
             'other_merchant_code' => ['nullable', 'string', 'max:255'],
         ];

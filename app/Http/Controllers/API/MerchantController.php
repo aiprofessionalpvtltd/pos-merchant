@@ -28,7 +28,7 @@ class MerchantController extends BaseController
     public function signup(Request $request)
     {
         $validator = $this->validateRequest($request, [
-            'phone_number' => 'required|string|max:15|unique:merchants,phone_number',
+            'phone_number' => 'required|string|max:15|unique:shops,phone_number',
 
         ]);
 

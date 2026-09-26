@@ -114,7 +114,16 @@ returning the current copy in `error.details.current`.
 ## 1. GET `/api/v1/merchant` — Get the shop profile
 
 **Purpose:** The shop's own details for the profile screen and receipts, including
-the owner, address, logo, currency settings and current plan.
+the owner, address, logo, currency settings and current plan. With `?include=` it
+also returns everything related to the merchant in one call: the merchant, all their
+shops, the subscription in full and all their staff (see
+[Everything about the merchant](#everything-about-the-merchant-include)).
+
+**Query**
+
+| Param | Notes |
+| --- | --- |
+| `include` | Optional. Comma-separated (`include=shops,employees`) or `include[]=shops`. Values: `merchant`, `shops`, `subscription`, `employees`, or `all`. Merchant only |
 
 **Response `200`**
 
@@ -156,6 +165,90 @@ the owner, address, logo, currency settings and current plan.
 ```
 
 `logo` is `null` until `logo_file_id` is set. Employees receive the same object.
+
+### Everything about the merchant (`?include=`)
+
+`GET /api/v1/merchant?include=all` returns the same object as above (the **current**
+shop, unchanged) with the merchant's whole picture merged in. Without `include` the
+response is exactly the object above, so existing apps are unaffected.
+
+| `include` | Adds | Same data as |
+| --- | --- | --- |
+| `merchant` | `merchant`: the merchant's own details and verified phone | [`GET /account`](data-model.md#api) |
+| `shops` | `shops[]`: **every** shop with address, codes, plan, payout wallets, staff count and a 5-person staff preview | `GET /account` |
+| `subscription` | The current shop's `subscription` **in full** (replaces the short one), and each shop's too when `shops` is also asked | [`GET /subscription`](subscription.md) |
+| `employees` | `employees`: the staff of **all** shops, with per-shop counts | [`GET /account/employees`](employees.md#12-get-apiv1accountemployees--staff-of-every-shop) |
+| `all` | All of the above | |
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": 94,
+    "version": 4,
+    "business_name": "Exelo Retail",
+    "owner": { "id": 91, "first_name": "Kalid", "phone_number": "+252634220202", "…": "…" },
+    "address": { "state": "Maroodi Jeex", "city": "Hargeisa", "…": "…" },
+    "currency": "USD",
+    "…": "…",
+
+    "subscription": {
+      "plan_id": 1, "plan": "gold", "plan_name": "Gold Package", "status": "active",
+      "features": ["dashboard.full", "pos.register", "employees.manage", "…"],
+      "started_at": "2026-09-01T00:00:00Z", "expires_at": "2026-10-01T00:00:00Z",
+      "renews_automatically": false, "can_upgrade": false, "can_downgrade": true,
+      "resubscribe_eligible": false, "grace": null
+    },
+
+    "merchant": {
+      "id": 41, "first_name": "Kalid", "last_name": "Ahmed", "dob": "1990-01-01",
+      "email": "kalid@exelo.co", "phone_number": "+252654110101",
+      "phone_verified": true, "phone_verified_at": "2026-09-26T07:02:10Z", "created_at": "2026-09-26T06:56:10Z"
+    },
+
+    "shops": [
+      {
+        "id": 94, "business_name": "Exelo Retail", "phone_number": "+252634220202", "email": "shop@exelo.co",
+        "address": { "state": "Maroodi Jeex", "state_code": "maroodi_jeex", "city": "Hargeisa", "location": "Hargeisa, Maroodi Jeex" },
+        "merchant_code": "740852", "other_merchant_code": "467188",
+        "subscription": { "plan": "gold", "status": "active", "features": ["…"], "expires_at": "2026-10-01T00:00:00Z", "…": "…" },
+        "payout_wallets": [ { "rail": "edahab", "number": "+252654110101", "status": "verified", "…": "…" }, "…" ],
+        "default_rail": "edahab",
+        "staff_count": 3,
+        "staff": [ { "id": 51, "first_name": "Nasra", "last_name": "Yusuf", "role": "Cashier" }, "…" ],
+        "is_active": true,
+        "created_at": "2026-09-26T07:05:00Z"
+      },
+      { "id": 130, "business_name": "Berbera Mart", "is_active": false, "…": "…" }
+    ],
+
+    "employees": {
+      "items": [
+        { "id": 51, "first_name": "Nasra", "last_name": "Yusuf", "role": "Cashier", "phone_number": "+252634110303",
+          "shop": { "id": 94, "business_name": "Exelo Retail" }, "status": "off_shift",
+          "permissions": [ { "key": "pos", "name": "POS" } ], "…": "…" }
+      ],
+      "total": 4,
+      "has_more": false,
+      "by_shop": [
+        { "shop_id": 94, "business_name": "Exelo Retail", "active": 3 },
+        { "shop_id": 130, "business_name": "Berbera Mart", "active": 1 }
+      ]
+    }
+  }
+}
+```
+
+- **The top-level fields are always the current shop** (the one this session is
+  working in), so the profile screen behaves as before. `shops[].is_active` marks it.
+- **`employees.items` holds up to 100 people**, ordered by shop then name. When
+  `has_more` is `true`, page through
+  [`GET /account/employees`](employees.md#12-get-apiv1accountemployees--staff-of-every-shop).
+- **Merchant only.** Staff can call `GET /merchant` without `include` as before;
+  with it they get `403 auth.merchant_only`, because the extras span every shop.
+- **Errors:** `422 validation.failed` for an unknown `include` value
+  ("Use merchant, shops, subscription, employees or all"), `403 auth.merchant_only`.
+- Ask only for what a screen needs: `include=all` runs several queries per shop.
 
 ## 2. PATCH `/api/v1/merchant` — Edit the shop profile
 
@@ -253,9 +346,14 @@ and not currently in the app.
 
 ## 3. GET `/api/v1/merchant/wallets` — List the payout wallets and their status
 
-**Purpose:** The numbers the shop gets paid on, and whether each is verified. This
+**Purpose:** The numbers each shop gets paid on, and whether each is verified. This
 is the **settings** view. [`GET /payments/methods`](payments.md#get-paymentsmethods)
-is the payment-screen view of the same data.
+is the payment-screen view of the **current** shop.
+
+Every shop has its own wallets and its own verification, so the response is
+**shop based**: `wallets` and `default_rail` are the **current** shop's (as before),
+and `shops` lists **every** shop's wallets. A merchant gets all their shops; a staff
+member gets the shops they work in.
 
 **Response `200`**
 
@@ -273,13 +371,45 @@ is the payment-screen view of the same data.
       { "rail": "evc", "label": "EVC", "number": null, "status": "not_set",
         "verified_at": null, "is_default": false }
     ],
-    "default_rail": "zaad"
+    "default_rail": "zaad",
+    "active_shop_id": 94,
+    "shops": [
+      {
+        "shop_id": 94,
+        "business_name": "Exelo Retail",
+        "is_active": true,
+        "wallets": [ { "rail": "zaad", "number": "+252632222222", "status": "verified", "…": "…" }, "…" ],
+        "default_rail": "zaad",
+        "verified_rails": ["zaad", "edahab"],
+        "pending_rails": []
+      },
+      {
+        "shop_id": 130,
+        "business_name": "Berbera Mart",
+        "is_active": false,
+        "wallets": [ { "rail": "evc", "number": "+252614440001", "status": "pending", "…": "…" }, "…" ],
+        "default_rail": "evc",
+        "verified_rails": [],
+        "pending_rails": ["evc"]
+      }
+    ]
   }
 }
 ```
 
+| Field | Meaning |
+| --- | --- |
+| `wallets`, `default_rail` | The **current** shop's wallets, unchanged from before |
+| `active_shop_id` | The current shop (the one this session is working in) |
+| `shops[]` | One entry per shop: its four wallets (same shape as `wallets`), its default, and quick lists of the rails that are `verified` or still `pending` |
+
 A `rejected` wallet also carries `rejection_reason`. All four rails are always
-listed, so the app can draw the whole screen without guessing.
+listed for every shop, so the app can draw the whole screen without guessing.
+
+Reading is shop based, but **writing stays on the current shop**:
+[`PATCH /merchant/wallets`](#4-patch-apiv1merchantwallets--add-change-or-remove-payout-numbers)
+and wallet verification act on the shop the session is working in, so switch shop
+first ([`POST /shops/{id}/select`](multiple-shop.md#4-post-shopsidselect--switch-shop)).
 
 ## 4. PATCH `/api/v1/merchant/wallets` — Add, change or remove payout numbers
 
@@ -353,6 +483,9 @@ the client or absent. Moving them server-side means a shop can change its VAT ra
 or exchange rate without an app release, and the rate used for SLSH display is the
 same on every till.
 
+Settings belong to **one shop**: this is the shop the session is working in. For a
+specific shop by id, see [`/shops/{id}/settings`](#settings-of-one-specific-shop-shopsidsettings).
+
 **Response `200`**
 
 ```json
@@ -390,19 +523,60 @@ same on every till.
 **Purpose:** Changes preferences. Partial and nested: only the keys sent are
 changed. Owner only.
 
-**Request**
+**Request.** Every field is optional: send only the keys to change. Groups (`receipt`,
+`register`, `alerts`) are merged, so `{ "receipt": { "footer": "Thanks" } }` changes only
+the footer. Keys not listed below are ignored.
 
 ```json
 {
+  "vat_rate": 0.05,
+  "vat_inclusive": false,
   "exchange_rate": 8500,
-  "receipt": { "footer": "Mahadsanid!" },
-  "register": { "allow_price_override": false }
+  "timezone": "Africa/Mogadishu",
+  "language": "en",
+  "receipt": {
+    "footer": "Mahadsanid!",
+    "show_logo": true,
+    "print_automatically": false
+  },
+  "register": {
+    "allow_price_override": false,
+    "require_customer_on_hold": true,
+    "scan_sound": true
+  },
+  "alerts": {
+    "default_alarm_limit": 4,
+    "default_stock_limit": 10
+  }
 }
 ```
 
+**Input fields**
+
+| Field | Type | Rule | Meaning |
+| --- | --- | --- | --- |
+| `vat_rate` | number | `0` to `1`, a **fraction**: `0.05` = 5%, `0.155` = 15.5% | VAT rate on sales. Stored with 4 decimals |
+| `vat_inclusive` | boolean | | `true` when shelf prices already include VAT |
+| `exchange_rate` | integer | Whole SLSH per USD, at least `1`, and within the allowed range (`5000` to `15000` by default), otherwise `422 settings.rate_out_of_range` | The shop's own rate, used instead of the server default. Setting a different value records `exchange_rate_updated_at` and turns `exchange_rate_source` to `manual` |
+| `timezone` | string | A valid timezone id, e.g. `Africa/Mogadishu`, `Africa/Nairobi` | The shop's timezone for dates and reports |
+| `language` | string | `en` or `so` | The shop's language |
+| `receipt.footer` | string \| `null` | Up to 200 characters. `null` clears it | Line printed at the bottom of receipts |
+| `receipt.show_logo` | boolean | | Show the shop logo on receipts |
+| `receipt.print_automatically` | boolean | | Print the receipt after each sale |
+| `register.allow_price_override` | boolean | | Whether a cashier may change a line's price at the register |
+| `register.require_customer_on_hold` | boolean | | Whether holding a ticket needs a customer |
+| `register.scan_sound` | boolean | | Beep when a barcode is scanned |
+| `alerts.default_alarm_limit` | integer | `0` to `100000` | Default low-stock **alarm** limit for products |
+| `alerts.default_stock_limit` | integer | `0` to `100000` | Default **stock** limit for products |
+
+The server stores and returns the `register` and `alerts` values for the app to apply
+at the register and when adding products; only the `receipt` values are used by the
+server itself (they appear in the receipt). Sending a value identical to the stored one
+is fine and changes nothing.
+
 **Response `200`** — the full settings object, as in
 [`GET /merchant/settings`](#5-get-apiv1merchantsettings--get-the-shop-preferences),
-with the changes applied.
+with the changes applied:
 
 ```json
 {
@@ -410,23 +584,38 @@ with the changes applied.
   "message": "Settings saved",
   "data": {
     "vat_rate": 0.05,
+    "vat_label": "5%",
+    "vat_inclusive": false,
     "exchange_rate": 8500,
     "exchange_rate_source": "manual",
+    "exchange_rate_updated_at": "2026-09-26T10:00:00Z",
     "receipt": { "footer": "Mahadsanid!", "show_logo": true, "print_automatically": false },
-    "register": { "allow_price_override": false, "require_customer_on_hold": true, "scan_sound": true }
+    "register": { "allow_price_override": false, "require_customer_on_hold": true, "scan_sound": true },
+    "alerts": { "default_alarm_limit": 4, "default_stock_limit": 10 },
+    "timezone": "Africa/Mogadishu",
+    "language": "en"
   }
 }
 ```
-
-(Remaining keys as in the settings response.)
 
 **Errors**
 
 | Status | Code | Meaning |
 | --- | --- | --- |
 | `403` | `auth.merchant_only` | Employees cannot change shop settings |
-| `422` | `settings.rate_out_of_range` | The exchange rate is outside the allowed range |
-| `422` | `validation.failed` | Per-field messages |
+| `422` | `settings.rate_out_of_range` | The exchange rate is outside the allowed range (`error.details` has `min` and `max`) |
+| `422` | `validation.failed` | Per-field messages in `error.details`, e.g. `vat_rate` above `1`, `language` not `en` or `so`, `receipt.footer` over 200 characters, an unknown `timezone`, a non-boolean toggle, or an alert limit outside `0` to `100000` |
+
+```json
+{
+  "success": false,
+  "message": "Please check the form",
+  "error": {
+    "code": "validation.failed",
+    "details": { "vat_rate": ["The vat rate field must be between 0 and 1."], "language": ["The selected language is invalid."] }
+  }
+}
+```
 
 ```json
 {
@@ -439,6 +628,73 @@ with the changes applied.
   }
 }
 ```
+
+### Settings of one specific shop (`/shops/{id}/settings`)
+
+Settings are **per shop**: each shop has its own VAT, exchange rate, timezone and
+preferences, stored on its own row in `shops` (`vat_rate`, `is_vat_inclusive`,
+`exchange_rate`, `exchange_rate_updated_at`, `timezone`, `language`, and `preferences`
+for `receipt`, `register` and `alerts`). The merchant's own row in `merchants` has none.
+
+**Every shop stores its own full set of preferences** in its `shops.preferences` JSON
+column: a new shop is created with all the values below, and existing shops were filled in
+by a migration. `config/exelo.php` (`preference_defaults`) is only the **template for new
+shops**; it is no longer what a shop reads its values from. Changing one value with
+`PATCH` keeps the rest stored, and the other shops are untouched.
+
+| Group | Keys and starting values |
+| --- | --- |
+| `receipt` | `footer` `null`, `show_logo` `true`, `print_automatically` `false` |
+| `register` | `allow_price_override` `true`, `require_customer_on_hold` `true`, `scan_sound` `true` |
+| `alerts` | `default_alarm_limit` `4`, `default_stock_limit` `10` |
+
+A key added to the template later is filled in on read until the shop stores it, and
+a row with no stored preferences reads as the template.
+
+`GET` and `PATCH /merchant/settings` (endpoints 5 and 6) act on **the shop the session is
+working in**. To read or change a **specific** shop, without switching to it, address it by
+id:
+
+| Method | Path | Who |
+| --- | --- | --- |
+| `GET` | `/api/v1/shops/{id}/settings` | The shop's owner, or its staff |
+| `PATCH` | `/api/v1/shops/{id}/settings` | The shop's owner only |
+
+`{id}` is a shop id (`shops[].id` from `GET /account` or `GET /shops`). The request
+body, validation, response and errors are **exactly those of endpoints 5 and 6**, plus a
+`shop` object saying which shop the settings belong to:
+
+```json
+{
+  "success": true,
+  "data": {
+    "shop": { "id": 130, "business_name": "Berbera Mart" },
+    "vat_rate": 0.1,
+    "vat_label": "10%",
+    "vat_inclusive": false,
+    "exchange_rate": 9000,
+    "exchange_rate_source": "manual",
+    "exchange_rate_updated_at": "2026-09-26T10:00:00Z",
+    "receipt": { "footer": null, "show_logo": true, "print_automatically": false },
+    "register": { "allow_price_override": true, "require_customer_on_hold": true, "scan_sound": true },
+    "alerts": { "default_alarm_limit": 4, "default_stock_limit": 10 },
+    "timezone": "Africa/Mogadishu",
+    "language": "en"
+  }
+}
+```
+
+```json
+PATCH /api/v1/shops/130/settings
+{ "vat_rate": 0.07, "exchange_rate": 8200, "receipt": { "footer": "Thanks for shopping" } }
+```
+
+Only the keys sent change, and only that shop: the other shops' settings and versions
+are untouched.
+
+**Extra errors:** `404 shop.not_found` when `{id}` isn't one of the caller's shops
+(a staff member can only reach the shops they work in); `403 auth.merchant_only` for
+staff on `PATCH`.
 
 ---
 

@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\API\V1\DateRangeRequest;
 use App\Http\Requests\API\V1\ListEmployeesRequest;
 use App\Http\Requests\API\V1\StoreEmployeeRequest;
+use App\Http\Requests\API\V1\TransferEmployeeRequest;
 use App\Http\Requests\API\V1\UpdateEmployeeRequest;
 use App\Http\Resources\API\V1\EmployeeResource;
 use App\Models\Merchant;
@@ -35,7 +36,7 @@ class EmployeeController extends Controller
         $result = $this->employees->paginate($this->merchant($request), $request->validated());
 
         $data = $result['items']
-            ->map(fn ($employee) => (new EmployeeResource($employee, $result['shifts']->get($employee->user_id)))->resolve())
+            ->map(fn ($employee) => (new EmployeeResource($employee, $result['shifts']->get($employee->id)))->resolve())
             ->all();
 
         return ApiResponse::success($data, null, 200, ['pagination' => $result['pagination']]);
@@ -48,7 +49,7 @@ class EmployeeController extends Controller
 
         $resource = new EmployeeResource(
             $employee,
-            $this->employees->openShifts(collect([$employee]))->get($employee->user_id),
+            $this->employees->openShifts(collect([$employee]))->get($employee->id),
             $this->employees->metrics($employee, $from, $to),
         );
 
@@ -57,17 +58,33 @@ class EmployeeController extends Controller
 
     public function store(StoreEmployeeRequest $request): JsonResponse
     {
-        $employee = $this->employees->create(
+        $shop = $this->employees->targetShop(
             $request->user(),
             $this->merchant($request),
-            $request->validated(),
-            $request->header('X-EXELO-Confirmation'),
+            $request->filled('shop_id') ? (int) $request->validated('shop_id') : null,
         );
+
+        $employee = $this->employees->create($request->user(), $shop, $request->validated(), $request->header('X-EXELO-Confirmation'));
+
+        // Someone who already works in another shop signs in with the PIN they have and picks this shop.
+        $message = $employee->joinedAsExistingPerson
+            ? $employee->first_name.' now also works in '.$shop->business_name.'. They sign in with their existing PIN.'
+            : $employee->first_name.' can now sign in with their phone number';
+
+        return ApiResponse::success(
+            (new EmployeeResource($employee))->resolve() + ['existing_person' => $employee->joinedAsExistingPerson],
+            $message,
+            201,
+        );
+    }
+
+    public function transfer(TransferEmployeeRequest $request, int $id): JsonResponse
+    {
+        $employee = $this->employees->transfer($request->user(), $id, (int) $request->validated('shop_id'));
 
         return ApiResponse::success(
             (new EmployeeResource($employee))->resolve(),
-            $employee->first_name.' can now sign in with their phone number',
-            201,
+            $employee->first_name.' now works in '.$employee->shop->business_name.'. They need to sign in again.',
         );
     }
 
@@ -76,7 +93,7 @@ class EmployeeController extends Controller
         $employee = $this->employees->update($request->user(), $this->merchant($request), $id, $request->validated());
 
         return ApiResponse::success(
-            (new EmployeeResource($employee, $this->employees->openShifts(collect([$employee]))->get($employee->user_id)))->resolve(),
+            (new EmployeeResource($employee, $this->employees->openShifts(collect([$employee]))->get($employee->id)))->resolve(),
             'Saved',
         );
     }
@@ -90,6 +107,7 @@ class EmployeeController extends Controller
             'deleted' => true,
             'tokens_revoked' => $result['tokens_revoked'],
             'open_shift_closed' => $result['open_shift_closed'],
+            'still_works_elsewhere' => $result['still_works_elsewhere'],
         ], $result['employee']->first_name.' '.$result['employee']->last_name.' removed');
     }
 

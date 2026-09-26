@@ -45,15 +45,26 @@ class SessionResource extends JsonResource
         // Every shop this person can switch to (docs/multiple-shop.md).
         $data['shops'] = app(ShopService::class)->summaries($user);
 
+        // First-time onboarding for a merchant account: verify its phone, then create its first shop.
+        $data['onboarding'] = $user->isEmployee() ? null : [
+            'phone_verified' => (bool) $user->merchantAccount?->isPhoneVerified(),
+            'next_step' => $user->onboardingNextStep(),
+        ];
+
         return $data;
     }
 
     private function userBlock(User $user, ?Merchant $merchant): array
     {
-        $profile = $user->isEmployee() ? $user->employee : $merchant;
+        // Staff are described by their staff record; a merchant by their merchants row
+        // (falling back to the shop for sign-ins that have none).
+        $profile = $user->isEmployee()
+            ? ($user->actingEmployee() ?? $user->employee)
+            : ($user->merchantAccount ?? $merchant);
 
         $firstName = $profile?->first_name;
         $lastName = $profile?->last_name;
+        $phone = $profile?->phone_number;
 
         return [
             'id' => $user->id,
@@ -62,7 +73,7 @@ class SessionResource extends JsonResource
             'last_name' => $lastName,
             'short_name' => $this->initials(trim($firstName.' '.$lastName) ?: $user->name),
             'email' => $user->email,
-            'phone_number' => $profile?->phone_number,
+            'phone_number' => $phone,
         ];
     }
 
@@ -119,7 +130,8 @@ class SessionResource extends JsonResource
     private function permissionsBlock(User $user): array
     {
         if ($user->isEmployee()) {
-            $permissions = $user->employee->permissions()->with('permission')->get()->pluck('permission')->filter();
+            // Permissions of their staff record in the current shop.
+            $permissions = $user->actingEmployee()?->permissions()->with('permission')->get()->pluck('permission')->filter() ?? collect();
         } else {
             $permissions = POSPermission::all();
         }
@@ -132,9 +144,12 @@ class SessionResource extends JsonResource
 
     private function shiftBlock(User $user): array
     {
-        $shift = Shift::where('user_id', $user->id)
-            ->whereNotNull('start_time')
-            ->whereNull('end_time')
+        // The open shift in the current shop only.
+        $shopId = $user->actingMerchant()?->id;
+
+        $shift = $shopId === null ? null : Shift::open()
+            ->where('user_id', $user->id)
+            ->forShop($shopId)
             ->latest('id')
             ->first();
 

@@ -125,6 +125,13 @@ to with [`POST /shops/{id}/select`](multiple-shop.md#4-post-shopsidselect--switc
 The same `shops` list is in [`GET /auth/session`](#get-authsession). See
 [multiple-shop.md](multiple-shop.md).
 
+A merchant account signs in with **its own** number, which may have no shop yet:
+then `merchant` and `subscription` are `null` and `shops` is `[]`. Every login and
+session response also has `onboarding`, `{ "phone_verified": bool, "next_step":
+"verify_phone" | "create_shop" | null }`, which tells the app what to show next
+(`null` for staff and once a shop exists). See
+[merchant-onboarding.md](merchant-onboarding.md).
+
 **Response `200`**
 
 ```json

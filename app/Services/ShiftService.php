@@ -13,7 +13,9 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Clock in and out, shift history, and owner corrections. A shift belongs to a
- * user, so the owner can clock in too. A shift is open while it has no end time.
+ * user in one shop (the session's current shop), so the owner can clock in too, and
+ * a person who works in several shops has separate shifts and hours in each.
+ * A shift is open while it has no end time.
  */
 class ShiftService
 {
@@ -33,20 +35,25 @@ class ShiftService
         return intdiv($seconds, 3600).'h '.str_pad((string) intdiv($seconds % 3600, 60), 2, '0', STR_PAD_LEFT).'m';
     }
 
+    /**
+     * The user's open shift in the current shop.
+     */
     public function openShift(User $user): ?Shift
     {
-        return Shift::open()->where('user_id', $user->id)->latest('id')->first();
+        return Shift::open()->where('user_id', $user->id)->forShop($this->shopId($user))->latest('id')->first();
     }
 
     public function start(User $user, ?string $startTime, ?string $idempotencyKey): Shift
     {
+        $shopId = $this->shopId($user);
         $replayKey = $idempotencyKey ? 'shift-start:'.$user->id.':'.sha1($idempotencyKey) : null;
 
         if ($replayKey && ($id = Cache::get($replayKey)) && ($shift = Shift::where('user_id', $user->id)->find($id))) {
             return $shift;
         }
 
-        return Cache::lock('shift:'.$user->id, 10)->block(5, function () use ($user, $startTime, $replayKey) {
+        // One open shift per person per shop.
+        return Cache::lock('shift:'.$user->id.':'.$shopId, 10)->block(5, function () use ($user, $shopId, $startTime, $replayKey) {
             if ($open = $this->openShift($user)) {
                 throw new ApiException('shift.already_active', 'You are already clocked in', 409, [
                     'shift' => ['id' => $open->id, 'started_at' => ApiResponse::iso($open->start_time)],
@@ -55,7 +62,7 @@ class ShiftService
 
             $time = $startTime ? $this->parse($startTime, 'start_time') : now();
 
-            $shift = Shift::create(['user_id' => $user->id, 'start_time' => $time->format('Y-m-d H:i:s')]);
+            $shift = Shift::create(['user_id' => $user->id, 'merchant_id' => $shopId, 'start_time' => $time->format('Y-m-d H:i:s')]);
 
             if ($replayKey) {
                 Cache::put($replayKey, $shift->id, now()->addDay());
@@ -69,8 +76,10 @@ class ShiftService
     {
         $replayKey = $idempotencyKey ? 'shift-end:'.$user->id.':'.$shiftId.':'.sha1($idempotencyKey) : null;
 
-        return DB::transaction(function () use ($user, $shiftId, $endTime, $replayKey) {
-            $shift = Shift::where('user_id', $user->id)->lockForUpdate()->find($shiftId)
+        $shopId = $this->shopId($user);
+
+        return DB::transaction(function () use ($user, $shopId, $shiftId, $endTime, $replayKey) {
+            $shift = Shift::where('user_id', $user->id)->forShop($shopId)->lockForUpdate()->find($shiftId)
                 ?? throw new ApiException('shift.not_found', 'We could not find that shift', 404);
 
             if ($shift->end_time) {
@@ -103,8 +112,10 @@ class ShiftService
     public function paginate(User $actor, ?int $employeeId, Carbon $from, Carbon $to, int $page, int $perPage): array
     {
         $target = $this->targetUser($actor, $employeeId);
+        $shopId = $this->shopId($actor);
 
         $query = Shift::where('user_id', $target->id)
+            ->forShop($shopId)
             ->whereNotNull('start_time')
             ->whereBetween('start_time', [$from->format('Y-m-d H:i:s'), $to->format('Y-m-d H:i:s')]);
 
@@ -125,7 +136,7 @@ class ShiftService
             ],
             'summary' => [
                 'total_hours' => round($totalSeconds / 3600, 1),
-                'active_shift_id' => Shift::open()->where('user_id', $target->id)->value('id'),
+                'active_shift_id' => Shift::open()->where('user_id', $target->id)->forShop($shopId)->value('id'),
             ],
         ];
     }
@@ -145,8 +156,8 @@ class ShiftService
         $merchant = $actor->actingMerchant() ?? throw new ApiException('merchant.not_found', 'We could not find that shop', 404);
         $userIds = Employee::where('merchant_id', $merchant->id)->pluck('user_id')->push($actor->id);
 
-        return DB::transaction(function () use ($shiftId, $userIds, $data, $actor) {
-            $shift = Shift::whereIn('user_id', $userIds)->lockForUpdate()->find($shiftId)
+        return DB::transaction(function () use ($shiftId, $userIds, $merchant, $data, $actor) {
+            $shift = Shift::whereIn('user_id', $userIds)->forShop($merchant->id)->lockForUpdate()->find($shiftId)
                 ?? throw new ApiException('shift.not_found', 'We could not find that shift', 404);
 
             $start = ! empty($data['start_time']) ? $this->parse($data['start_time'], 'start_time') : Carbon::parse($shift->start_time);
@@ -189,6 +200,12 @@ class ShiftService
         // A removed employee's login is soft-deleted, but their shift history stays readable
         return User::withTrashed()->find($employee->user_id)
             ?? throw new ApiException('employee.not_found', 'We could not find that staff member', 404);
+    }
+
+    private function shopId(User $user): int
+    {
+        return $user->actingMerchant()?->id
+            ?? throw new ApiException('merchant.not_found', 'We could not find that shop', 404);
     }
 
     private function parse(string $value, string $field): Carbon

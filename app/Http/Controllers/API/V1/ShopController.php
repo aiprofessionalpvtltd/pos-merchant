@@ -4,6 +4,7 @@ namespace App\Http\Controllers\API\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\API\V1\StoreShopRequest;
+use App\Http\Requests\API\V1\UpdateMerchantSettingsRequest;
 use App\Http\Requests\API\V1\UpdateShopRequest;
 use App\Services\ShopService;
 use App\Support\ApiResponse;
@@ -42,6 +43,18 @@ class ShopController extends Controller
             $request->validated(),
             trim((string) $request->header('If-Match'), ' "') ?: null,
         );
+
+        return ApiResponse::success($result['data'], $result['message']);
+    }
+
+    public function settings(Request $request, int $id): JsonResponse
+    {
+        return ApiResponse::success($this->shops->settings($request->user(), $id));
+    }
+
+    public function updateSettings(UpdateMerchantSettingsRequest $request, int $id): JsonResponse
+    {
+        $result = $this->shops->updateSettings($request->user(), $id, $request->validated());
 
         return ApiResponse::success($result['data'], $result['message']);
     }

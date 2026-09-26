@@ -37,6 +37,8 @@ class EmployeeResource extends JsonResource
             'short_name' => Str::upper(Str::substr($employee->first_name, 0, 1).Str::substr($employee->last_name, 0, 1)),
             'role' => $employee->role,
             'phone_number' => $employee->phone_number,
+            // The shop this person works in (merchants → shops → employees).
+            'shop' => ['id' => $employee->merchant_id, 'business_name' => $employee->shop?->business_name],
             'dob' => $employee->dob,
             'salary' => $employee->salary === null
                 ? null

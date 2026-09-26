@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Exceptions\ApiException;
 use App\Http\Resources\API\V1\MerchantProfileResource;
 use App\Models\Merchant;
+use App\Models\User;
 use App\Support\ApiResponse;
 use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\DB;
@@ -90,6 +91,35 @@ class MerchantProfileService
     }
 
     /**
+     * The payout wallets of every shop this user can act for: all the shops a merchant owns,
+     * or the shops a staff member works in. Each shop has its own wallets and verification.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function walletsByShop(User $user): array
+    {
+        $activeId = $user->actingMerchant()?->id;
+
+        return $user->accessibleShops()
+            ->map(function (Merchant $shop) use ($activeId) {
+                $data = $this->wallets($shop);
+                $wallets = collect($data['wallets']);
+
+                return [
+                    'shop_id' => $shop->id,
+                    'business_name' => $shop->business_name,
+                    'is_active' => $shop->id === $activeId,
+                    'wallets' => $data['wallets'],
+                    'default_rail' => $data['default_rail'],
+                    'verified_rails' => $wallets->where('status', 'verified')->pluck('rail')->values()->all(),
+                    'pending_rails' => $wallets->where('status', 'pending')->pluck('rail')->values()->all(),
+                ];
+            })
+            ->values()
+            ->all();
+    }
+
+    /**
      * @param  array<int, array{rail: string, number: ?string}>  $wallets
      */
     public function updateWallets(Merchant $merchant, array $wallets, ?string $defaultRail): array
@@ -118,9 +148,7 @@ class MerchantProfileService
                     throw new ApiException('payment.wallet_invalid', 'That number does not belong to '.self::RAIL_LABELS[$rail], 422, [], $field);
                 }
 
-                if (Merchant::where('id', '!=', $merchant->id)->whereIn($column, PhoneNumber::variants($number))->exists()) {
-                    throw new ApiException('wallet.number_taken', 'That number is already used by another shop', 409, [], $field);
-                }
+                $this->assertWalletFree($merchant, $rail, $number, $field);
 
                 if ($number === $current) {
                     continue;
@@ -154,6 +182,46 @@ class MerchantProfileService
     /**
      * Called once a verification fee is paid: numbers waiting for verification are confirmed.
      */
+    /**
+     * A paid verification fee proves the merchant controls the wallet it was paid from:
+     * that wallet becomes the shop's verified payout number on its rail.
+     */
+    public function verifyWalletFromPayment(Merchant $merchant, string $rail, string $walletNumber): Merchant
+    {
+        return DB::transaction(function () use ($merchant, $rail, $walletNumber) {
+            $merchant = $this->lock($merchant);
+            $number = PhoneNumber::normalize($walletNumber);
+            $column = $rail.'_number';
+
+            $this->assertWalletFree($merchant, $rail, $number);
+
+            $states = $merchant->wallet_states ?? [];
+            $merchant->{$column} = $number;
+            $states[$rail] = ['status' => 'verified', 'verified_at' => now()->toIso8601String(), 'rejection_reason' => null];
+            $merchant->wallet_states = $states;
+            $merchant->default_rail ??= $rail;
+
+            $this->save($merchant);
+
+            return $merchant;
+        });
+    }
+
+    /**
+     * A payout number can't be on another owner's shop. Shops of the same owner may share one.
+     */
+    public function assertWalletFree(Merchant $merchant, string $rail, string $number, string $field = 'wallet_number'): void
+    {
+        $isTaken = Merchant::where('id', '!=', $merchant->id)
+            ->whereIn($rail.'_number', PhoneNumber::variants($number))
+            ->when($merchant->user_id, fn ($query) => $query->where(fn ($owner) => $owner->whereNull('user_id')->orWhere('user_id', '!=', $merchant->user_id)))
+            ->exists();
+
+        if ($isTaken) {
+            throw new ApiException('wallet.number_taken', 'That number is already used by another shop', 409, [], $field);
+        }
+    }
+
     public function markPendingWalletsVerified(Merchant $merchant): void
     {
         $states = $merchant->wallet_states ?? [];

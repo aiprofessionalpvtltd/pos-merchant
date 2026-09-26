@@ -22,7 +22,6 @@ class DatabaseSeeder extends Seeder
             // Gives the plans their keys, features, SLSH prices and the default plan the v1 API needs.
             PlanCatalogueSeeder::class,
             POSPermissionsTableSeeder::class,
-            MerchantSeeder::class,
         ]);
 
         $this->runPermissionUpdateCommand();

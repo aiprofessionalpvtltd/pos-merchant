@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\API\V1;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\API\V1\CompleteAccountVerificationRequest;
 use App\Http\Requests\API\V1\CompleteVerificationRequest;
 use App\Http\Requests\API\V1\IssueInvoiceRequest;
 use App\Http\Requests\API\V1\PhoneNumberRequest;
@@ -69,5 +70,12 @@ class RegistrationController extends Controller
         $data = $this->registration->completeVerification($request->user(), $id, $request->validated('invoice_id'));
 
         return ApiResponse::success($data, 'Your payment numbers are verified');
+    }
+
+    public function completeAccountVerification(CompleteAccountVerificationRequest $request): JsonResponse
+    {
+        $data = $this->registration->completeAccountVerification($request->user(), $request->validated('invoice_id'));
+
+        return ApiResponse::success($data, 'Your phone number is verified. You can now create your shop.');
     }
 }

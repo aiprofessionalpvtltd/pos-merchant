@@ -49,6 +49,13 @@ Full URL = `{BASE_URL}/api/v1` + path.
 | 9 | POST | `/api/v1/shifts/start` | Clock in | Bearer | optional `start_time`, `idempotency_key` | `201` | `409 shift.already_active`, `422 shift.time_in_future` |
 | 10 | POST | `/api/v1/shifts/{id}/end` | Clock out | Bearer (own shift) | optional `end_time`, `idempotency_key` | `200` | `404 shift.not_found`, `409 shift.already_ended`, `422 shift.end_before_start`, `422 shift.time_in_future` |
 | 11 | PATCH | `/api/v1/shifts/{id}` | Correct a recorded shift | Bearer, owner only | `start_time` and/or `end_time`, `reason` | `200` | `403 auth.merchant_only`, `404 shift.not_found`, `422 shift.end_before_start` |
+| 12 | GET | `/api/v1/account/employees` | Staff of **every shop** the merchant owns | Bearer, merchant only | `shop_id`, `status`, `q`, `page`, `per_page` | `200` + pagination | `403 auth.merchant_only`, `404 shop.not_found` |
+| 13 | POST | `/api/v1/employees/{id}/transfer` | Move staff to another of the owner's shops | Bearer, merchant only | `shop_id` | `200` | `403 auth.merchant_only`, `403 plan.feature_unavailable`, `404 employee.not_found`, `404 shop.not_found`, `409 employee.already_in_shop`, `409 employee.shift_open` |
+
+Endpoint 4 also takes an optional `shop_id`, and endpoints 12 and 13 are described
+under [Staff across shops](#staff-across-shops) and
+[12](#12-get-apiv1accountemployees--staff-of-every-shop) and
+[13](#13-post-apiv1employeesidtransfer--move-staff-to-another-shop) below.
 
 **Status codes shared by every endpoint**
 
@@ -129,10 +136,67 @@ the owner can correct the form without typing the PIN again.
 
 ### Removing staff
 
-`DELETE` is immediate: the employee's tokens are revoked, an open shift is
-closed, and their number is freed so a new person can be added with it. Orders
-and shifts stay, so reports keep working. The removed person still appears under
-`?status=disabled` and their shift history stays readable.
+`DELETE` is immediate and removes the person **from this shop**: an open shift in
+this shop is closed, their sessions working in this shop are revoked, and their
+staff record is disabled. Orders and shifts stay, so reports keep working. The
+removed person still appears under `?status=disabled` and their shift history stays
+readable.
+
+- **They work nowhere else:** their sign-in is also removed, all their sessions end,
+  and their number is freed so a new person can be added with it.
+- **They work in another shop too** (`still_works_elsewhere: true`): only this shop's
+  record goes. Their sign-in, PIN and other shops are untouched.
+
+### Staff across shops
+
+The chain is **merchant → shops → employees**: a merchant owns many shops, and each
+shop has its own team. See [data-model.md](data-model.md).
+
+- **Each shop has its own staff list.** `GET /employees` is the current shop's team.
+  The owner can see every shop's team at once with `GET /account/employees`, without
+  switching shop.
+- **The owner can add staff to any of their shops** by sending `shop_id` with
+  `POST /employees`. Without it, staff join the current shop. A staff manager (the
+  `employees` permission) can only add to their own shop (`403 auth.merchant_only`
+  if they send another `shop_id`).
+- **The plan is checked on the target shop.** A shop on the free plan can't have
+  staff (`403 plan.feature_unavailable`), wherever the request comes from.
+- **One person can work in several shops** (see the next section). Otherwise a staff
+  member can be **moved** to another of the owner's shops with `POST
+  /employees/{id}/transfer`: their permissions stay, their sessions in the old shop end,
+  and they sign in again.
+- **A merchant's or a shop's phone number can't be staff** (`409 employee.phone_taken`).
+  A person is a merchant or staff, not both.
+
+### Staff in several shops
+
+One person (one phone number, one PIN) can work in more than one shop, with **separate
+permissions, shifts, hours and pay in each**.
+
+- **Adding.** `POST /employees` with a number that is already active staff elsewhere
+  adds that same person to this shop instead of failing. The response has
+  `existing_person: true`; they **keep their PIN** (any `pin` sent is ignored), and get
+  the permissions and role you send for this shop. The same person twice in one shop
+  returns `409 employee.already_in_shop`.
+- **Signing in.** `POST /auth/pin/login` takes an optional `shop_id`; without it the
+  person lands in the shop their device used last, else their first shop. `shops[]` in
+  the response lists each shop with `role: "staff"`, and
+  [`POST /shops/{id}/select`](multiple-shop.md#4-post-shopsidselect--switch-shop)
+  switches between them without a PIN.
+- **Permissions follow the shop.** `permissions` in the session and every permission
+  check use the person's staff record **in the current shop**. Someone with `inventory`
+  in one shop and `pos` in another gets exactly that.
+- **Shifts follow the shop.** A shift is stored with the shop it was worked in.
+  Clock in, clock out, history, the open-shift status and the hours and payroll figures
+  are all for the **current shop**. A person can be clocked in at two shops at once,
+  once per shop.
+- **Removing** takes them out of one shop only (see above), and a **transfer** moves
+  one staff record.
+
+**Duplicates from before.** Until now the same number could be added to two shops as
+two unrelated sign-ins. `php artisan staff:duplicates` lists them (it changes
+nothing). Each needs merging by hand: keep one sign-in, point its staff records at it,
+and reset the PIN.
 
 ### Shifts
 
@@ -140,9 +204,10 @@ and shifts stay, so reports keep working. The removed person still appears under
   employee logs in with their phone number and PIN, and only then clocks in with
   `POST /shifts/start`. Without a token it returns `401 auth.token_invalid`. See
   [Daily flow](#daily-flow-sign-in-then-start-the-shift).
-- A shift belongs to a **user**, so the owner can clock in too.
-- Only one shift can be open at a time; starting another returns
-  `409 shift.already_active` with the open shift.
+- A shift belongs to a **user in one shop** (the session's current shop), so the
+  owner can clock in too, and a person in several shops has separate shifts in each.
+- Only one shift can be open **per person per shop**; starting another in the same
+  shop returns `409 shift.already_active` with the open shift.
 - `start_time` / `end_time` are optional and default to server time. Send them when
   clocking in offline. A time more than 5 minutes ahead of the server is refused
   (`422 shift.time_in_future`).
@@ -322,6 +387,7 @@ two.
 | `pin` | string | no | The employee's PIN: exactly 4 digits, not weak (`0000`, `1234`, repeated digits). Stored as a hash. |
 | `pin_confirmation` | string | with `pin` | Must match `pin` |
 | `permission_keys` | array | yes | At least one stable key from `GET /permissions` |
+| `shop_id` | int | no | **Owners only:** add the person to this shop (one of theirs) instead of the current one. `403 auth.merchant_only` for a staff manager, `404 shop.not_found` if it isn't the owner's. The plan of **that** shop must include staff |
 
 **Response `201`**
 
@@ -336,6 +402,8 @@ two.
     "short_name": "NY",
     "role": "Cashier",
     "phone_number": "+252634110303",
+    "shop": { "id": 94, "business_name": "Exelo Retail" },
+    "existing_person": false,
     "dob": "2000-01-19",
     "salary": { "amount": 450, "currency": "USD", "display": "$4.50" },
     "salary_period": "daily",
@@ -359,6 +427,17 @@ The PIN is never returned. `has_pin` tells you which case you are in:
 No default PIN exists in either case. The PIN is checked before the owner's PIN
 confirmation is spent, so a weak PIN (`422 auth.pin_too_weak`) or a mismatch does
 not cost another PIN entry.
+
+**`existing_person: true`** means the number already belongs to active staff in
+another shop. They are added to this shop as **the same person**: the message is
+`"Nasra now also works in Hodan Berbera. They sign in with their existing PIN."`,
+`has_pin` is `true`, and any `pin` in the request is ignored (so it is not checked
+either). See [Staff in several shops](#staff-in-several-shops).
+
+**Errors added:** `409 employee.already_in_shop` (this person already works in the
+target shop); `404 shop.not_found` and `403 auth.merchant_only` for `shop_id`.
+`409 employee.phone_taken` now means the number is a **merchant's or a shop's** own
+number; a number that is staff elsewhere is no longer refused.
 
 **Errors**
 
@@ -474,14 +553,15 @@ removal is explicit. Send `"salary": null` to clear the salary.
 {
   "success": true,
   "message": "Nasra Yusuf removed",
-  "data": { "id": 165, "deleted": true, "tokens_revoked": 0, "open_shift_closed": true }
+  "data": { "id": 165, "deleted": true, "tokens_revoked": 0, "open_shift_closed": true, "still_works_elsewhere": false }
 }
 ```
 
 | Field | Notes |
 | --- | --- |
-| `tokens_revoked` | How many signed-in devices were signed out |
-| `open_shift_closed` | Whether an active shift was ended as part of the removal |
+| `tokens_revoked` | How many signed-in devices were signed out. For someone who works elsewhere too, only sessions working in **this** shop |
+| `open_shift_closed` | Whether an active shift **in this shop** was ended as part of the removal |
+| `still_works_elsewhere` | `true` if the person also works in another shop: only this shop's record was removed, and their sign-in and PIN are unchanged. `false`: their sign-in was removed too |
 
 History is preserved: orders they took keep their reference, so reports stay
 correct. Removing the same person again returns `404 employee.not_found`.
@@ -771,6 +851,106 @@ records. Replaces `PUT /api/user/shift/{id}`.
 
 ---
 
+## 12. GET `/api/v1/account/employees` — Staff of every shop
+
+**Purpose:** The merchant's whole team in one list, across every shop they own,
+without switching shop first. Merchant only (`403 auth.merchant_only` for staff).
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Query**
+
+| Param | Default | Notes |
+| --- | --- | --- |
+| `shop_id` | all shops | Only this shop's staff. `404 shop.not_found` if it isn't the merchant's |
+| `status` | `active` | `active` or `inactive` (removed staff) |
+| `q` | — | Search name or phone |
+| `page`, `per_page` | `1`, `50` | `per_page` up to 100 |
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "data": {
+    "employees": [
+      {
+        "id": 51,
+        "first_name": "Nasra",
+        "last_name": "Yusuf",
+        "short_name": "NY",
+        "role": "Cashier",
+        "phone_number": "+252634110303",
+        "shop": { "id": 94, "business_name": "Exelo Retail" },
+        "status": "off_shift",
+        "has_pin": true,
+        "permissions": [ { "key": "pos", "name": "POS" } ],
+        "current_shift": null,
+        "created_at": "2026-09-19T13:09:49Z"
+      }
+    ],
+    "by_shop": [
+      { "shop_id": 94, "business_name": "Exelo Retail", "active": 3 },
+      { "shop_id": 130, "business_name": "Berbera Mart", "active": 1 },
+      { "shop_id": 131, "business_name": "Berbera Kiosk", "active": 0 }
+    ]
+  },
+  "meta": { "pagination": { "page": 1, "per_page": 50, "total": 4, "total_pages": 1, "has_more": false } }
+}
+```
+
+Ordered by shop, then name. Each employee has the same fields as
+[`GET /employees`](#2-get-apiv1employees--list-staff), plus `shop`. A person who works
+in two shops appears once per shop, each with that shop's role, permissions and
+shift status. `by_shop` counts active staff for **every** owned shop, even ones with
+none, whatever the filters. `status` here is the shift status **in that employee's shop**.
+
+`GET /account` also returns a short preview (`staff`, up to 5) and `staff_count` for
+each shop.
+
+## 13. POST `/api/v1/employees/{id}/transfer` — Move staff to another shop
+
+**Purpose:** Moves a staff member from one of the merchant's shops to another. Their
+permissions, role and pay stay. Merchant only.
+
+**Request**
+
+```json
+{ "shop_id": 130 }
+```
+
+**Response `200`**
+
+```json
+{
+  "success": true,
+  "message": "Nasra now works in Berbera Mart. They need to sign in again.",
+  "data": {
+    "id": 51,
+    "first_name": "Nasra",
+    "shop": { "id": 130, "business_name": "Berbera Mart" },
+    "permissions": [ { "key": "pos", "name": "POS" } ],
+    "…": "…"
+  }
+}
+```
+
+The person's sessions **working in the old shop** are revoked, so they sign in again
+and land in the new shop. Their sessions in any other shop they work in carry on.
+`{id}` is the staff record's id, which can be in any of the merchant's shops (not
+only the current one).
+
+**Errors**
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `403` | `auth.merchant_only` | Only the owner can move staff |
+| `403` | `plan.feature_unavailable` | The **target** shop's plan doesn't include staff |
+| `404` | `employee.not_found` | Not active staff of one of the merchant's shops |
+| `404` | `shop.not_found` | Not one of the merchant's shops |
+| `409` | `employee.already_in_shop` | They are already in, or already have a record in, the target shop. Add or re-add them there instead |
+| `409` | `employee.shift_open` | Clocked in at their current shop; end the shift first |
+
 ## Daily flow: sign in, then start the shift
 
 Every working day the employee follows the same order. The shift comes **last**,
@@ -840,9 +1020,14 @@ Every call below that creates or uses a PIN needs the header
 1. The employee types their **mobile number**.
 2. The app calls `POST /auth/lookup`. The response names the **shop**
    (`business_name`) and the employee (`display_name`), so the employee can see
-   they are signing in to the right merchant before typing a PIN.
+   they are signing in to the right merchant before typing a PIN. Someone who works
+   in several shops sees one of them here; they choose the shop after the PIN.
 3. The employee enters their **PIN**, and the app calls `POST /auth/pin/login`
-   (or `POST /auth/pin` the first time).
+   (or `POST /auth/pin` the first time). `data.shops` lists every shop they work in;
+   with more than one, show a shop picker and use
+   [`POST /shops/{id}/select`](multiple-shop.md#4-post-shopsidselect--switch-shop) to
+   switch (no second PIN), or send `shop_id` at sign-in. `permissions` are those of
+   the **current** shop.
 
 A number that is not registered as staff or as a shop owner returns
 `exists: false`. Nothing about the shop is shown for an unknown number.
@@ -931,9 +1116,12 @@ requests and responses.
 
 ### Removed employees
 
-When the owner removes an employee, their tokens are revoked at once, so their
-next request returns `401 auth.token_invalid`, and any new sign-in returns
-`403 auth.employee_disabled`.
+When the owner removes an employee, their tokens for that shop are revoked at once,
+so their next request from it returns `401 auth.token_invalid`. If that was the only
+shop they worked in, their sign-in is removed too: any new sign-in with that number
+returns `401 auth.invalid_credentials` (the number is free again for a new person),
+and `403 auth.employee_disabled` is returned for a staff account that still exists
+but has no active shop. Someone who also works elsewhere keeps signing in normally.
 
 ---
 
@@ -998,4 +1186,27 @@ unchanged.
 - **Sales figures** come from the shop's `Paid` and `Complete` orders taken by the
   employee, in USD.
 - **Wording.** The 201 message uses "their", since the app does not store gender.
-- **Plan gating.** Only `POST /employees` checks the plan, as in the original spec.
+- **Plan gating.** `POST /employees` and `POST /employees/{id}/transfer` check the
+  plan, on the shop the person is being added or moved **to**.
+
+### Staff across shops (2026-09-26)
+
+- **Schema.** `employees.merchant_id` holds a **shop id** (the legacy column name; see
+  [data-model.md](data-model.md)). New: index `employees(merchant_id, status)`;
+  `shifts.merchant_id` (a shop id, filled for existing shifts from the person's staff
+  record, or an owner's first shop) with index `(merchant_id, user_id, start_time)`; and
+  a unique index `employees(user_id, merchant_id)`, one staff record per person per shop.
+  The migration refuses to run if that pair already has duplicates.
+- **Code.** `User::employments()` (all staff records), `User::actingEmployee()` (the
+  record in the current shop, used for permissions), `Employee::shop()`,
+  `MerchantAccount::employees()`, `Shift::forShop()`. `EmployeeService` adds
+  `targetShop()`, `listForMerchant()` and `transfer()`; `create()` reuses an existing
+  person and `remove()` removes one shop only. `ShiftService` scopes every query to
+  the current shop, and a `Shift` created without a shop (the legacy API does this) is
+  put in the person's current or first shop.
+- **Legacy API.** `/api/employee/*` and `/api/user/shift` are unchanged and keep
+  working, on the person's first shop.
+- **Not covered.** Shift history from before this change is attached to the shop of the
+  person's staff record, so someone who already worked in several shops under one
+  sign-in has all their old hours in one of them. `php artisan staff:duplicates` lists
+  numbers that are staff under more than one sign-in.

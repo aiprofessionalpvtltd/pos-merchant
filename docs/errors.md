@@ -99,6 +99,7 @@ See [multiple-shop.md](multiple-shop.md).
 
 | Code | Status | Meaning |
 | --- | --- | --- |
+| `account.phone_unverified` | 409 | Creating the first shop needs the merchant's phone verified first |
 | `shop.not_a_member` | 403 | Login `shop_id` isn't one of this person's shops |
 | `shop.not_found` | 404 | No such shop for this person, or it was closed |
 | `shop.last_shop` | 409 | The owner's only shop can't be closed |
@@ -181,7 +182,9 @@ A `from` equal to `to` on a transfer is an ordinary `422 validation.failed` on `
 
 | Code | Status | Meaning |
 | --- | --- | --- |
-| `employee.phone_taken` | 409 | Number already belongs to an EXELO user |
+| `employee.phone_taken` | 409 | Number is a merchant's or a shop's own number (staff elsewhere is allowed: the person joins this shop) |
+| `employee.already_in_shop` | 409 | The person already works in (or, for a transfer, already has a record in) that shop |
+| `employee.shift_open` | 409 | Transfer refused: clocked in at their current shop |
 | `employee.permission_unknown` | 422 | Bad key in `permission_keys` |
 | `employee.not_found` | 404 | |
 | `shift.already_active` | 409 | Already clocked in; `details.shift` |

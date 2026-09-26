@@ -6,6 +6,7 @@ use App\Exceptions\ApiException;
 use App\Models\Employee;
 use App\Models\EmployeePermission;
 use App\Models\Merchant;
+use App\Models\MerchantAccount;
 use App\Models\Order;
 use App\Models\POSPermission;
 use App\Models\Shift;
@@ -43,14 +44,15 @@ class EmployeeService
         $search = trim($filters['q'] ?? '');
 
         $query = Employee::where('merchant_id', $merchant->id)
-            ->with(['user' => fn ($user) => $user->withTrashed(), 'permissions.permission'])
+            ->with(['user' => fn ($user) => $user->withTrashed(), 'permissions.permission', 'shop'])
             // Removed staff only show under status=disabled, so the everyday list stays clean
             ->where('status', $status === 'disabled' ? 'inactive' : 'active');
 
+        // On shift in this shop (a person may be clocked in elsewhere).
         if ($status === 'on_shift') {
-            $query->whereHas('user.shifts', fn ($shift) => $shift->open());
+            $query->whereHas('user.shifts', fn ($shift) => $shift->open()->forShop($merchant->id));
         } elseif ($status === 'off_shift') {
-            $query->whereDoesntHave('user.shifts', fn ($shift) => $shift->open());
+            $query->whereDoesntHave('user.shifts', fn ($shift) => $shift->open()->forShop($merchant->id));
         }
 
         if ($search !== '') {
@@ -77,16 +79,141 @@ class EmployeeService
     public function find(Merchant $merchant, int $id): Employee
     {
         return Employee::where('merchant_id', $merchant->id)
-            ->with(['user' => fn ($user) => $user->withTrashed(), 'permissions.permission'])
+            ->with(['user' => fn ($user) => $user->withTrashed(), 'permissions.permission', 'shop'])
             ->find($id) ?? throw new ApiException('employee.not_found', 'We could not find that staff member', 404);
     }
 
     /**
-     * @return Collection<int, Shift> the open shift of each user, keyed by user id
+     * The shop a new staff member joins: the one asked for (owners only, any of their
+     * shops), else the session's current shop.
+     */
+    public function targetShop(User $actor, Merchant $current, ?int $shopId): Merchant
+    {
+        if ($shopId === null || $shopId === $current->id) {
+            return $current;
+        }
+
+        // Staff managers act on their own shop only.
+        if (! $actor->isMerchantAccount()) {
+            throw new ApiException('auth.merchant_only', 'Only the shop owner can add staff to another shop', 403, [], 'shop_id');
+        }
+
+        return $actor->accessibleShop($shopId)
+            ?? throw new ApiException('shop.not_found', 'We could not find that shop', 404, [], 'shop_id');
+    }
+
+    /**
+     * Staff of every shop the merchant owns, with per-shop counts (merchants → shops → employees).
+     *
+     * @param  array{shop_id?: ?int, status?: ?string, q?: ?string, page?: int, per_page?: int}  $filters
+     * @return array{items: Collection<int, Employee>, shifts: Collection<int, Shift>, by_shop: array<int, array<string, mixed>>, pagination: array<string, int|bool>}
+     */
+    public function listForMerchant(User $owner, array $filters): array
+    {
+        $this->assertMerchantAccount($owner);
+
+        $shops = $owner->accessibleShops();
+        $shopIds = $shops->pluck('id');
+
+        if (! empty($filters['shop_id']) && ! $shopIds->contains((int) $filters['shop_id'])) {
+            throw new ApiException('shop.not_found', 'We could not find that shop', 404, [], 'shop_id');
+        }
+
+        $search = trim($filters['q'] ?? '');
+
+        $query = Employee::whereIn('merchant_id', empty($filters['shop_id']) ? $shopIds : [(int) $filters['shop_id']])
+            ->where('status', ($filters['status'] ?? 'active') === 'inactive' ? 'inactive' : 'active')
+            ->with(['user' => fn ($user) => $user->withTrashed(), 'permissions.permission', 'shop'])
+            ->when($search !== '', fn ($inner) => $inner->where(fn ($match) => $match
+                ->whereRaw("concat_ws(' ', first_name, last_name) like ?", ["%{$search}%"])
+                ->orWhere('phone_number', 'like', "%{$search}%")));
+
+        $page = $query->orderBy('merchant_id')->orderBy('first_name')->orderBy('id')
+            ->paginate($filters['per_page'] ?? 50, ['*'], 'page', $filters['page'] ?? 1);
+
+        $counts = Employee::active()->whereIn('merchant_id', $shopIds)
+            ->selectRaw('merchant_id, count(*) as active')->groupBy('merchant_id')->pluck('active', 'merchant_id');
+
+        return [
+            'items' => $page->getCollection(),
+            'shifts' => $this->openShifts($page->getCollection()),
+            'by_shop' => $shops->map(fn (Merchant $shop) => [
+                'shop_id' => $shop->id,
+                'business_name' => $shop->business_name,
+                'active' => (int) ($counts[$shop->id] ?? 0),
+            ])->values()->all(),
+            'pagination' => [
+                'page' => $page->currentPage(),
+                'per_page' => $page->perPage(),
+                'total' => $page->total(),
+                'total_pages' => $page->lastPage(),
+                'has_more' => $page->hasMorePages(),
+            ],
+        ];
+    }
+
+    /**
+     * Moves a staff member to another of the owner's shops. Their permissions stay; their
+     * sessions end, so they sign in again into the new shop.
+     */
+    public function transfer(User $owner, int $employeeId, int $shopId): Employee
+    {
+        $this->assertMerchantAccount($owner);
+
+        $shopIds = $owner->accessibleShops()->pluck('id');
+
+        $employee = Employee::active()->whereIn('merchant_id', $shopIds)->find($employeeId)
+            ?? throw new ApiException('employee.not_found', 'We could not find that staff member', 404);
+
+        $target = $owner->accessibleShop($shopId)
+            ?? throw new ApiException('shop.not_found', 'We could not find that shop', 404, [], 'shop_id');
+
+        // Already there, or has an earlier staff record there (one per person per shop).
+        $hasRecordThere = $employee->merchant_id === $target->id
+            || ($employee->user_id && Employee::where('user_id', $employee->user_id)->where('merchant_id', $target->id)->exists());
+
+        if ($hasRecordThere) {
+            throw new ApiException('employee.already_in_shop', 'This staff member already has a record in '.$target->business_name.'. Add them there instead.', 409, [], 'shop_id');
+        }
+
+        if ($employee->user_id && Shift::open()->where('user_id', $employee->user_id)->forShop($employee->merchant_id)->exists()) {
+            throw new ApiException('employee.shift_open', 'This staff member is clocked in. End their shift first.', 409);
+        }
+
+        $this->subscriptions->requireFeature($target, 'employees.manage');
+
+        $fromShopId = $employee->merchant_id;
+
+        // Sessions working in the old shop end; any in their other shops carry on.
+        $revoked = DB::transaction(function () use ($employee, $target, $fromShopId) {
+            $employee->update(['merchant_id' => $target->id]);
+
+            return $employee->user ? $employee->user->tokens()->where('merchant_id', $fromShopId)->delete() : 0;
+        });
+
+        Log::info('Employee transferred', [
+            'employee_id' => $employee->id, 'from_shop_id' => $fromShopId, 'to_shop_id' => $target->id,
+            'tokens_revoked' => $revoked, 'moved_by' => $owner->id,
+        ]);
+
+        return $employee->fresh(['user', 'permissions.permission', 'shop']);
+    }
+
+    /**
+     * Each staff record's open shift in its own shop, keyed by employee id (a person
+     * who works in two shops can be clocked in at one and not the other).
+     *
+     * @return Collection<int, Shift>
      */
     public function openShifts(Collection $employees): Collection
     {
-        return Shift::open()->whereIn('user_id', $employees->pluck('user_id')->filter())->orderBy('id')->get()->keyBy('user_id');
+        $open = Shift::open()->whereIn('user_id', $employees->pluck('user_id')->filter())->orderBy('id')->get();
+
+        return $employees
+            ->mapWithKeys(fn (Employee $employee) => [$employee->id => $open->first(
+                fn (Shift $shift) => $shift->user_id === $employee->user_id && $shift->merchant_id === $employee->merchant_id,
+            )])
+            ->filter();
     }
 
     /**
@@ -100,20 +227,29 @@ class EmployeeService
         $phone = PhoneNumber::normalize($data['phone_number']);
         $permissions = $this->resolvePermissions($actor, $data['permission_keys']);
 
-        // A weak PIN is refused here, before the PIN confirmation is spent
-        if (! empty($data['pin'])) {
-            $this->auth->assertPinAcceptable($data['pin']);
-        }
-
+        // A merchant's or a shop's number can't be staff (a person is a merchant or staff, not both).
         if ($this->phoneTaken($phone)) {
             throw new ApiException('employee.phone_taken', 'That number already belongs to an EXELO user', 409, [], 'phone_number');
+        }
+
+        // Someone who already works in another shop joins this one as the same person, with their own PIN.
+        $person = $this->existingStaffPerson($phone);
+
+        if ($person && Employee::active()->where('user_id', $person->id)->where('merchant_id', $merchant->id)->exists()) {
+            throw new ApiException('employee.already_in_shop', 'This person already works in '.$merchant->business_name, 409, [], 'phone_number');
+        }
+
+        // A weak PIN is refused here, before the PIN confirmation is spent. An existing person
+        // keeps their PIN, so one sent for them is ignored rather than checked.
+        if (! $person && ! empty($data['pin'])) {
+            $this->auth->assertPinAcceptable($data['pin']);
         }
 
         // Only now is the PIN entry spent: a request refused above does not cost another one
         $this->auth->consumeConfirmation($actor, $confirmationToken, 'employees.create');
 
-        $employee = DB::transaction(function () use ($merchant, $data, $phone, $permissions) {
-            $user = User::create([
+        $employee = DB::transaction(function () use ($merchant, $data, $phone, $permissions, $person) {
+            $user = $person ?? User::create([
                 'name' => $data['first_name'].' '.$data['last_name'],
                 'email' => $this->newEmail($phone),
                 // Unusable until the employee sets their own PIN
@@ -121,30 +257,45 @@ class EmployeeService
                 'user_type' => 'employee',
             ]);
 
-            // With a PIN the employee can sign in at once; without one they set their own
-            if (! empty($data['pin'])) {
+            // With a PIN a new employee can sign in at once; without one they set their own.
+            // Someone who already works elsewhere keeps the PIN they have.
+            if (! $person && ! empty($data['pin'])) {
                 $this->auth->setPinFor($user, $data['pin']);
             }
 
-            $employee = Employee::create([
-                'user_id' => $user->id,
-                'merchant_id' => $merchant->id,
+            $attributes = [
                 'phone_number' => $phone,
                 'first_name' => $data['first_name'],
                 'last_name' => $data['last_name'],
                 'dob' => $data['dob'],
                 'role' => $data['role'],
                 'status' => 'active',
-            ] + $this->salaryAttributes($data));
+                'removed_at' => null,
+                'former_phone_number' => null,
+            ] + $this->salaryAttributes($data);
+
+            // One staff record per person per shop: a person removed from this shop earlier gets theirs back.
+            $employee = Employee::where('user_id', $user->id)->where('merchant_id', $merchant->id)->first();
+
+            if ($employee) {
+                $employee->update($attributes);
+            } else {
+                $employee = Employee::create(['user_id' => $user->id, 'merchant_id' => $merchant->id] + $attributes);
+            }
 
             $this->syncPermissions($employee, $permissions);
 
             return $employee;
         });
 
-        Log::info('Employee added', ['employee_id' => $employee->id, 'merchant_id' => $merchant->id, 'added_by' => $actor->id]);
+        $employee->joinedAsExistingPerson = $person !== null;
 
-        return $employee->load(['user', 'permissions.permission']);
+        Log::info('Employee added', [
+            'employee_id' => $employee->id, 'merchant_id' => $merchant->id, 'added_by' => $actor->id,
+            'existing_person' => $employee->joinedAsExistingPerson,
+        ]);
+
+        return $employee->load(['user', 'permissions.permission', 'shop']);
     }
 
     /**
@@ -197,14 +348,12 @@ class EmployeeService
             throw new ApiException('employee.not_found', 'We could not find that staff member', 404);
         }
 
+        // Removes the person from this shop. Only someone who works nowhere else loses their sign-in.
         $result = DB::transaction(function () use ($employee) {
             $user = $employee->user;
 
-            $openShifts = $user ? Shift::open()->where('user_id', $user->id)->get() : collect();
+            $openShifts = $user ? Shift::open()->where('user_id', $user->id)->forShop($employee->merchant_id)->get() : collect();
             $openShifts->each(fn (Shift $shift) => $shift->update(['end_time' => now()->format('Y-m-d H:i:s')]));
-
-            $tokens = $user ? $user->tokens()->get() : collect();
-            $tokens->each->delete();
 
             $employee->update([
                 'status' => 'inactive',
@@ -213,12 +362,26 @@ class EmployeeService
                 'phone_number' => '0',
             ]);
 
-            if ($user) {
+            $stillWorksElsewhere = $user !== null && Employee::active()->where('user_id', $user->id)->exists();
+
+            // Elsewhere: end only the sessions working in this shop. Nowhere: end them all.
+            $tokens = match (true) {
+                $user === null => collect(),
+                $stillWorksElsewhere => $user->tokens()->where('merchant_id', $employee->merchant_id)->get(),
+                default => $user->tokens()->get(),
+            };
+            $tokens->each->delete();
+
+            if ($user && ! $stillWorksElsewhere) {
                 $user->update(['email' => 'deleted'.$employee->id.'@email.com']);
                 $user->delete();
             }
 
-            return ['tokens_revoked' => $tokens->count(), 'open_shift_closed' => $openShifts->isNotEmpty()];
+            return [
+                'tokens_revoked' => $tokens->count(),
+                'open_shift_closed' => $openShifts->isNotEmpty(),
+                'still_works_elsewhere' => $stillWorksElsewhere,
+            ];
         });
 
         Log::info('Employee removed', ['employee_id' => $employee->id, 'removed_by' => $actor->id]);
@@ -241,6 +404,7 @@ class EmployeeService
             ->first();
 
         $shifts = Shift::where('user_id', $employee->user_id)
+            ->forShop($employee->merchant_id)
             ->whereNotNull('start_time')
             ->whereBetween('start_time', [$from->format('Y-m-d H:i:s'), $to->format('Y-m-d H:i:s')])
             ->get(['start_time', 'end_time']);
@@ -270,7 +434,7 @@ class EmployeeService
         $employees = Employee::where('merchant_id', $merchant->id)->active()->orderBy('first_name')->orderBy('id')->get();
         $userIds = $employees->pluck('user_id')->filter();
 
-        $shifts = Shift::whereIn('user_id', $userIds)->whereNotNull('start_time')
+        $shifts = Shift::whereIn('user_id', $userIds)->forShop($merchant->id)->whereNotNull('start_time')
             ->whereBetween('start_time', [$from->format('Y-m-d H:i:s'), $to->format('Y-m-d H:i:s')])
             ->get(['user_id', 'start_time', 'end_time'])->groupBy('user_id');
 
@@ -291,7 +455,7 @@ class EmployeeService
                 'hours' => $hours,
                 'sales_cents' => Money::toMinor((float) $sales->get($employee->user_id, 0), 'USD'),
                 'payroll_cents' => $this->payrollCents($employee, $hours, $days, $windowDays),
-                'is_on_shift' => $open->has($employee->user_id),
+                'is_on_shift' => $open->has($employee->id),
             ];
         });
 
@@ -409,12 +573,32 @@ class EmployeeService
         return $attributes;
     }
 
+    private function assertMerchantAccount(User $user): void
+    {
+        if (! $user->isMerchantAccount()) {
+            throw new ApiException('auth.merchant_only', 'Only the shop owner can do this', 403);
+        }
+    }
+
+    /**
+     * A shop's or a merchant's number: never a staff number.
+     */
     private function phoneTaken(string $phone): bool
     {
         $variants = PhoneNumber::variants($phone);
 
         return Merchant::whereIn('phone_number', $variants)->exists()
-            || Employee::active()->whereIn('phone_number', $variants)->exists();
+            || MerchantAccount::whereIn('phone_number', $variants)->exists();
+    }
+
+    /**
+     * The person behind an active staff number, if they still have a sign-in.
+     */
+    private function existingStaffPerson(string $phone): ?User
+    {
+        $employee = Employee::active()->whereIn('phone_number', PhoneNumber::variants($phone))->orderBy('id')->first();
+
+        return $employee?->user_id ? User::where('user_type', 'employee')->find($employee->user_id) : null;
     }
 
     private function newEmail(string $phone): string

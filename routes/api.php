@@ -22,6 +22,7 @@ use App\Http\Controllers\API\V1\EmployeeController as V1EmployeeController;
 use App\Http\Controllers\API\V1\FileController as V1FileController;
 use App\Http\Controllers\API\V1\InventoryController as V1InventoryController;
 use App\Http\Controllers\API\V1\MerchantController as V1MerchantController;
+use App\Http\Controllers\API\V1\MerchantAccountController;
 use App\Http\Controllers\API\V1\ShopController;
 use App\Http\Controllers\API\V1\OrderController as V1OrderController;
 use App\Http\Controllers\API\V1\PaymentChargeController;
@@ -139,6 +140,8 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('/', [ShopController::class, 'store'])->name('store');
         Route::get('{id}', [ShopController::class, 'show'])->whereNumber('id')->name('show');
         Route::patch('{id}', [ShopController::class, 'update'])->whereNumber('id')->name('update');
+        Route::get('{id}/settings', [ShopController::class, 'settings'])->whereNumber('id')->name('settings.show');
+        Route::patch('{id}/settings', [ShopController::class, 'updateSettings'])->whereNumber('id')->name('settings.update');
         Route::delete('{id}', [ShopController::class, 'destroy'])->whereNumber('id')->name('destroy');
         Route::post('{id}/select', [ShopController::class, 'select'])->whereNumber('id')->name('select');
     });
@@ -168,6 +171,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::get('{id}', [V1EmployeeController::class, 'show'])->whereNumber('id')->name('show');
             Route::patch('{id}', [V1EmployeeController::class, 'update'])->whereNumber('id')->name('update');
             Route::delete('{id}', [V1EmployeeController::class, 'destroy'])->whereNumber('id')->name('destroy');
+            Route::post('{id}/transfer', [V1EmployeeController::class, 'transfer'])->whereNumber('id')->name('transfer');
         });
 
         Route::prefix('shifts')->name('shifts.')->group(function () {
@@ -177,6 +181,17 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
             Route::patch('{id}', [ShiftController::class, 'update'])->whereNumber('id')->name('update');
         });
     });
+
+    // The merchant account and all its shops — docs/data-model.md
+    Route::middleware(['auth:api', 'throttle:v1-merchant'])->prefix('account')->name('account.')->group(function () {
+        Route::get('/', [MerchantAccountController::class, 'show'])->name('show');
+        Route::patch('/', [MerchantAccountController::class, 'update'])->name('update');
+        Route::get('employees', [MerchantAccountController::class, 'employees'])->name('employees');
+    });
+
+    // The merchant's own phone number, verified by a fee paid from it — docs/merchant-onboarding.md
+    Route::middleware('auth:api')->post('account/verification/complete', [V1RegistrationController::class, 'completeAccountVerification'])
+        ->name('account.verification.complete');
 
     Route::middleware('auth:api')->post('merchants/{id}/verification/complete', [V1RegistrationController::class, 'completeVerification'])
         ->whereNumber('id')
