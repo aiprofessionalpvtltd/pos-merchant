@@ -110,6 +110,7 @@ class InvoicePaymentService
 
         $payload = [
             'charge_id' => $invoice->public_id,
+            'shop' => ['id' => $invoice->merchant_id, 'business_name' => $invoice->merchant?->business_name],
             'status' => $status,
             'rail' => $invoice->rail,
             'purpose' => $invoice->purpose ?? strtolower($invoice->type),

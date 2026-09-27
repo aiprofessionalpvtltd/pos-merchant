@@ -17,7 +17,7 @@ class PayOrderRequest extends FormRequest
             'rail' => ['required', 'in:cash,zaad,edahab,card,nfc'],
             'amount_tendered' => ['sometimes', 'array'],
             'amount_tendered.amount' => ['required_with:amount_tendered', 'integer', 'min:0', 'max:100000000'],
-            'amount_tendered.currency' => ['required_with:amount_tendered', 'in:USD'],
+            'amount_tendered.currency' => ['required_with:amount_tendered', 'in:USD,SLSH'],
             'customer' => ['sometimes', 'array'],
             'customer.wallet_number' => ['sometimes', 'nullable', 'string', 'max:20'],
             'idempotency_key' => ['required', 'string', 'max:64'],

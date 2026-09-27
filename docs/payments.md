@@ -7,6 +7,14 @@ provider callbacks.
 One resource, the **charge**, covers every way money moves into the shop. The rail
 is a field, not a different endpoint.
 
+**Every endpoint here is shop-based**, like the rest of the app since multiple
+shops per merchant ([multiple-shop.md](multiple-shop.md)): it acts on the token's
+**current shop**, never a shop the caller names in the request. `GET
+/payments/methods`, `POST /payments/quote`, and every charge response carry a
+`shop` object (`id`, `business_name`) so the app can show which shop a payment
+belongs to without a second call. To charge or check payments for a different
+shop, [switch the current shop](multiple-shop.md#4-post-shopsidselect--switch-shop) first.
+
 > **Status: partly implemented.**
 >
 > | Endpoint | State |
@@ -180,6 +188,7 @@ which is the settings view. Replaces `GET /api/merchants/getPhoneNumbersStatus`.
 {
   "success": true,
   "data": {
+    "shop": { "id": 42, "business_name": "Sahra Store" },
     "wallets": [
       { "rail": "zaad",   "number": "+252632222222", "status": "verified", "label": "Zaad" },
       { "rail": "edahab", "number": "+252651111111", "status": "verified", "label": "eDahab" },
@@ -195,6 +204,7 @@ which is the settings view. Replaces `GET /api/merchants/getPhoneNumbersStatus`.
 
 | Field | Meaning |
 | --- | --- |
+| `shop` | **The shop this response is about.** Every payment endpoint acts on the token's **current shop** ([multiple-shop.md](multiple-shop.md)), never one the caller picks; this is that shop's `id` and `business_name`, so an app juggling several shops can tell them apart without a second call |
 | `wallets[]` | All four wallet rails, as on the settings screen |
 | `accepts` | **The definitive list** of rails to show, in the order `zaad`, `edahab`, `cash`, `card`, `nfc`. `cash` is always present. `zaad` and `edahab` are present only when that wallet is `verified` (a `pending` or `not_set` wallet is left out). `card` and `nfc` appear only when switched on (`EXELO_CARD_ENABLED`, `EXELO_NFC_ENABLED`). Golis and EVC are stored but cannot take payments yet. |
 | `card.environment` | `production` or `sandbox` |
@@ -234,6 +244,7 @@ Replaces `POST /api/merchant/transaction/process`. Needs the `pos` permission.
   "success": true,
   "data": {
     "quote_id": "qte_01JBXT2N9K",
+    "shop": { "id": 42, "business_name": "Sahra Store" },
     "amount":            { "amount": 3774, "currency": "USD", "display": "$37.74" },
     "customer_charge":   { "amount": 3850, "currency": "USD", "display": "$38.50" },
     "merchant_receives": { "amount": 3700, "currency": "USD", "display": "$37.00" },
@@ -254,6 +265,7 @@ The example is a Zaad quote for `$37.74` on a Silver shop. The amounts differ on
 
 | Field | Meaning |
 | --- | --- |
+| `shop` | The shop this quote is for — the token's current shop, as on [`GET /payments/methods`](#1-get-apiv1paymentsmethods--which-payment-methods-the-shop-accepts) |
 | `amount` | What was asked for |
 | `customer_charge` | What the customer is billed |
 | `merchant_receives` | What lands in the shop |
@@ -340,6 +352,7 @@ required.** Needs the `pos` permission.
   "message": "Ask the customer to approve the payment",
   "data": {
     "charge_id": "chg_01JBXT5P3R",
+    "shop": { "id": 42, "business_name": "Sahra Store" },
     "status": "pending",
     "rail": "zaad",
     "amount": { "amount": 3774, "currency": "USD", "display": "$37.74" },
@@ -381,6 +394,7 @@ not built yet. Allowing a new charge would risk the customer paying both.
   "message": "Sale complete",
   "data": {
     "charge_id": "chg_01JBXT6Q4S",
+    "shop": { "id": 42, "business_name": "Sahra Store" },
     "status": "paid",
     "rail": "cash",
     "paid_at": "2026-09-20T09:16:44Z",
@@ -435,6 +449,7 @@ shop: a sale, a subscription, a registration or verification fee. Replaces
   "success": true,
   "data": {
     "charge_id": "chg_01JBXT5P3R",
+    "shop": { "id": 42, "business_name": "Sahra Store" },
     "status": "paid",
     "rail": "zaad",
     "purpose": "pos_sale",
@@ -456,6 +471,7 @@ shop: a sale, a subscription, a registration or verification fee. Replaces
   "success": true,
   "data": {
     "charge_id": "chg_01JBXT5P3R",
+    "shop": { "id": 42, "business_name": "Sahra Store" },
     "status": "pending",
     "rail": "zaad",
     "purpose": "pos_sale",
@@ -473,6 +489,7 @@ shop: a sale, a subscription, a registration or verification fee. Replaces
   "success": true,
   "data": {
     "charge_id": "chg_01JBXT5P3R",
+    "shop": { "id": 42, "business_name": "Sahra Store" },
     "status": "failed",
     "failure": { "code": "insufficient_funds", "message": "The customer's Zaad balance is too low" }
   }

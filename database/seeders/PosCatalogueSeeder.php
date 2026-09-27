@@ -86,12 +86,12 @@ class PosCatalogueSeeder extends Seeder
         $products = 0;
 
         foreach (self::CATALOGUE as $categoryName => $rows) {
-            $category = Category::firstOrCreate(['merchant_id' => $merchant->id, 'name' => $categoryName]);
+            $category = Category::firstOrCreate(['shop_id' => $merchant->id, 'name' => $categoryName]);
             $categories += $category->wasRecentlyCreated ? 1 : 0;
 
             foreach ($rows as [$name, $barcode, $cents, $shelf, $backRoom, $stockLimit, $alarmLimit, $vatPercent]) {
                 $product = Product::firstOrCreate(
-                    ['merchant_id' => $merchant->id, 'client_uuid' => 'seed-'.Str::slug($name)],
+                    ['shop_id' => $merchant->id, 'client_uuid' => 'seed-'.Str::slug($name)],
                     [
                         'category_id' => $category->id,
                         'product_name' => $name,
@@ -137,6 +137,6 @@ class PosCatalogueSeeder extends Seeder
 
     private function barcodeIsFree(Merchant $merchant, string $barcode): bool
     {
-        return ! Product::withTrashed()->where('merchant_id', $merchant->id)->where('bar_code', $barcode)->exists();
+        return ! Product::withTrashed()->where('shop_id', $merchant->id)->where('bar_code', $barcode)->exists();
     }
 }

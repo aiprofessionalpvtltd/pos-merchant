@@ -2,22 +2,21 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Http\Controllers\API\BaseController;
 use App\Http\Resources\ProductInventoryResource;
 use App\Http\Resources\ProductResource;
-use App\Models\Order;
 use App\Models\Product;
 use App\Models\ProductInventory;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
-use Illuminate\Support\Facades\DB;
 
 class ProductInventoryController extends BaseController
 {
     public function index()
     {
         $inventories = ProductInventory::with('product')->get();
+
         return $this->sendResponse(ProductInventoryResource::collection($inventories), 'Product inventories retrieved successfully.');
     }
 
@@ -37,9 +36,11 @@ class ProductInventoryController extends BaseController
             DB::beginTransaction();
             $inventory = ProductInventory::create($request->all());
             DB::commit();
+
             return $this->sendResponse(new ProductInventoryResource($inventory), 'Product inventory created successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Product inventory creation failed.', [$e->getMessage()]);
         }
     }
@@ -70,9 +71,11 @@ class ProductInventoryController extends BaseController
             DB::beginTransaction();
             $inventory->update($request->all());
             DB::commit();
+
             return $this->sendResponse(new ProductInventoryResource($inventory), 'Product inventory updated successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Product inventory update failed.', [$e->getMessage()]);
         }
     }
@@ -83,9 +86,11 @@ class ProductInventoryController extends BaseController
             DB::beginTransaction();
             $inventory->delete();
             DB::commit();
+
             return $this->sendResponse([], 'Product inventory deleted successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Product inventory deletion failed.', [$e->getMessage()]);
         }
     }
@@ -94,7 +99,7 @@ class ProductInventoryController extends BaseController
     {
         try {
             // Validate the type input (must be either 'stock' or 'shop')
-            if (!in_array($type, ['stock', 'shop', 'transportation'])) {
+            if (! in_array($type, ['stock', 'shop', 'transportation'])) {
                 return $this->sendError('Invalid type provided. It must be either "stock" or "shop".');
             }
 
@@ -106,7 +111,7 @@ class ProductInventoryController extends BaseController
             }
 
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -115,7 +120,7 @@ class ProductInventoryController extends BaseController
 
             // Retrieve products based on the type (stock or shop)
             $productInventories = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
-                $query->where('merchant_id', $merchantID);
+                $query->where('shop_id', $merchantID);
             })->where('type', $type)->with('product')->get();
 
             // If no product inventories found
@@ -146,7 +151,7 @@ class ProductInventoryController extends BaseController
 
         try {
             // Validate the type input (must be either 'stock' or 'shop')
-            if (!in_array($type, ['stock', 'shop', 'transportation'])) {
+            if (! in_array($type, ['stock', 'shop', 'transportation'])) {
                 return $this->sendError('Invalid type provided. It must be either "stock" or "shop".');
             }
 
@@ -156,9 +161,8 @@ class ProductInventoryController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -167,7 +171,7 @@ class ProductInventoryController extends BaseController
 
             // Retrieve products based on the type (stock or shop)
             $productInventories = ProductInventory::whereHas('product', function ($query) use ($merchantID, $categoryID) {
-                $query->where('merchant_id', $merchantID)->where('category_id', $categoryID);
+                $query->where('shop_id', $merchantID)->where('category_id', $categoryID);
             })->where('type', $type)->with('product.category')->get();
 
             // If no product inventories found
@@ -179,7 +183,7 @@ class ProductInventoryController extends BaseController
             $productsData = $productInventories->map(function ($inventory) {
                 return [
                     'product_id' => $inventory->product->id,
-                    'price' =>  ($inventory->product->price),
+                    'price' => ($inventory->product->price),
                     'image' => Storage::url($inventory->product->image),
                     'category_id' => $inventory->product->category->id,
                     'category_name' => $inventory->product->category->name,
@@ -221,7 +225,7 @@ class ProductInventoryController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -229,10 +233,10 @@ class ProductInventoryController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Find the product by ID
-            $product = Product::where('merchant_id', $merchantID)->find($productId);
+            $product = Product::where('shop_id', $merchantID)->find($productId);
 
-            if (!$product) {
-                return $this->sendError('Product not found.', ['Product not found with ID ' . $productId]);
+            if (! $product) {
+                return $this->sendError('Product not found.', ['Product not found with ID '.$productId]);
             }
 
             // Get shop inventory for the product
@@ -241,7 +245,7 @@ class ProductInventoryController extends BaseController
                 ->first();
 
             // Check if shop has enough quantity to transfer
-            if (!$shopInventory || $shopInventory->quantity < $quantity) {
+            if (! $shopInventory || $shopInventory->quantity < $quantity) {
                 return $this->sendError('Not enough quantity in shop to transfer.');
             }
 
@@ -268,6 +272,7 @@ class ProductInventoryController extends BaseController
                 return $this->sendResponse([], 'Transfer from shop to stock successful.');
             } catch (\Exception $e) {
                 DB::rollBack();
+
                 return $this->sendError('Error during transfer.', [$e->getMessage()]);
             }
 
@@ -300,7 +305,7 @@ class ProductInventoryController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -308,10 +313,10 @@ class ProductInventoryController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Find the product by ID
-            $product = Product::where('merchant_id', $merchantID)->find($productId);
+            $product = Product::where('shop_id', $merchantID)->find($productId);
 
-            if (!$product) {
-                return $this->sendError('Product not found.', ['Product not found with ID ' . $productId]);
+            if (! $product) {
+                return $this->sendError('Product not found.', ['Product not found with ID '.$productId]);
             }
 
             // Get stock inventory for the product
@@ -320,7 +325,7 @@ class ProductInventoryController extends BaseController
                 ->first();
 
             // Check if stock has enough quantity to transfer
-            if (!$stockInventory || $stockInventory->quantity < $quantity) {
+            if (! $stockInventory || $stockInventory->quantity < $quantity) {
                 return $this->sendError('Not enough quantity in stock to transfer.');
             }
 
@@ -348,6 +353,7 @@ class ProductInventoryController extends BaseController
                 return $this->sendResponse([], 'Transfer from stock to shop successful.');
             } catch (\Exception $e) {
                 DB::rollBack();
+
                 return $this->sendError('Error during transfer.', [$e->getMessage()]);
             }
 
@@ -378,7 +384,7 @@ class ProductInventoryController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -386,10 +392,10 @@ class ProductInventoryController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Find the product by ID
-            $product = Product::where('merchant_id', $merchantID)->find($productId);
+            $product = Product::where('shop_id', $merchantID)->find($productId);
 
-            if (!$product) {
-                return $this->sendError('Product not found.', ['Product not found with ID ' . $productId]);
+            if (! $product) {
+                return $this->sendError('Product not found.', ['Product not found with ID '.$productId]);
             }
 
             // Get transportation inventory for the product
@@ -397,7 +403,7 @@ class ProductInventoryController extends BaseController
                 ->where('type', 'transportation')
                 ->first();
 
-            if (!$transportationInventory || $transportationInventory->quantity < $quantity) {
+            if (! $transportationInventory || $transportationInventory->quantity < $quantity) {
                 return $this->sendError('Not enough quantity in transportation to transfer.');
             }
 
@@ -424,6 +430,7 @@ class ProductInventoryController extends BaseController
                 return $this->sendResponse([], 'Transfer from transportation to shop successful.');
             } catch (\Exception $e) {
                 DB::rollBack();
+
                 return $this->sendError('Error during transfer.', [$e->getMessage()]);
             }
 
@@ -455,7 +462,7 @@ class ProductInventoryController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -463,10 +470,10 @@ class ProductInventoryController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Find the product by ID
-            $product = Product::where('merchant_id', $merchantID)->find($productId);
+            $product = Product::where('shop_id', $merchantID)->find($productId);
 
-            if (!$product) {
-                return $this->sendError('Product not found.', ['Product not found with ID ' . $productId]);
+            if (! $product) {
+                return $this->sendError('Product not found.', ['Product not found with ID '.$productId]);
             }
 
             // Get transportation inventory for the product
@@ -474,7 +481,7 @@ class ProductInventoryController extends BaseController
                 ->where('type', 'transportation')
                 ->first();
 
-            if (!$transportationInventory || $transportationInventory->quantity < $quantity) {
+            if (! $transportationInventory || $transportationInventory->quantity < $quantity) {
                 return $this->sendError('Not enough quantity in transportation to transfer.');
             }
 
@@ -501,6 +508,7 @@ class ProductInventoryController extends BaseController
                 return $this->sendResponse([], 'Transfer from transportation to stock successful.');
             } catch (\Exception $e) {
                 DB::rollBack();
+
                 return $this->sendError('Error during transfer.', [$e->getMessage()]);
             }
 
@@ -532,7 +540,7 @@ class ProductInventoryController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -540,10 +548,10 @@ class ProductInventoryController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Find the product by ID
-            $product = Product::where('merchant_id', $merchantID)->find($productId);
+            $product = Product::where('shop_id', $merchantID)->find($productId);
 
-            if (!$product) {
-                return $this->sendError('Product not found.', ['Product not found with ID ' . $productId]);
+            if (! $product) {
+                return $this->sendError('Product not found.', ['Product not found with ID '.$productId]);
             }
 
             // Get shop inventory for the product
@@ -551,7 +559,7 @@ class ProductInventoryController extends BaseController
                 ->where('type', 'shop')
                 ->first();
 
-            if (!$shopInventory || $shopInventory->quantity < $quantity) {
+            if (! $shopInventory || $shopInventory->quantity < $quantity) {
                 return $this->sendError('Not enough quantity in shop to transfer.');
             }
 
@@ -578,6 +586,7 @@ class ProductInventoryController extends BaseController
                 return $this->sendResponse([], 'Transfer from shop to transportation successful.');
             } catch (\Exception $e) {
                 DB::rollBack();
+
                 return $this->sendError('Error during transfer.', [$e->getMessage()]);
             }
 
@@ -609,7 +618,7 @@ class ProductInventoryController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -617,10 +626,10 @@ class ProductInventoryController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Find the product by ID
-            $product = Product::where('merchant_id', $merchantID)->find($productId);
+            $product = Product::where('shop_id', $merchantID)->find($productId);
 
-            if (!$product) {
-                return $this->sendError('Product not found.', ['Product not found with ID ' . $productId]);
+            if (! $product) {
+                return $this->sendError('Product not found.', ['Product not found with ID '.$productId]);
             }
 
             // Get stock inventory for the product
@@ -628,7 +637,7 @@ class ProductInventoryController extends BaseController
                 ->where('type', 'stock')
                 ->first();
 
-            if (!$stockInventory || $stockInventory->quantity < $quantity) {
+            if (! $stockInventory || $stockInventory->quantity < $quantity) {
                 return $this->sendError('Not enough quantity in stock to transfer.');
             }
 
@@ -655,6 +664,7 @@ class ProductInventoryController extends BaseController
                 return $this->sendResponse([], 'Transfer from stock to transportation successful.');
             } catch (\Exception $e) {
                 DB::rollBack();
+
                 return $this->sendError('Error during transfer.', [$e->getMessage()]);
             }
 
@@ -680,7 +690,7 @@ class ProductInventoryController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -688,10 +698,10 @@ class ProductInventoryController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Find the product
-            $product = Product::where('merchant_id', $merchantID)->find($request->product_id);
+            $product = Product::where('shop_id', $merchantID)->find($request->product_id);
 
-            if (!$product) {
-                return $this->sendError('Product not found.', ['Product not found with ID ' . $request->product_id]);
+            if (! $product) {
+                return $this->sendError('Product not found.', ['Product not found with ID '.$request->product_id]);
             }
 
             // Check for existing inventories
@@ -723,7 +733,6 @@ class ProductInventoryController extends BaseController
                     'quantity' => $request->stock_quantity,
                 ]);
             }
-
 
             // Calculate instock and in shop quantities
             $product->in_stock_quantity = $product->inventories->where('type', 'stock')->sum('quantity');

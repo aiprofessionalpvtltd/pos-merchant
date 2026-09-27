@@ -29,14 +29,14 @@ class ReportService
         [$from, $to] = $this->period($filters);
         $groupBy = $filters['group_by'] ?? 'day';
 
-        $orders = Order::where('merchant_id', $merchant->id)->whereNotNull('paid_at')->whereBetween('paid_at', [$from, $to]);
+        $orders = Order::where('shop_id', $merchant->id)->whereNotNull('paid_at')->whereBetween('paid_at', [$from, $to]);
 
         $gross = Money::toMinor((float) (clone $orders)->sum('total_price'), 'USD');
         $vat = Money::toMinor((float) (clone $orders)->sum('vat'), 'USD');
         $fees = Money::toMinor((float) (clone $orders)->sum('exelo_amount'), 'USD');
         $orderCount = (clone $orders)->count();
         $productsSold = (int) OrderItem::join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->where('orders.merchant_id', $merchant->id)->whereNotNull('orders.paid_at')->whereBetween('orders.paid_at', [$from, $to])
+            ->where('orders.shop_id', $merchant->id)->whereNotNull('orders.paid_at')->whereBetween('orders.paid_at', [$from, $to])
             ->sum('order_items.quantity');
 
         return [
@@ -64,7 +64,7 @@ class ReportService
      */
     private function salesRows(Merchant $merchant, Carbon $from, Carbon $to, string $groupBy): array
     {
-        $query = Order::where('merchant_id', $merchant->id)->whereNotNull('paid_at')->whereBetween('paid_at', [$from, $to]);
+        $query = Order::where('shop_id', $merchant->id)->whereNotNull('paid_at')->whereBetween('paid_at', [$from, $to]);
 
         if ($groupBy === 'payment_method') {
             $rows = (clone $query)->selectRaw('payment_method as bucket, COUNT(*) as order_count, SUM(total_price) as gross, SUM(total_price - vat - exelo_amount) as net')
@@ -91,7 +91,7 @@ class ReportService
             ->groupBy('bucket')->orderBy('bucket_date')->get();
 
         $productsSoldByBucket = OrderItem::join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->where('orders.merchant_id', $merchant->id)->whereNotNull('orders.paid_at')->whereBetween('orders.paid_at', [$from, $to])
+            ->where('orders.shop_id', $merchant->id)->whereNotNull('orders.paid_at')->whereBetween('orders.paid_at', [$from, $to])
             ->selectRaw("DATE_FORMAT(orders.paid_at, '$format') as bucket, SUM(order_items.quantity) as qty")
             ->groupBy('bucket')->pluck('qty', 'bucket');
 
@@ -110,7 +110,7 @@ class ReportService
     private function salesRow(string $column, string $bucket, string $label, Merchant $merchant, Carbon $from, Carbon $to, $row): array
     {
         $productsSold = (int) OrderItem::join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->where('orders.merchant_id', $merchant->id)
+            ->where('orders.shop_id', $merchant->id)
             ->whereNotNull('orders.paid_at')->whereBetween('orders.paid_at', [$from, $to])
             ->where("orders.$column", $bucket)
             ->sum('order_items.quantity');
@@ -138,7 +138,7 @@ class ReportService
     {
         [$from, $to] = $this->period($filters);
 
-        $products = Product::where('merchant_id', $merchant->id)
+        $products = Product::where('shop_id', $merchant->id)
             ->when($filters['category_id'] ?? null, fn ($q, $categoryId) => $q->where('category_id', $categoryId))
             ->with(['category', 'inventories'])
             ->get();
@@ -149,7 +149,7 @@ class ReportService
         $rows = [];
 
         $soldByProduct = OrderItem::join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->where('orders.merchant_id', $merchant->id)->whereNotNull('orders.paid_at')->whereBetween('orders.paid_at', [$from, $to])
+            ->where('orders.shop_id', $merchant->id)->whereNotNull('orders.paid_at')->whereBetween('orders.paid_at', [$from, $to])
             ->selectRaw('order_items.product_id, SUM(order_items.quantity) as qty')->groupBy('order_items.product_id')->pluck('qty', 'product_id');
 
         foreach ($products as $product) {
@@ -198,7 +198,7 @@ class ReportService
     {
         $query = DB::table('inventory_histories')
             ->join('products', 'products.id', '=', 'inventory_histories.product_id')
-            ->where('products.merchant_id', $merchant->id)
+            ->where('products.shop_id', $merchant->id)
             ->when($categoryId, fn ($q) => $q->where('products.category_id', $categoryId))
             ->whereBetween('inventory_histories.created_at', [$from, $to]);
 
@@ -261,7 +261,7 @@ class ReportService
     {
         $rows = OrderItem::join('orders', 'orders.id', '=', 'order_items.order_id')
             ->join('products', 'products.id', '=', 'order_items.product_id')
-            ->where('products.merchant_id', $merchant->id)
+            ->where('products.shop_id', $merchant->id)
             ->whereNotNull('orders.paid_at')->whereBetween('orders.paid_at', [$from, $to])
             ->when($filters['category_id'] ?? null, fn ($q, $categoryId) => $q->where('products.category_id', $categoryId))
             ->selectRaw('products.id as product_id, products.product_name, products.bar_code, products.category_id, products.price, products.image, products.image_file_id, SUM(order_items.quantity) as units')
@@ -276,7 +276,7 @@ class ReportService
      */
     private function stockRows(Merchant $merchant, string $location, array $filters): \Illuminate\Support\Collection
     {
-        $rows = Product::where('merchant_id', $merchant->id)
+        $rows = Product::where('shop_id', $merchant->id)
             ->when($filters['category_id'] ?? null, fn ($q, $categoryId) => $q->where('category_id', $categoryId))
             ->whereHas('inventories', fn ($q) => $q->where('type', $location)->where('quantity', '>', 0))
             ->with('inventories')
@@ -297,7 +297,7 @@ class ReportService
     {
         $productIds = DB::table('inventory_histories')
             ->join('products', 'products.id', '=', 'inventory_histories.product_id')
-            ->where('products.merchant_id', $merchant->id)
+            ->where('products.shop_id', $merchant->id)
             ->where('inventory_histories.kind', 'opening')->where('inventory_histories.to_location', $location)
             ->whereBetween('inventory_histories.created_at', [$from, $to])
             ->selectRaw('products.id as product_id, SUM(inventory_histories.quantity) as units')
@@ -350,13 +350,13 @@ class ReportService
     {
         [$from, $to] = $this->period($filters);
 
-        $categories = Category::where('merchant_id', $merchant->id)
+        $categories = Category::where('shop_id', $merchant->id)
             ->when($filters['category_id'] ?? null, fn ($q, $categoryId) => $q->whereKey($categoryId))
             ->with(['products' => fn ($q) => $q->when($filters['q'] ?? null, fn ($inner, $term) => $inner->where('product_name', 'like', "%$term%"))->with('inventories')])
             ->get();
 
         $soldByProduct = OrderItem::join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->where('orders.merchant_id', $merchant->id)->whereNotNull('orders.paid_at')->whereBetween('orders.paid_at', [$from, $to])
+            ->where('orders.shop_id', $merchant->id)->whereNotNull('orders.paid_at')->whereBetween('orders.paid_at', [$from, $to])
             ->selectRaw('order_items.product_id, SUM(order_items.quantity) as qty, SUM(order_items.quantity * order_items.price) as revenue')
             ->groupBy('order_items.product_id')->get()->keyBy('product_id');
 

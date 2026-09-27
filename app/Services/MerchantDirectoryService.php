@@ -5,9 +5,12 @@ namespace App\Services;
 use App\Models\Employee;
 use App\Models\Invoice;
 use App\Models\Merchant;
+use App\Models\MerchantAccount;
 use App\Models\MerchantSubscription;
 use App\Models\Order;
+use App\Models\Shop;
 use App\Models\Transaction;
+use Illuminate\Support\Collection;
 
 /**
  * What the admin merchant pages show. `listRow` expects the merchant loaded with
@@ -39,7 +42,7 @@ class MerchantDirectoryService
      */
     public function detail(Merchant $merchant): array
     {
-        $merchant->loadMissing('user');
+        $merchant->loadMissing(['user', 'merchantAccount', 'logoFile']);
 
         $currentSubscription = MerchantSubscription::where('merchant_id', $merchant->id)
             ->with('subscriptionPlan')
@@ -47,7 +50,7 @@ class MerchantDirectoryService
             ->latest('id')
             ->first();
 
-        $orders = Order::where('merchant_id', $merchant->id);
+        $orders = Order::where('shop_id', $merchant->id);
         $invoices = Invoice::where('merchant_id', $merchant->id);
         $transactions = Transaction::where('merchant_id', $merchant->id);
 
@@ -55,6 +58,10 @@ class MerchantDirectoryService
             'address' => $this->address($merchant),
             'plan' => $this->status->plan($currentSubscription),
             'pin' => $merchant->user->exists ? $this->status->pin($merchant->user) : null,
+            'is_active' => $merchant->is_approved && ! $merchant->trashed(),
+            'logo_url' => $merchant->logoFile?->url(),
+            'merchant_account' => $this->merchantAccount($merchant),
+            'sibling_shops' => $this->siblingShops($merchant),
             'wallets' => [
                 'Zaad' => $merchant->zaad_number,
                 'eDahab' => $merchant->edahab_number,
@@ -89,6 +96,59 @@ class MerchantDirectoryService
                 'transactions' => $transactions->latest()->limit(self::RECENT_LIMIT)->get(),
             ],
         ];
+    }
+
+    /**
+     * The merchant account that owns this shop, with the verification state the
+     * shop-level page has no other way to show. Null for shops with no account
+     * row (older data, or a single-shop merchant that predates the split).
+     *
+     * @return array<string, mixed>|null
+     */
+    private function merchantAccount(Merchant $merchant): ?array
+    {
+        $account = $merchant->merchantAccount;
+
+        if (! $account instanceof MerchantAccount) {
+            return null;
+        }
+
+        return [
+            'id' => $account->id,
+            'name' => $account->fullName(),
+            'phone_number' => $account->phone_number,
+            'email' => $account->email,
+            'phone_verified' => $account->isPhoneVerified(),
+            'phone_verified_at' => $account->phone_verified_at,
+        ];
+    }
+
+    /**
+     * Every shop of the same merchant account, so the admin sees the whole
+     * business from any one of its shops. Each row carries just enough for a
+     * summary row: its own plan, staff count and open/closed state.
+     *
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function siblingShops(Merchant $merchant): Collection
+    {
+        if (! $merchant->merchant_id) {
+            return collect();
+        }
+
+        return Shop::where('merchant_id', $merchant->merchant_id)
+            ->with('currentSubscription.subscriptionPlan')
+            ->withCount(['employees' => fn ($query) => $query->where('status', 'active')])
+            ->orderBy('id')
+            ->get()
+            ->map(fn (Shop $shop) => [
+                'id' => $shop->id,
+                'business_name' => $shop->business_name,
+                'is_current' => $shop->id === $merchant->id,
+                'is_active' => $shop->is_approved && ! $shop->trashed(),
+                'plan' => $this->status->plan($shop->currentSubscription)['name'],
+                'staff_count' => (int) $shop->employees_count,
+            ]);
     }
 
     private function address(Merchant $merchant): ?string

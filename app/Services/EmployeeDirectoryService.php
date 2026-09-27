@@ -28,12 +28,13 @@ class EmployeeDirectoryService
     {
         return Employee::query()
             ->select('employees.*')
-            ->with(['merchant', 'user', 'permissions.permission'])
+            ->with(['merchant', 'merchantAccount', 'user', 'permissions.permission'])
             ->selectSub($this->shiftSub('COUNT(*)'), 'shifts_count')
             ->selectSub($this->shiftSub('MAX(start_time)'), 'last_shift_at')
             ->selectSub($this->shiftSub('COUNT(*)', 'AND end_time IS NULL'), 'open_shifts')
             ->selectSub($this->orderSub('COUNT(*)'), 'orders_count')
-            ->selectSub($this->orderSub('COALESCE(SUM(total_price), 0)'), 'orders_total');
+            ->selectSub($this->orderSub('COALESCE(SUM(total_price), 0)'), 'orders_total')
+            ->selectSub($this->otherShopsSub(), 'other_shops_count');
     }
 
     public function filterStatus(Builder $query, ?string $status): void
@@ -55,7 +56,9 @@ class EmployeeDirectoryService
     public function listRow(Employee $employee): array
     {
         return [
-            'merchant' => $employee->merchant?->business_name ?: trim($employee->merchant?->first_name.' '.$employee->merchant?->last_name),
+            'shop' => $employee->merchant?->business_name ?: trim($employee->merchant?->first_name.' '.$employee->merchant?->last_name),
+            'merchant_account' => $employee->merchantAccount?->fullName(),
+            'other_shops' => (int) $employee->other_shops_count,
             'name' => trim($employee->first_name.' '.$employee->last_name),
             'salary' => $this->salary($employee),
             'status' => $this->status($employee, (int) $employee->open_shifts > 0),
@@ -73,13 +76,13 @@ class EmployeeDirectoryService
      */
     public function detail(Employee $employee): array
     {
-        $employee->loadMissing(['merchant', 'user', 'permissions.permission']);
+        $employee->loadMissing(['merchant', 'merchantAccount', 'user', 'permissions.permission']);
 
         $shifts = Shift::where('user_id', $employee->user_id)->with('editor')->latest('id')->get();
         $open = $shifts->first(fn (Shift $shift) => $shift->start_time && ! $shift->end_time);
         $seconds = $shifts->sum(fn (Shift $shift) => $this->shifts->seconds($shift));
 
-        $orders = Order::where('user_id', $employee->user_id)->where('merchant_id', $employee->shop_id);
+        $orders = Order::where('user_id', $employee->user_id)->where('shop_id', $employee->shop_id);
         $paid = (clone $orders)->whereRaw("LOWER(order_status) IN ('complete','paid')");
 
         return [
@@ -88,6 +91,7 @@ class EmployeeDirectoryService
             'pin' => $employee->user?->hasPin() ? 'Set' : 'Not set',
             'locked' => $employee->user?->locked_until?->isFuture() ?? false,
             'permissions' => $employee->permissions->pluck('permission')->filter()->values(),
+            'other_shops' => $this->otherShops($employee),
             'open_shift' => $open ? ['started_at' => $open->start_time, 'elapsed' => $this->shifts->formatDuration($this->shifts->seconds($open))] : null,
             'shift_count' => $shifts->count(),
             'worked' => $this->shifts->formatDuration($seconds),
@@ -121,6 +125,33 @@ class EmployeeDirectoryService
         return ['key' => $key, 'label' => self::STATUSES[$key], 'color' => ['on_shift' => 'success', 'off_shift' => 'secondary', 'disabled' => 'warning', 'removed' => 'danger'][$key]];
     }
 
+    /**
+     * The other active shops this same person (same `user_id`) works in, so the admin
+     * can see shared staff without leaving the page. Empty for a person with no login
+     * yet, since two staff records with no login can't be told apart as the same person.
+     *
+     * @return \Illuminate\Support\Collection<int, array<string, mixed>>
+     */
+    private function otherShops(Employee $employee): \Illuminate\Support\Collection
+    {
+        if (! $employee->user_id) {
+            return collect();
+        }
+
+        return Employee::where('user_id', $employee->user_id)
+            ->where('id', '!=', $employee->id)
+            ->active()
+            ->with('merchant')
+            ->orderBy('first_name')
+            ->get()
+            ->map(fn (Employee $other) => [
+                'employee_id' => $other->id,
+                'shop_id' => $other->shop_id,
+                'shop_name' => $other->merchant?->business_name,
+                'role' => $other->role,
+            ]);
+    }
+
     private function salary(Employee $employee): ?string
     {
         if ($employee->salary === null) {
@@ -141,7 +172,21 @@ class EmployeeDirectoryService
     {
         return DB::table('orders')->selectRaw($aggregate)
             ->whereColumn('orders.user_id', 'employees.user_id')
-            ->whereColumn('orders.merchant_id', 'employees.shop_id')
+            ->whereColumn('orders.shop_id', 'employees.shop_id')
             ->whereRaw("LOWER(orders.order_status) IN ('complete','paid')");
+    }
+
+    /**
+     * How many of this person's *other* active shops they also work in, so the list
+     * shows at a glance who is shared staff (see docs/data-model.md, "Staff in
+     * several shops"). 0 for a person with no login yet or only this one record.
+     */
+    private function otherShopsSub()
+    {
+        return DB::table('employees as other_employees')->selectRaw('COUNT(*)')
+            ->whereColumn('other_employees.user_id', 'employees.user_id')
+            ->whereColumn('other_employees.id', '!=', 'employees.id')
+            ->where('other_employees.status', 'active')
+            ->whereNull('other_employees.removed_at');
     }
 }

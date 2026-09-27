@@ -32,7 +32,8 @@ it('lists every employee with shop, role, salary, access, shifts and completed s
 
     $row = staffRows(table($admin, 'admin.employees.index', [], ['phone_number'], '+252634990701'))['+252634990701'];
 
-    expect($row['merchant'])->toBe('Exelo Retail')
+    expect($row['shop'])->toBe('Exelo Retail')
+        ->and($row['other_shops'])->toBe(0)
         ->and($row['name'])->toBe('Layla Ahmed')
         ->and($row['role'])->toBe('Cashier')
         ->and($row['salary_display'])->toBe('$4.50 / daily')
@@ -150,4 +151,29 @@ it('shows the Employees menu entry to users who may open the page', function () 
     $admin = merchantPagesAdmin(['view-employee']);
 
     test()->actingAs($admin, 'web')->get(route('admin.employees.index'))->assertOk()->assertSee(route('admin.employees.index'), false);
+});
+
+it('shows shared staff: someone who works in more than one shop', function () {
+    [$owner, $admin] = staffShop();
+    $layla = makeStaff($owner, '+252634990716', ['pos']);
+
+    $secondShop = App\Models\Merchant::create(['phone_number' => '+252634990900', 'business_name' => 'Exelo Two', 'is_approved' => true]);
+    $secondRecord = App\Models\Employee::create([
+        'user_id' => $layla->user_id, 'shop_id' => $secondShop->id, 'phone_number' => '+252634990716',
+        'first_name' => 'Layla', 'last_name' => 'Ahmed', 'dob' => '1998-04-12', 'role' => 'Supervisor', 'status' => 'active',
+    ]);
+
+    $row = staffRows(table($admin, 'admin.employees.index', [], ['phone_number'], '+252634990716'))['+252634990716'];
+    expect($row['other_shops'])->toBe(1);
+
+    test()->actingAs($admin, 'web')->get(route('admin.employees.view', $layla->id))
+        ->assertOk()
+        ->assertSee('Other shops this person works in')
+        ->assertSee('Exelo Two')
+        ->assertSee('Supervisor');
+
+    test()->actingAs($admin, 'web')->get(route('admin.employees.view', $secondRecord->id))
+        ->assertOk()
+        ->assertSee('Exelo Retail')
+        ->assertSee('Cashier');
 });

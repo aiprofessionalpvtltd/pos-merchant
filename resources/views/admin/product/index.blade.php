@@ -34,6 +34,7 @@
                 <table id="ProductTable" class="table table-striped">
                     <thead>
                     <tr>
+                        <th>Shop</th>
                         <th>Merchant</th>
                         <th>Product</th>
                         <th>Barcode</th>
@@ -73,12 +74,13 @@
                     }
                 },
                 columns: [
-                    {data: 'merchant', name: 'merchant'},
+                    {data: 'shop', name: 'shop'},
+                    {data: 'merchant_account', name: 'merchant_account', orderable: false, searchable: false, defaultContent: '—'},
                     {data: 'product_name', name: 'product_name'},
                     {data: 'bar_code', name: 'bar_code', defaultContent: '—'},
                     {data: 'category', name: 'category', defaultContent: '—'},
                     {data: 'price_display', name: 'price_display', searchable: false},
-                    {data: 'shop', name: 'shop', searchable: false},
+                    {data: 'shelf_qty', name: 'shelf_qty', searchable: false},
                     {data: 'stock', name: 'stock', searchable: false},
                     {data: 'transit', name: 'transit', searchable: false},
                     {data: 'status', name: 'status', orderable: false, searchable: false, render: function (status) {
@@ -87,7 +89,7 @@
                     {data: 'created_at', name: 'created_at'},
                     {data: 'action', name: 'action', orderable: false, searchable: false}
                 ],
-                order: [[9, 'desc']]
+                order: [[10, 'desc']]
             });
 
             $('#statusFilter').on('change', function () {

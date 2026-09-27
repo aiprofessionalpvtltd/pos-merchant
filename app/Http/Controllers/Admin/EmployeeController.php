@@ -24,12 +24,15 @@ class EmployeeController extends Controller
         if ($request->ajax()) {
             return DataTables::of($this->employees->listQuery())
                 ->filter(fn ($query) => $this->employees->filterStatus($query, $request->input('status')), true)
-                ->addColumn('merchant', fn (Employee $employee) => $this->employees->listRow($employee)['merchant'])
-                ->filterColumn('merchant', fn ($query, $keyword) => $query->whereHas('merchant', fn ($merchant) => $merchant
+                ->addColumn('shop', fn (Employee $employee) => $this->employees->listRow($employee)['shop'])
+                ->filterColumn('shop', fn ($query, $keyword) => $query->whereHas('merchant', fn ($merchant) => $merchant
                     ->where('business_name', 'like', "%{$keyword}%")
                     ->orWhere('first_name', 'like', "%{$keyword}%")
                     ->orWhere('last_name', 'like', "%{$keyword}%")))
-                ->orderColumn('merchant', 'employees.shop_id $1')
+                ->orderColumn('shop', 'employees.shop_id $1')
+                ->addColumn('merchant_account', fn (Employee $employee) => $this->employees->listRow($employee)['merchant_account'])
+                ->addColumn('other_shops', fn (Employee $employee) => $this->employees->listRow($employee)['other_shops'])
+                ->orderColumn('other_shops', 'other_shops_count $1')
                 ->addColumn('name', fn (Employee $employee) => $this->employees->listRow($employee)['name'])
                 ->filterColumn('name', fn ($query, $keyword) => $query->whereRaw("CONCAT(employees.first_name, ' ', employees.last_name) LIKE ?", ["%{$keyword}%"]))
                 ->orderColumn('name', 'employees.first_name $1')

@@ -94,10 +94,24 @@
 
         <!-- Profile -->
         <div class="card">
-            <div class="card-header"><h5 class="card-title mb-0">Profile</h5></div>
+            <div class="card-header">
+                <h5 class="card-title mb-0">Shop profile</h5>
+            </div>
             <div class="card-body">
                 <div class="row">
-                    <div class="col-md-6">
+                    <div class="col-md-2 text-center mb-3">
+                        @if($detail['logo_url'])
+                            <img src="{{ $detail['logo_url'] }}" alt="{{ $merchant->business_name }} logo" class="rounded border" style="width: 96px; height: 96px; object-fit: cover;">
+                        @else
+                            <div class="rounded border d-flex align-items-center justify-content-center bg-light text-muted mx-auto" style="width: 96px; height: 96px;">
+                                <i class="fas fa-store fa-2x"></i>
+                            </div>
+                        @endif
+                        <div class="mt-2">
+                            <span class="badge bg-{{ $detail['is_active'] ? 'success' : 'secondary' }}">{{ $detail['is_active'] ? 'Active shop' : 'Closed' }}</span>
+                        </div>
+                    </div>
+                    <div class="col-md-5">
                         <h6 class="m-3"><strong>First Name:</strong> {{ $merchant->first_name }}</h6>
                         <h6 class="m-3"><strong>Last Name:</strong> {{ $merchant->last_name }}</h6>
                         <h6 class="m-3"><strong>DOB:</strong> {{ $merchant->dob }}</h6>
@@ -107,7 +121,7 @@
                         <h6 class="m-3"><strong>Email:</strong> {{ $merchant->email ?? '—' }}</h6>
                         <h6 class="m-3"><strong>Phone NO:</strong> {{ $merchant->phone_number }}</h6>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-5">
                         <h6 class="m-3"><strong>Verification Status:</strong>
                             <span class="badge bg-{{ $merchant->confirmation_status ? 'success' : 'danger' }}">{{ $merchant->confirmation_status ? 'Verified' : 'Not Verified' }}</span></h6>
                         <h6 class="m-3"><strong>Account Approval Status:</strong>
@@ -116,6 +130,64 @@
                         <h6 class="m-3"><strong>Last Updated At:</strong> {{ $merchant->updated_at->format('Y-m-d H:i:s') }}</h6>
                     </div>
                 </div>
+            </div>
+        </div>
+
+        <!-- Merchant account: the owner behind this shop, and every shop they run -->
+        <div class="card">
+            <div class="card-header"><h5 class="card-title mb-0">Merchant account</h5></div>
+            <div class="card-body">
+                @if($detail['merchant_account'])
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <h6 class="m-3"><strong>Owner:</strong> {{ $detail['merchant_account']['name'] }}</h6>
+                            <h6 class="m-3"><strong>Owner's phone:</strong> {{ $detail['merchant_account']['phone_number'] ?? '—' }}</h6>
+                            <h6 class="m-3"><strong>Owner's email:</strong> {{ $detail['merchant_account']['email'] ?? '—' }}</h6>
+                        </div>
+                        <div class="col-md-6">
+                            <h6 class="m-3"><strong>Phone verification:</strong>
+                                <span class="badge bg-{{ $detail['merchant_account']['phone_verified'] ? 'success' : 'warning' }}">
+                                    {{ $detail['merchant_account']['phone_verified'] ? 'Verified' : 'Not verified' }}
+                                </span>
+                            </h6>
+                            @if($detail['merchant_account']['phone_verified_at'])
+                                <h6 class="m-3 text-muted">since {{ $detail['merchant_account']['phone_verified_at']->format('d M Y') }}</h6>
+                            @endif
+                        </div>
+                    </div>
+
+                    <h6 class="mt-4">Shops run by this merchant ({{ $detail['sibling_shops']->count() }})</h6>
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-hover mb-0">
+                            <thead>
+                            <tr>
+                                <th>Shop</th>
+                                <th>Plan</th>
+                                <th>Active staff</th>
+                                <th>Status</th>
+                                <th></th>
+                            </tr>
+                            </thead>
+                            <tbody>
+                            @foreach($detail['sibling_shops'] as $shop)
+                                <tr class="{{ $shop['is_current'] ? 'table-primary' : '' }}">
+                                    <td>{{ $shop['business_name'] ?? '—' }} @if($shop['is_current'])<span class="badge bg-primary ms-1">Viewing</span>@endif</td>
+                                    <td>{{ $shop['plan'] }}</td>
+                                    <td>{{ $shop['staff_count'] }}</td>
+                                    <td><span class="badge bg-{{ $shop['is_active'] ? 'success' : 'secondary' }}">{{ $shop['is_active'] ? 'Active' : 'Closed' }}</span></td>
+                                    <td>
+                                        @unless($shop['is_current'])
+                                            <a href="{{ route('view-merchant', $shop['id']) }}" class="btn btn-sm btn-outline-primary">View</a>
+                                        @endunless
+                                    </td>
+                                </tr>
+                            @endforeach
+                            </tbody>
+                        </table>
+                    </div>
+                @else
+                    <p class="text-muted mb-0">This shop has no merchant account on file yet (older data, or created before accounts and shops were split).</p>
+                @endif
             </div>
         </div>
 
@@ -186,7 +258,7 @@
         </div>
 
         <!-- Employees -->
-        <h3>Employees ({{ $detail['employees']->count() }})</h3>
+        <h3>Employees of this shop ({{ $detail['employees']->count() }})</h3>
         <div class="table-responsive mb-5">
             <table class="table table-bordered table-hover">
                 <thead>

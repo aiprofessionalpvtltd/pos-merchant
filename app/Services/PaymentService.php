@@ -27,10 +27,23 @@ class PaymentService
         $card = config('exelo.payments.card');
 
         return [
+            'shop' => $this->shopSummary($merchant),
             'wallets' => $wallets,
             'accepts' => $this->acceptedRails($merchant),
             'card' => ['enabled' => $card['enabled'], 'provider' => 'braintree', 'environment' => $card['environment']],
         ];
+    }
+
+    /**
+     * Which shop a payment endpoint is acting on: always the token's current shop,
+     * never one the caller picks. Included so an app juggling several shops can
+     * tell them apart without a second call.
+     *
+     * @return array{id: int, business_name: ?string}
+     */
+    public function shopSummary(Merchant $merchant): array
+    {
+        return ['id' => $merchant->id, 'business_name' => $merchant->business_name];
     }
 
     /**
@@ -78,6 +91,7 @@ class PaymentService
 
         $quote = [
             'quote_id' => 'qte_'.Str::upper(Str::ulid()->toBase32()),
+            'shop' => $this->shopSummary($merchant),
             'amount' => Money::of($amount, $currency),
             'customer_charge' => Money::of($customerCharge, $currency),
             'merchant_receives' => Money::of($merchantReceives, $currency),

@@ -20,7 +20,8 @@ class ProductResource extends JsonResource
             'product_name' => $this->product_name,
             'category_id' => $this->category_id,
             'category' => new CategoryResource($this->whenLoaded('category')), // Assuming you have a CategoryResource
-            'merchant_id' => $this->merchant_id,
+            // Legacy field name: the shop id (products.shop_id), not the real merchant id.
+            'merchant_id' => $this->shop_id,
             'merchant' => new MerchantResource($this->whenLoaded('merchant')),
             'price' => $this->price,
             'price_in_sls' => $this->price_sls,

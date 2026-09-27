@@ -30,9 +30,10 @@
                     </div>
 
                     <div class="col-sm-6 text-end">
-                        <h6 class="mb-3">Merchant Details:</h6>
+                        <h6 class="mb-3">Shop Details:</h6>
                         <div><strong>Business Name:</strong> {{ $order->merchant->business_name }}</div>
                         <div><strong>Contact:</strong> {{ $order->merchant->first_name }} {{ $order->merchant->last_name }}</div>
+                        <div><strong>Merchant:</strong> {{ $order->merchantAccount?->fullName() ?? '—' }}</div>
                     </div>
                 </div>
 
@@ -54,8 +55,8 @@
                             <th>Product Name</th>
                             <th class="text-center">Quantity</th>
                             <th class="text-end">Unit Price</th>
-                            <th class="text-end">Total Price</th>
-                            <th class="text-end">Total Price (USD)</th>
+                            <th class="text-end">Total (USD)</th>
+                            <th class="text-end">Total (SLSH)</th>
                         </tr>
                         </thead>
                         <tbody>
@@ -64,9 +65,9 @@
                                 <td>{{ $index + 1 }}</td>
                                 <td>{{ $item->product->product_name }}</td>
                                 <td class="text-center">{{ $item->quantity }}</td>
-                                <td class="text-end">{{ $item->price }}</td>
-                                <td class="text-end">{{ $item->quantity * $item->price }}</td>
-                                <td class="text-end">${{ convertShillingToUSD($item->quantity * $item->price) }}</td>
+                                <td class="text-end">${{ number_format($item->price, 2) }}</td>
+                                <td class="text-end">${{ number_format($item->quantity * $item->price, 2) }}</td>
+                                <td class="text-end">{{ number_format(round($item->quantity * $item->price * $rate)) }} SLSH</td>
                             </tr>
                         @endforeach
                         </tbody>
@@ -82,10 +83,10 @@
                     </div>
                     <div class="col-sm-6 text-end">
                         <ul class="list-unstyled">
-                            <li><strong>Subtotal:</strong> {{ $subtotal }} (${{ convertShillingToUSD($subtotal) }})</li>
-                            <li><strong>VAT ({{ env('VAT_CHARGE') * 100 }}%):</strong> {{ $vat }} (${{ convertShillingToUSD($vat) }})</li>
-                            <li><strong>Exelo Amount:</strong> {{ $exeloAmount }} (${{ convertShillingToUSD($exeloAmount) }})</li>
-                            <li><strong>Total:</strong> {{ $totalPriceWithVAT }} (${{ convertShillingToUSD($totalPriceWithVAT) }})</li>
+                            <li><strong>Subtotal:</strong> ${{ number_format($subtotal, 2) }} ({{ number_format(round($subtotal * $rate)) }} SLSH)</li>
+                            <li><strong>VAT:</strong> ${{ number_format($vat, 2) }} ({{ number_format(round($vat * $rate)) }} SLSH)</li>
+                            <li><strong>Exelo Amount:</strong> ${{ number_format($exeloAmount, 2) }} ({{ number_format(round($exeloAmount * $rate)) }} SLSH)</li>
+                            <li><strong>Total:</strong> ${{ number_format($totalPriceWithVAT, 2) }} ({{ number_format($totalSls) }} SLSH)</li>
                         </ul>
                     </div>
                 </div>

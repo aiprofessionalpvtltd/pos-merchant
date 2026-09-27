@@ -166,6 +166,7 @@ which talk to a real payment rail.
       "payment_method": null,
       "item_count": 1,
       "unit_count": 1,
+      "paid_currency": "USD",
       "total": { "amount": 1890, "currency": "USD", "display": "$18.90" },
       "total_alt": { "amount": 151200, "currency": "SLSH", "display": "151,200 SLSH" },
       "has_signature": false,
@@ -183,6 +184,7 @@ which talk to a real payment rail.
       "payment_method": "cash",
       "item_count": 1,
       "unit_count": 6,
+      "paid_currency": "USD",
       "total": { "amount": 2520, "currency": "USD", "display": "$25.20" },
       "total_alt": { "amount": 201600, "currency": "SLSH", "display": "201,600 SLSH" },
       "has_signature": false,
@@ -254,6 +256,7 @@ whole shop's counts regardless of the filter.
       "subtotal":  { "amount": 2400, "currency": "USD", "display": "$24.00" },
       "vat":       { "amount": 120,  "currency": "USD", "display": "$1.20" },
       "fee":       { "amount": 0,    "currency": "USD", "display": "$0.00" },
+      "paid_currency": "USD",
       "total":     { "amount": 2520, "currency": "USD", "display": "$25.20" },
       "total_alt": { "amount": 201600, "currency": "SLSH", "display": "201,600 SLSH" },
       "vat_rate": 0.05,
@@ -297,6 +300,7 @@ whole shop's counts regardless of the filter.
       "subtotal":  { "amount": 1800, "currency": "USD", "display": "$18.00" },
       "vat":       { "amount": 90,   "currency": "USD", "display": "$0.90" },
       "fee":       { "amount": 0,    "currency": "USD", "display": "$0.00" },
+      "paid_currency": "USD",
       "total":     { "amount": 1890, "currency": "USD", "display": "$18.90" },
       "total_alt": { "amount": 151200, "currency": "SLSH", "display": "151,200 SLSH" },
       "vat_rate": 0.05,
@@ -396,6 +400,7 @@ on the day it happened, not the day it synced.
       "subtotal":  { "amount": 2600, "currency": "USD", "display": "$26.00" },
       "vat":       { "amount": 130,  "currency": "USD", "display": "$1.30" },
       "fee":       { "amount": 0,    "currency": "USD", "display": "$0.00" },
+      "paid_currency": "USD",
       "total":     { "amount": 2730, "currency": "USD", "display": "$27.30" },
       "total_alt": { "amount": 218400, "currency": "SLSH", "display": "218,400 SLSH" },
       "vat_rate": 0.05,
@@ -503,7 +508,7 @@ payment in the API.
 | --- | --- | --- | --- |
 | `rail` | enum | yes | `cash` \| `zaad` \| `edahab`. `card` and `nfc` are not built yet. |
 | `customer.wallet_number` | string | wallet rails | Must belong to the rail |
-| `amount_tendered` | Money | no | Cash only, USD: returns `change_due` |
+| `amount_tendered` | Money | no | Cash only, **`USD` or `SLSH`**: returns `change_due` in that same currency |
 | `idempotency_key` | string | yes | UUID, one per attempt |
 
 **Response `202`: wallet, awaiting the customer** (captured)
@@ -618,6 +623,7 @@ order reopened to `pending`, then deleted), that stock is put back.
       "subtotal":  { "amount": 2400, "currency": "USD", "display": "$24.00" },
       "vat":       { "amount": 120,  "currency": "USD", "display": "$1.20" },
       "fee":       { "amount": 0,    "currency": "USD", "display": "$0.00" },
+      "paid_currency": "USD",
       "total":     { "amount": 2520, "currency": "USD", "display": "$25.20" },
       "total_alt": { "amount": 201600, "currency": "SLSH", "display": "201,600 SLSH" },
       "vat_rate": 0.05,
@@ -711,6 +717,18 @@ curl $BASE/orders/549/receipt -H 'Accept: application/json' -H "Authorization: B
   `client_order_id`, `cancel_reason`, `stock_deducted_at` and
   `signature_file_id`. Prices on an order are the ones on the ticket when it
   was sold, so later catalogue price changes never rewrite history.
+- **Schema (2026-09-29).** `orders.shop_id` is the shop (FK `shops.id`); a new
+  `orders.merchant_id` is the merchant that owns that shop (FK `merchants.id`),
+  filled in automatically from the shop when an order is created. Before this
+  date the table had only `merchant_id`, holding a shop id under the legacy
+  name (the same pattern already fixed for
+  [`employees`](employees.md#staff-across-shops-2026-09-26) and
+  [`products`/`categories`](inventory.md#schema-2026-09-28)). **This v1 API is
+  unchanged** — it never returned a raw `merchant_id`; it already scopes every
+  request to the token's current shop. Only the legacy API's order responses
+  expose `merchant_id`, and that field still means the shop id, kept for
+  existing clients. The offline-order uniqueness check (`client_order_id`) is
+  now `(shop_id, client_order_id)`.
 - **`version` starts at `1`** on every order, whichever path created it — a
   freshly created order from `POST /orders` now returns `version: 1`, not
   `null` (fixed while writing this doc: `createFromLines()` was leaving it
@@ -723,6 +741,23 @@ curl $BASE/orders/549/receipt -H 'Accept: application/json' -H "Authorization: B
   instead of `0.05`) on a multi-line order where each line's VAT was rounded
   to the cent independently — the stored per-line rate is exact, this
   displayed ratio is a derived approximation.
+- **`total` shows the currency the customer actually paid in** (2026-09-29):
+  `totals.paid_currency` is `USD` for a cash sale, or the alt currency
+  (`SLSH`) once a wallet payment settled it; `totals.total` is in that
+  currency and `totals.total_alt` is the other one — `total_alt` no longer
+  always means SLSH. Before the order is paid, `paid_currency` is `USD` (the
+  asking price), since no money has moved yet. The same fields are on the
+  smaller order block inside [`POST /cart/pay`](cart.md#post-cartpay) and
+  [`POST /cart/hold`](cart.md#post-carthold) responses.
+- **The alt-currency amount is frozen, not recalculated.** Once an order is
+  paid on a wallet, `total_alt` (or `total`, if that's the wallet currency)
+  is the *exact* amount that left the customer's wallet — stored on the order
+  at the moment it settled — never recomputed at today's exchange rate. This
+  matters for an order that was **held and paid later**: if the shop's rate
+  changed between the two, the order still shows what was actually charged,
+  not a fresh estimate. A still-`pending` (held, unpaid) order's `total_alt`
+  remains an estimate at the current rate, since nothing has been charged
+  yet.
 - **Stock leaves the shelf once**, at the moment an order is first paid or
   first marked `complete`, never when it is held. See
   [Concepts](#stock-leaves-the-shelf-once).

@@ -64,7 +64,7 @@ function shiftRow(User $user, string $start, ?string $end = null): Shift
 function makeSale(User $owner, int $userId, float $total, string $status = 'Paid'): Order
 {
     return Order::forceCreate([
-        'merchant_id' => $owner->merchant->id, 'user_id' => $userId, 'order_status' => $status, 'total_price' => $total,
+        'shop_id' => $owner->merchant->id, 'user_id' => $userId, 'order_status' => $status, 'total_price' => $total,
         'sub_total' => $total, 'vat' => 0, 'exelo_amount' => 0, 'name' => 'Customer', 'mobile_number' => '1', 'order_type' => 'shop',
     ]);
 }

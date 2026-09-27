@@ -33,7 +33,7 @@ class CatalogueService
         $since = $this->databaseTime($filters['updated_since'] ?? null);
 
         $query = Product::query()
-            ->where('merchant_id', $merchant->id)
+            ->where('shop_id', $merchant->id)
             ->with(['category', 'inventories'])
             ->withSum('orderItems', 'quantity');
 
@@ -90,7 +90,7 @@ class CatalogueService
 
     public function lookup(Merchant $merchant, string $barcode, string $type): array
     {
-        $query = Product::where('merchant_id', $merchant->id)->with(['category', 'inventories']);
+        $query = Product::where('shop_id', $merchant->id)->with(['category', 'inventories']);
         Barcode::match($query, $barcode);
         $product = $query->first();
 
@@ -108,7 +108,7 @@ class CatalogueService
     public function create(User $actor, Merchant $merchant, array $data): array
     {
         return DB::transaction(function () use ($actor, $merchant, $data) {
-            $existing = Product::where('merchant_id', $merchant->id)->where('client_uuid', $data['client_uuid'])->withTrashed()->first();
+            $existing = Product::where('shop_id', $merchant->id)->where('client_uuid', $data['client_uuid'])->withTrashed()->first();
 
             if ($existing) {
                 return ['data' => $this->present($merchant, $existing), 'message' => 'Product already added', 'status' => 200];
@@ -122,7 +122,7 @@ class CatalogueService
             $usd = $this->usdMajor($merchant, $data['price']);
 
             $product = Product::create([
-                'merchant_id' => $merchant->id,
+                'shop_id' => $merchant->id,
                 'client_uuid' => $data['client_uuid'],
                 'product_name' => $data['product_name'],
                 'bar_code' => $data['bar_code'] ?? null,
@@ -162,7 +162,7 @@ class CatalogueService
     public function update(Merchant $merchant, int $id, array $data, ?string $ifMatch): array
     {
         return DB::transaction(function () use ($merchant, $id, $data, $ifMatch) {
-            $product = Product::where('merchant_id', $merchant->id)->lockForUpdate()->find($id)
+            $product = Product::where('shop_id', $merchant->id)->lockForUpdate()->find($id)
                 ?? throw new ApiException('product.not_found', 'We could not find that product', 404);
 
             if ($ifMatch !== null && (int) $ifMatch !== $product->version) {
@@ -236,7 +236,7 @@ class CatalogueService
     {
         $since = $this->databaseTime($filters['updated_since'] ?? null);
 
-        $query = Category::where('merchant_id', $merchant->id)->orderBy('name');
+        $query = Category::where('shop_id', $merchant->id)->orderBy('name');
 
         if ($since) {
             $query->withTrashed()->where('updated_at', '>', $since);
@@ -274,13 +274,13 @@ class CatalogueService
     public function createCategory(Merchant $merchant, string $name, ?string $idempotencyKey): array
     {
         return Idempotency::run("m{$merchant->id}:category", $idempotencyKey, ['name' => $name], function () use ($merchant, $name) {
-            $existing = Category::where('merchant_id', $merchant->id)->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
+            $existing = Category::where('shop_id', $merchant->id)->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])->first();
 
             if ($existing) {
                 throw new ApiException('category.name_taken', 'That category already exists', 409, ['category' => ['id' => $existing->id, 'name' => $existing->name]]);
             }
 
-            $category = Category::create(['merchant_id' => $merchant->id, 'name' => $name]);
+            $category = Category::create(['shop_id' => $merchant->id, 'name' => $name]);
 
             return ['data' => ['id' => $category->id, 'name' => $category->name, 'product_count' => 0], 'message' => 'Category created', 'status' => 201];
         });
@@ -288,7 +288,7 @@ class CatalogueService
 
     public function find(Merchant $merchant, int $id): Product
     {
-        return Product::where('merchant_id', $merchant->id)
+        return Product::where('shop_id', $merchant->id)
             ->with(['category', 'inventories'])
             ->withSum('orderItems', 'quantity')
             ->find($id)
@@ -317,7 +317,7 @@ class CatalogueService
             return;
         }
 
-        $query = Product::where('merchant_id', $merchant->id)->when($exceptId, fn (Builder $q) => $q->where('id', '!=', $exceptId));
+        $query = Product::where('shop_id', $merchant->id)->when($exceptId, fn (Builder $q) => $q->where('id', '!=', $exceptId));
         Barcode::match($query, $barcode);
 
         if ($existing = $query->first()) {
@@ -327,7 +327,7 @@ class CatalogueService
 
     private function assertCategory(Merchant $merchant, ?int $categoryId): void
     {
-        if ($categoryId !== null && ! Category::where('merchant_id', $merchant->id)->whereKey($categoryId)->exists()) {
+        if ($categoryId !== null && ! Category::where('shop_id', $merchant->id)->whereKey($categoryId)->exists()) {
             throw new ApiException('validation.failed', 'Please check the form', 422, ['category_id' => ['Choose one of your categories']], 'category_id');
         }
     }

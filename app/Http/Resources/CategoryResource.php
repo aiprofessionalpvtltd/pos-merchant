@@ -17,7 +17,8 @@ class CategoryResource extends JsonResource
         return [
             'id' => $this->id,
             'name' => $this->name,
-            'merchant_id' => $this->merchant_id,
+            // Legacy field name: the shop id (categories.shop_id), not the real merchant id.
+            'merchant_id' => $this->shop_id,
             'merchant' => new MerchantResource($this->whenLoaded('merchant')),
         ];
     }

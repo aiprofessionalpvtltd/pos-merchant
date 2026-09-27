@@ -51,7 +51,7 @@ class InvoiceDocumentService
         return [
             'number' => $this->number($invoice),
             'merchant' => $this->partyName($invoice),
-            'amount' => $this->formatAmount((float) $invoice->amount, $invoice->currency),
+            'amount' => $this->formatAmount((float) $invoice->amount, $invoice->currency, $invoice),
             'method' => $this->method($invoice),
             'has_document' => $this->isAvailable($invoice),
         ];
@@ -93,13 +93,13 @@ class InvoiceDocumentService
             ],
             'items' => [$this->lineItem($invoice, $company?->company_name ?: config('app.name'))],
             'currency' => $invoice->currency,
-            'total' => $this->formatAmount((float) $invoice->amount, $invoice->currency),
+            'total' => $this->formatAmount((float) $invoice->amount, $invoice->currency, $invoice),
         ];
     }
 
     private function lineItem(Invoice $invoice, string $company): array
     {
-        $amount = $this->formatAmount((float) $invoice->amount, $invoice->currency);
+        $amount = $this->formatAmount((float) $invoice->amount, $invoice->currency, $invoice);
 
         if ($invoice->type === 'Subscription') {
             $plan = $invoice->subscription_plan_id ? SubscriptionPlan::withTrashed()->find($invoice->subscription_plan_id) : null;
@@ -152,11 +152,30 @@ class InvoiceDocumentService
         return self::METHODS[$key] ?? ($key !== '' ? ucfirst($key) : '—');
     }
 
-    private function formatAmount(float $amount, ?string $currency): string
+    /**
+     * Shows both currencies: the amount as stored, and its equivalent at the
+     * rate the sale actually settled at (the order's own frozen `exchange_rate`
+     * when there is one, else the shop's current rate).
+     */
+    private function formatAmount(float $amount, ?string $currency, Invoice $invoice): string
     {
-        $decimals = strtoupper((string) $currency) === 'SLSH' ? 0 : 2;
+        $currency = strtoupper((string) $currency);
+        $rate = $this->rate($invoice);
 
-        return number_format($amount, $decimals).' '.strtoupper((string) $currency);
+        if ($currency === 'SLSH') {
+            $usd = $rate > 0 ? $amount / $rate : 0.0;
+
+            return number_format($amount).' SLSH ($'.number_format($usd, 2).')';
+        }
+
+        $slsh = $rate > 0 ? round($amount * $rate) : 0;
+
+        return '$'.number_format($amount, 2).' ('.number_format($slsh).' SLSH)';
+    }
+
+    private function rate(Invoice $invoice): int
+    {
+        return (int) ($invoice->order->exchange_rate ?: $invoice->merchant?->effectiveExchangeRate() ?: config('exelo.conversion_rate'));
     }
 
     private function setting(): ?Setting

@@ -34,6 +34,7 @@
                 <table id="EmployeeTable" class="table table-striped">
                     <thead>
                     <tr>
+                        <th>Shop</th>
                         <th>Merchant</th>
                         <th>Employee</th>
                         <th>Phone</th>
@@ -42,6 +43,7 @@
                         <th>Status</th>
                         <th>PIN</th>
                         <th>Access</th>
+                        <th>Other shops</th>
                         <th>Shifts</th>
                         <th>Last shift</th>
                         <th>Sales</th>
@@ -75,7 +77,8 @@
                     }
                 },
                 columns: [
-                    {data: 'merchant', name: 'merchant'},
+                    {data: 'shop', name: 'shop'},
+                    {data: 'merchant_account', name: 'merchant_account', orderable: false, searchable: false, defaultContent: '—'},
                     {data: 'name', name: 'name'},
                     {data: 'phone_number', name: 'phone_number'},
                     {data: 'role', name: 'role', defaultContent: '—'},
@@ -85,13 +88,16 @@
                         }},
                     {data: 'pin', name: 'pin', orderable: false, searchable: false},
                     {data: 'permission_keys', name: 'permission_keys', orderable: false, searchable: false, defaultContent: '—'},
+                    {data: 'other_shops', name: 'other_shops', searchable: false, render: function (count) {
+                            return count > 0 ? '<span class="badge bg-info">+' + count + '</span>' : '—';
+                        }},
                     {data: 'shifts', name: 'shifts', searchable: false},
                     {data: 'last_shift', name: 'last_shift', searchable: false, defaultContent: '—'},
                     {data: 'sales', name: 'sales', searchable: false},
                     {data: 'created_at', name: 'created_at'},
                     {data: 'action', name: 'action', orderable: false, searchable: false}
                 ],
-                order: [[11, 'desc']]
+                order: [[13, 'desc']]
             });
 
             $('#statusFilter').on('change', function () {

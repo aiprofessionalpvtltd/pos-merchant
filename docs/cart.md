@@ -530,12 +530,21 @@ requests, so a dropped connection between them could leave a paid sale with no o
 }
 ```
 
+Paying with shillings in hand instead: send `amount_tendered` in `SLSH`, and
+`change_due` comes back in `SLSH` too.
+
+```json
+{
+  "amount_tendered": { "amount": 320000, "currency": "SLSH" }
+}
+```
+
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `type` | enum | no | `shop` (default) \| `stock` |
 | `cart_version` | int | yes | The ticket `version` the shopkeeper confirmed; `409` if it moved |
 | `rail` | enum | yes | `cash`, `zaad` or `edahab`. `card` and `nfc` are not built yet. |
-| `amount_tendered` | Money | no | Cash only, USD: the cash handed over. When sent, `change_due` is returned. |
+| `amount_tendered` | Money | no | Cash only, **`USD` or `SLSH`**: the cash handed over, in whichever currency the customer actually paid with. When sent, `change_due` is returned in that same currency. |
 | `customer.name` | string | no | On the receipt |
 | `customer.mobile_number` | string | no | |
 | `customer.wallet_number` | string | wallet rails | The number to bill; must belong to the rail (`63…` is Zaad, `65…` `66…` `62…` is eDahab) |
@@ -554,7 +563,9 @@ requests, so a dropped connection between them could leave a paid sale with no o
     "order": {
       "id": 164,
       "order_status": "Complete",
-      "total": { "amount": 10001, "currency": "USD", "display": "$100.01" }
+      "paid_currency": "USD",
+      "total": { "amount": 10001, "currency": "USD", "display": "$100.01" },
+      "total_alt": { "amount": 800080, "currency": "SLSH", "display": "800,080 SLSH" }
     },
     "change_due": { "amount": 9999, "currency": "USD", "display": "$99.99" },
     "receipt": { "invoice_no": "INV-164", "url": "/api/v1/orders/164/receipt" },
@@ -566,6 +577,11 @@ requests, so a dropped connection between them could leave a paid sale with no o
 `change_due` is `null` when no `amount_tendered` was sent. The response is stored
 against the `idempotency_key`, so a retry returns this same sale and never a second
 order.
+
+The embedded `order` shows `total` in the currency the customer actually paid
+(`paid_currency`) with `total_alt` in the other one, same as
+[`GET /orders/{id}`](orders.md#implementation-notes) — `USD` for cash, as
+here; `SLSH` for a wallet sale, frozen at the amount charged.
 
 **Response `202`: wallet rail, awaiting approval**
 
@@ -688,8 +704,10 @@ required.**
       "order_status": "Pending",
       "name": "Amina Yusuf",
       "mobile_number": "+252635550101",
+      "created_at": "2026-09-20T09:38:12Z",
+      "paid_currency": "USD",
       "total": { "amount": 3885, "currency": "USD", "display": "$38.85" },
-      "created_at": "2026-09-20T09:38:12Z"
+      "total_alt": { "amount": 310800, "currency": "SLSH", "display": "310,800 SLSH" }
     },
     "cart": { "cart_id": 182, "type": "shop", "version": 9, "is_empty": true, "items": [], "...": "all totals at zero" }
   }

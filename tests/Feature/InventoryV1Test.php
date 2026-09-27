@@ -7,7 +7,6 @@ use App\Models\InventoryHistory;
 use App\Models\Merchant;
 use App\Models\Product;
 use App\Models\ProductInventory;
-use App\Models\User;
 use Database\Seeders\PlanCatalogueSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Str;
@@ -66,10 +65,24 @@ it('adds a product with its opening stock and history', function () {
         ->assertJsonPath('data.image', null);
 
     $product = Product::find($response->json('data.id'));
-    expect($product->merchant_id)->toBe($owner->merchant->id)
+    expect($product->shop_id)->toBe($owner->merchant->id)
         ->and((float) $product->total_price)->toBe(19.43)
         ->and($product->vat)->toBe(5)
         ->and(InventoryHistory::where('product_id', $product->id)->where('kind', 'opening')->count())->toBe(1);
+});
+
+it('stores both the shop and its merchant on every product and category', function () {
+    $owner = App\Models\User::create(['name' => 'Nadia Warsame', 'email' => 'nadia-catalogue@example.test', 'password' => 'x', 'user_type' => 'merchant']);
+    $account = App\Models\MerchantAccount::create(['user_id' => $owner->id, 'first_name' => 'Nadia', 'last_name' => 'Warsame', 'phone_number' => '+252655990201']);
+    $shop = Merchant::create(['merchant_id' => $account->id, 'business_name' => 'Nadia Store', 'phone_number' => '+252634990201', 'is_approved' => true]);
+
+    $category = Category::create(['shop_id' => $shop->id, 'name' => 'Drinks']);
+    $product = Product::create(['shop_id' => $shop->id, 'category_id' => $category->id, 'product_name' => 'Cola', 'price' => 1, 'vat' => 0, 'total_price' => 1, 'stock_limit' => 0, 'alarm_limit' => 0]);
+
+    expect($category->merchant_id)->toBe($account->id)
+        ->and($product->merchant_id)->toBe($account->id)
+        ->and($product->shop->id)->toBe($shop->id)
+        ->and($product->merchantAccount->id)->toBe($account->id);
 });
 
 it('returns the same product when an offline create is replayed', function () {
@@ -91,7 +104,7 @@ it('converts an SLSH price and refuses a taken barcode or foreign category', fun
     test()->withToken($token)->postJson('/api/v1/products', productBody(['bar_code' => 'SLS-1']))
         ->assertStatus(409)->assertJsonPath('error.code', 'product.barcode_taken')->assertJsonPath('error.field', 'bar_code');
 
-    $foreign = Category::create(['merchant_id' => otherShop()->id, 'name' => 'Not mine']);
+    $foreign = Category::create(['shop_id' => otherShop()->id, 'name' => 'Not mine']);
     test()->withToken($token)->postJson('/api/v1/products', productBody(['bar_code' => 'NEW-1', 'category_id' => $foreign->id]))
         ->assertStatus(422)->assertJsonPath('error.code', 'validation.failed');
 
@@ -124,7 +137,7 @@ it('lists the catalogue with filters and pagination', function () {
 
 it('only shows a shop its own products', function () {
     [, $token] = shopOwner();
-    $theirs = Product::create(['merchant_id' => otherShop()->id, 'product_name' => 'Other shop', 'price' => 1, 'vat' => 0, 'total_price' => 1, 'stock_limit' => 0, 'alarm_limit' => 0]);
+    $theirs = Product::create(['shop_id' => otherShop()->id, 'product_name' => 'Other shop', 'price' => 1, 'vat' => 0, 'total_price' => 1, 'stock_limit' => 0, 'alarm_limit' => 0]);
     $mine = addProduct($token);
 
     test()->withToken($token)->getJson('/api/v1/products')->assertJsonCount(1, 'data');

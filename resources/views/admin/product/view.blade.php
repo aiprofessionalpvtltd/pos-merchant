@@ -59,11 +59,12 @@
                     <div class="card-header"><h5 class="card-title mb-0">Details</h5></div>
                     <div class="card-body">
                         <table class="table table-sm mb-0">
-                            <tr><th>Merchant</th><td>
+                            <tr><th>Shop</th><td>
                                     @if($product->merchant)
                                         <a href="{{ route('view-merchant', $product->merchant->id) }}">{{ $merchantName }}</a>
                                     @else — @endif
                                 </td></tr>
+                            <tr><th>Merchant</th><td>{{ $product->merchantAccount?->fullName() ?? '—' }}</td></tr>
                             <tr><th>Barcode</th><td>{{ $product->bar_code ?: '—' }}</td></tr>
                             <tr><th>Category</th><td>{{ $product->category?->name ?: '—' }}</td></tr>
                             <tr><th>Price</th><td>{{ $detail['price'] }} <span class="text-muted">({{ $detail['price_sls'] }})</span></td></tr>

@@ -17,7 +17,7 @@ function table(User $admin, string $route, array $query = [], array $columns = [
 {
     $query += [
         'draw' => 1, 'start' => 0, 'length' => 50,
-        'columns' => collect($columns)->map(fn ($name) => ['data' => $name, 'name' => $name, 'searchable' => in_array($name, ['shop', 'stock', 'transit', 'lines', 'units', 'total', 'price_display'], true) ? 'false' : 'true', 'orderable' => 'true'])->all(),
+        'columns' => collect($columns)->map(fn ($name) => ['data' => $name, 'name' => $name, 'searchable' => in_array($name, ['shelf_qty', 'stock', 'transit', 'lines', 'units', 'total', 'price_display'], true) ? 'false' : 'true', 'orderable' => 'true'])->all(),
         'search' => ['value' => $search],
     ];
 
@@ -46,9 +46,9 @@ it('lists every product with stock per location and a stock status', function ()
         ->and($rows['Running low']['status'])->toBe('Low stock')
         ->and($rows['Gone']['status'])->toBe('Out of stock')
         ->and($rows['Removed']['status'])->toBe('Deleted')
-        ->and($rows['Plenty']['merchant'])->toBe('Exelo Retail')
+        ->and($rows['Plenty']['shop'])->toBe('Exelo Retail')
         ->and($rows['Plenty']['price_display'])->toBe('$18.50')
-        ->and($rows['Plenty']['shop'])->toBe(40)
+        ->and($rows['Plenty']['shelf_qty'])->toBe(40)
         ->and($rows['Plenty']['stock'])->toBe(0)
         ->and($rows['Plenty']['action'])->toContain('/admin/products/'.$rows['Plenty']['id']);
 });
@@ -81,7 +81,7 @@ it('finds products by merchant name', function () {
     [$owner, $token, $admin] = portalShop();
     addProduct($token, ['bar_code' => 'MER-1', 'product_name' => 'Belongs to the shop']);
 
-    $rows = table($admin, 'admin.products.index', [], ['merchant'], 'Exelo Retail')->assertOk()->json('data');
+    $rows = table($admin, 'admin.products.index', [], ['shop'], 'Exelo Retail')->assertOk()->json('data');
 
     expect(collect($rows)->pluck('bar_code'))->toContain('MER-1');
 });
@@ -91,7 +91,7 @@ it('sorts products by stock', function () {
     addProduct($token, ['bar_code' => 'SRT-1', 'product_name' => 'A', 'quantity' => 5]);
     addProduct($token, ['bar_code' => 'SRT-2', 'product_name' => 'B', 'quantity' => 50]);
 
-    $response = table($admin, 'admin.products.index', ['order' => [['column' => 0, 'dir' => 'desc']]], ['shop', 'bar_code'], 'SRT-')->assertOk();
+    $response = table($admin, 'admin.products.index', ['order' => [['column' => 0, 'dir' => 'desc']]], ['shelf_qty', 'bar_code'], 'SRT-')->assertOk();
 
     expect(collect($response->json('data'))->pluck('product_name')->all())->toBe(['B', 'A']);
 });
@@ -139,7 +139,7 @@ it('lists categories with how many products each holds', function () {
     $rows = collect(table($admin, 'admin.categories.index', [], ['name'], 'Portal test category')->assertOk()->json('data'));
 
     expect($rows)->toHaveCount(1)
-        ->and($rows[0]['merchant'])->toBe('Exelo Retail')
+        ->and($rows[0]['shop'])->toBe('Exelo Retail')
         ->and($rows[0]['products_count'])->toBe(2)
         ->and($rows[0]['status'])->toBe('Active');
 });
@@ -228,4 +228,30 @@ it('shows the menu entries to users who may open the pages', function () {
         ->assertSee(route('admin.products.index'), false)
         ->assertSee(route('admin.categories.index'), false)
         ->assertSee(route('admin.carts.index'), false);
+});
+
+it('shows the merchant account, not just the shop, for a product', function () {
+    $owner = App\Models\User::create(['name' => 'Warda Egal', 'email' => 'warda-catalogue@example.test', 'password' => 'x', 'user_type' => 'merchant']);
+    $account = App\Models\MerchantAccount::create(['user_id' => $owner->id, 'first_name' => 'Warda', 'last_name' => 'Egal', 'phone_number' => '+252655990301']);
+    $shop = App\Models\Merchant::create(['merchant_id' => $account->id, 'business_name' => 'Warda Store', 'phone_number' => '+252634990301', 'is_approved' => true]);
+    App\Models\Product::create(['shop_id' => $shop->id, 'product_name' => 'Chips', 'bar_code' => 'MRC-1', 'price' => 1, 'vat' => 0, 'total_price' => 1, 'stock_limit' => 0, 'alarm_limit' => 0]);
+
+    $admin = merchantPagesAdmin(['view-product']);
+
+    $productRow = collect(table($admin, 'admin.products.index', [], ['bar_code'], 'MRC-1')->assertOk()->json('data'))->first();
+    expect($productRow['shop'])->toBe('Warda Store')
+        ->and($productRow['merchant_account'])->toBe('Warda Egal');
+});
+
+it('shows the merchant account, not just the shop, for a category', function () {
+    $owner = App\Models\User::create(['name' => 'Hodo Jama', 'email' => 'hodo-catalogue@example.test', 'password' => 'x', 'user_type' => 'merchant']);
+    $account = App\Models\MerchantAccount::create(['user_id' => $owner->id, 'first_name' => 'Hodo', 'last_name' => 'Jama', 'phone_number' => '+252655990302']);
+    $shop = App\Models\Merchant::create(['merchant_id' => $account->id, 'business_name' => 'Hodo Store', 'phone_number' => '+252634990302', 'is_approved' => true]);
+    App\Models\Category::create(['shop_id' => $shop->id, 'name' => 'Snacks']);
+
+    $admin = merchantPagesAdmin(['view-product']);
+
+    $categoryRow = collect(table($admin, 'admin.categories.index', [], ['name'], 'Snacks')->assertOk()->json('data'))->first();
+    expect($categoryRow['shop'])->toBe('Hodo Store')
+        ->and($categoryRow['merchant_account'])->toBe('Hodo Jama');
 });

@@ -29,7 +29,7 @@ class OrderService
      */
     public function paginate(Merchant $merchant, array $filters): array
     {
-        $query = Order::where('merchant_id', $merchant->id)->withCount('items')->withSum('items', 'quantity')->with('user.employee');
+        $query = Order::where('shop_id', $merchant->id)->withCount('items')->withSum('items', 'quantity')->with(['user.employee', 'paidInvoice']);
 
         if (isset($filters['status'])) {
             $this->whereStatus($query, $filters['status']);
@@ -97,7 +97,7 @@ class OrderService
     public function create(User $actor, Merchant $merchant, array $data): array
     {
         return DB::transaction(function () use ($actor, $merchant, $data) {
-            $existing = Order::where('merchant_id', $merchant->id)->where('client_order_id', $data['client_order_id'])->first();
+            $existing = Order::where('shop_id', $merchant->id)->where('client_order_id', $data['client_order_id'])->first();
 
             if ($existing) {
                 return ['data' => $this->detail($existing, $merchant) + ['client_order_id' => $data['client_order_id']], 'message' => 'Order already saved', 'status' => 200];
@@ -105,7 +105,7 @@ class OrderService
 
             $lines = [];
             foreach ($data['items'] as $item) {
-                $product = Product::where('merchant_id', $merchant->id)->find($item['product_id'])
+                $product = Product::where('shop_id', $merchant->id)->find($item['product_id'])
                     ?? throw new ApiException('product.not_found', 'We could not find that product', 404, ['product_id' => $item['product_id']]);
 
                 $lines[] = ['product_id' => $product->id, 'quantity' => (int) $item['quantity'], 'unit_cents' => Money::toMinor((float) $product->price, 'USD'), 'vat_percent' => (int) $product->vat];
@@ -148,7 +148,7 @@ class OrderService
         $rate = $merchant->effectiveExchangeRate();
 
         $order = Order::create($attributes + [
-            'merchant_id' => $merchant->id,
+            'shop_id' => $merchant->id,
             'user_id' => $actor->id,
             'version' => 1,
             'name' => $customer['name'] ?? null,
@@ -171,14 +171,24 @@ class OrderService
     /**
      * Money was received: the order is Complete and paid, and stock leaves the shelf once.
      */
-    public function settle(Order $order, string $rail, ?User $actor = null): Order
+    public function settle(Order $order, string $rail, ?User $actor = null, ?Invoice $invoice = null): Order
     {
-        $order->forceFill([
+        $updates = [
             'order_status' => 'Complete',
             'paid_at' => $order->paid_at ?? now(),
             'payment_method' => $rail,
             'version' => $order->version + 1,
-        ])->save();
+        ];
+
+        // A held order can sit for a while before it's paid. If it settled on a wallet,
+        // freeze the amount and rate that were actually charged — not what was estimated
+        // when the order was held — so the order always shows what really moved.
+        if ($invoice && strtoupper($invoice->currency) !== 'USD' && (float) $order->total_price > 0) {
+            $updates['total_price_sls'] = (float) $invoice->amount;
+            $updates['exchange_rate'] = (int) round(((float) $invoice->amount) / (float) $order->total_price);
+        }
+
+        $order->forceFill($updates)->save();
 
         $this->deductStock($order, $actor);
 
@@ -211,7 +221,7 @@ class OrderService
     public function transition(Merchant $merchant, int $id, string $status, ?string $reason): array
     {
         return DB::transaction(function () use ($merchant, $id, $status, $reason) {
-            $order = Order::where('merchant_id', $merchant->id)->lockForUpdate()->find($id)
+            $order = Order::where('shop_id', $merchant->id)->lockForUpdate()->find($id)
                 ?? throw new ApiException('order.not_found', 'We could not find that order', 404);
 
             $current = $order->isPending() ? 'pending' : ($order->isCancelled() ? 'cancelled' : 'complete');
@@ -248,7 +258,7 @@ class OrderService
     public function delete(Merchant $merchant, int $id): array
     {
         return DB::transaction(function () use ($merchant, $id) {
-            $order = Order::where('merchant_id', $merchant->id)->lockForUpdate()->find($id)
+            $order = Order::where('shop_id', $merchant->id)->lockForUpdate()->find($id)
                 ?? throw new ApiException('order.not_found', 'We could not find that order', 404);
 
             if (! $order->isPending()) {
@@ -311,8 +321,8 @@ class OrderService
 
     public function find(Merchant $merchant, int $id): Order
     {
-        return Order::where('merchant_id', $merchant->id)
-            ->with(['items.product' => fn ($query) => $query->withTrashed(), 'user.employee'])
+        return Order::where('shop_id', $merchant->id)
+            ->with(['items.product' => fn ($query) => $query->withTrashed(), 'user.employee', 'paidInvoice'])
             ->find($id)
             ?? throw new ApiException('order.not_found', 'We could not find that order', 404);
     }
@@ -322,7 +332,7 @@ class OrderService
      */
     public function detail(Order $order, Merchant $merchant): array
     {
-        $order->loadMissing(['items.product' => fn ($query) => $query->withTrashed(), 'user.employee']);
+        $order->loadMissing(['items.product' => fn ($query) => $query->withTrashed(), 'user.employee', 'paidInvoice']);
         $rate = $merchant->effectiveExchangeRate();
 
         return $this->header($order, $merchant) + [
@@ -355,12 +365,16 @@ class OrderService
     private function summary(Order $order, Merchant $merchant, int $rate): array
     {
         $total = Money::toMinor((float) $order->total_price, 'USD');
+        $currency = $this->paidCurrency($order);
+        $usd = Money::usd($total);
+        $alt = $this->altTotal($order, $total, (int) ($order->exchange_rate ?: $rate));
 
         return $this->header($order, $merchant) + [
             'item_count' => $order->items_count,
             'unit_count' => (int) $order->items_sum_quantity,
-            'total' => Money::usd($total),
-            'total_alt' => $this->alt($total, $rate),
+            'paid_currency' => $currency,
+            'total' => $currency === 'USD' ? $usd : $alt,
+            'total_alt' => $currency === 'USD' ? $alt : $usd,
             'has_signature' => false,
             'created_at' => ApiResponse::iso($order->created_at),
             'created_at_display' => $this->display($order->created_at, $merchant),
@@ -385,6 +399,28 @@ class OrderService
     }
 
     /**
+     * The same `total`/`total_alt`/`paid_currency` block as an order's own totals,
+     * for the smaller order summaries embedded in checkout responses (a cash sale,
+     * a held ticket). See `paidCurrency()` and `altTotal()`.
+     *
+     * @return array{total: array<string, mixed>, total_alt: array<string, mixed>, paid_currency: string}
+     */
+    public function totalBlock(Order $order, Merchant $merchant): array
+    {
+        $total = Money::toMinor((float) $order->total_price, 'USD');
+        $rate = (int) ($order->exchange_rate ?: $merchant->effectiveExchangeRate());
+        $currency = $this->paidCurrency($order);
+        $usd = Money::usd($total);
+        $alt = $this->altTotal($order, $total, $rate);
+
+        return [
+            'total' => $currency === 'USD' ? $usd : $alt,
+            'total_alt' => $currency === 'USD' ? $alt : $usd,
+            'paid_currency' => $currency,
+        ];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function totals(Order $order, int $rate): array
@@ -393,16 +429,52 @@ class OrderService
         $vat = Money::toMinor((float) $order->vat, 'USD');
         $fee = Money::toMinor((float) $order->exelo_amount, 'USD');
         $total = Money::toMinor((float) $order->total_price, 'USD');
+        $usedRate = (int) ($order->exchange_rate ?: $rate);
+        $currency = $this->paidCurrency($order);
+        $usd = Money::usd($total);
+        $alt = $this->altTotal($order, $total, $usedRate);
 
         return [
             'subtotal' => Money::usd($subtotal),
             'vat' => Money::usd($vat),
             'fee' => Money::usd($fee),
-            'total' => Money::usd($total),
-            'total_alt' => $this->alt($total, (int) ($order->exchange_rate ?: $rate)),
+            'paid_currency' => $currency,
+            'total' => $currency === 'USD' ? $usd : $alt,
+            'total_alt' => $currency === 'USD' ? $alt : $usd,
             'vat_rate' => $subtotal > 0 ? round($vat / $subtotal, 4) : 0,
-            'exchange_rate' => (int) ($order->exchange_rate ?: $rate),
+            'exchange_rate' => $usedRate,
         ];
+    }
+
+    /**
+     * Which currency the customer actually paid in: `USD` for cash (or an order
+     * not paid yet), or the alt currency (`SLSH`) once a wallet invoice settled
+     * it. Drives which of `total`/`total_alt` this order shows first.
+     */
+    private function paidCurrency(Order $order): string
+    {
+        if (! $order->paid_at) {
+            return 'USD';
+        }
+
+        $invoice = $order->relationLoaded('paidInvoice') ? $order->paidInvoice : $order->paidInvoice()->first();
+
+        return $invoice ? strtoupper($invoice->currency) : 'USD';
+    }
+
+    /**
+     * The alt-currency total. Once a wallet invoice settled the order, this is
+     * the exact amount that left the customer's wallet (`orders.total_price_sls`,
+     * frozen at settlement by `settle()`) — never recalculated at today's rate,
+     * so it always matches what was actually paid. Before payment (or for a
+     * cash order, which never moves alt-currency money) it is an estimate at
+     * the given rate.
+     */
+    private function altTotal(Order $order, int $usdCents, int $rate): array
+    {
+        return $order->total_price_sls !== null
+            ? Money::of(Money::toMinor((float) $order->total_price_sls, config('exelo.alt_currency')), config('exelo.alt_currency'))
+            : $this->alt($usdCents, $rate);
     }
 
     /**
@@ -427,7 +499,7 @@ class OrderService
         }
 
         // The seller's staff record in the order's shop (a person may work in several).
-        $employee = $user->employments()->where('shop_id', $order->merchant_id)->first();
+        $employee = $user->employments()->where('shop_id', $order->shop_id)->first();
 
         return [
             'id' => $employee?->id,
@@ -440,8 +512,8 @@ class OrderService
      */
     private function summaryCounts(Merchant $merchant): array
     {
-        $pending = Order::where('merchant_id', $merchant->id)->tap(fn ($query) => $this->whereStatus($query, 'pending'));
-        $complete = Order::where('merchant_id', $merchant->id)->tap(fn ($query) => $this->whereStatus($query, 'complete'));
+        $pending = Order::where('shop_id', $merchant->id)->tap(fn ($query) => $this->whereStatus($query, 'pending'));
+        $complete = Order::where('shop_id', $merchant->id)->tap(fn ($query) => $this->whereStatus($query, 'complete'));
 
         return [
             'pending_count' => $pending->count(),

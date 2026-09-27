@@ -58,7 +58,7 @@ class OrderController extends Controller
     public function pay(PayOrderRequest $request, int $id): JsonResponse
     {
         $merchant = $this->merchant($request);
-        $order = Order::where('merchant_id', $merchant->id)->find($id)
+        $order = Order::where('shop_id', $merchant->id)->find($id)
             ?? throw new ApiException('order.not_found', 'We could not find that order', 404);
 
         $result = $this->charges->create($request->user(), $merchant, [
@@ -68,7 +68,7 @@ class OrderController extends Controller
             'customer' => $request->validated('customer') ?? [],
             'order_id' => $order->id,
             'idempotency_key' => $request->validated('idempotency_key'),
-            'tendered' => $request->validated('amount_tendered.amount'),
+            'tendered' => $request->validated('amount_tendered'),
         ]);
 
         $data = $result['data'];
@@ -79,9 +79,8 @@ class OrderController extends Controller
             return ApiResponse::success($data, $result['message'], 202);
         }
 
-        $tendered = $request->validated('amount_tendered.amount');
         $data = ['status' => 'paid', 'charge_id' => $data['charge_id'], 'order' => $this->orders->show($merchant, $order->id)]
-            + ($tendered !== null ? ['change_due' => Money::usd($tendered - $data['customer_charge']['amount'])] : []);
+            + (isset($data['change_due']) ? ['change_due' => $data['change_due']] : []);
 
         return ApiResponse::success($data, 'Order paid');
     }

@@ -54,7 +54,10 @@ class ChargeService
 
             $this->assertNoOpenCharge($sale);
 
-            if ($rail === 'cash' && isset($data['tendered']) && $data['tendered'] < $chargeCents) {
+            $tendered = $data['tendered'] ?? null;
+            $rate = $merchant->effectiveExchangeRate();
+
+            if ($rail === 'cash' && $tendered && $this->toUsdCents($tendered, $rate) < $chargeCents) {
                 throw new ApiException('payment.tender_too_low', 'The cash given is less than the total', 422, ['due' => Money::usd($chargeCents)], 'amount_tendered');
             }
 
@@ -67,6 +70,8 @@ class ChargeService
                 'fee_cents' => $fee['amount'],
                 'fee_payer' => $fee['payer'],
                 'customer_charge_cents' => $chargeCents,
+                'tendered' => $tendered,
+                'rate' => $rate,
             ];
 
             return $rail === 'cash'
@@ -94,7 +99,7 @@ class ChargeService
                 $order = Order::with('items')->lockForUpdate()->find($meta['order_id']);
 
                 if ($order && ! $order->paid_at) {
-                    $this->orders->settle($order, $invoice->rail, $actor);
+                    $this->orders->settle($order, $invoice->rail, $actor, $invoice);
                 }
 
                 return;
@@ -110,7 +115,7 @@ class ChargeService
             ], $meta['fee_cents']);
             $order->load('items');
 
-            $this->orders->settle($order, $invoice->rail, $actor);
+            $this->orders->settle($order, $invoice->rail, $actor, $invoice);
             $invoice->update(['order_id' => $order->id]);
 
             $this->clearCart($invoice);
@@ -153,7 +158,7 @@ class ChargeService
      */
     private function saleFromOrder(Merchant $merchant, array $data): array
     {
-        $order = Order::where('merchant_id', $merchant->id)->with('items')->find($data['order_id'] ?? 0)
+        $order = Order::where('shop_id', $merchant->id)->with('items')->find($data['order_id'] ?? 0)
             ?? throw new ApiException('order.not_found', 'We could not find that order', 404);
 
         if ($order->paid_at) {
@@ -285,7 +290,48 @@ class ChargeService
      */
     private function payload(Invoice $invoice, Merchant $merchant): array
     {
-        return $this->invoices->chargePayload($invoice) + ['customer_charge' => Money::usd($invoice->meta['customer_charge_cents'])];
+        $meta = $invoice->meta ?? [];
+        $payload = $this->invoices->chargePayload($invoice) + ['customer_charge' => Money::usd($meta['customer_charge_cents'] ?? 0)];
+
+        if (! empty($meta['tendered'])) {
+            $rate = (int) ($meta['rate'] ?? $merchant->effectiveExchangeRate());
+            $payload['change_due'] = $this->changeDue($meta['tendered'], (int) ($meta['customer_charge_cents'] ?? 0), $rate);
+        }
+
+        return $payload;
+    }
+
+    /**
+     * A money amount (`amount`, `currency`) converted to USD cents, at the given
+     * SLSH-per-USD rate. Used to compare cash tendered in either currency against
+     * the charge total, which is always tracked internally in USD.
+     *
+     * @param  array{amount: int, currency: string}  $money
+     */
+    private function toUsdCents(array $money, int $rate): int
+    {
+        return strtoupper($money['currency']) === 'SLSH'
+            ? (int) round($money['amount'] * 100 / $rate)
+            : (int) $money['amount'];
+    }
+
+    /**
+     * Change due, in the same currency the customer actually handed over — a
+     * shopkeeper given shillings should get shillings back, not a dollar figure
+     * they'd have to convert themselves.
+     *
+     * @param  array{amount: int, currency: string}  $tendered
+     * @return array<string, mixed>
+     */
+    private function changeDue(array $tendered, int $chargeCents, int $rate): array
+    {
+        if (strtoupper($tendered['currency']) === 'SLSH') {
+            $chargeSls = (int) round($chargeCents * $rate / 100);
+
+            return Money::of($tendered['amount'] - $chargeSls, 'SLSH');
+        }
+
+        return Money::usd($tendered['amount'] - $chargeCents);
     }
 
     private function clearCart(Invoice $invoice): void

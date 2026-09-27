@@ -2,13 +2,11 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Http\Controllers\Controller;
 use App\Http\Resources\CategoryResource;
 use App\Models\Category;
+use Exception;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
-use Exception;
-
 
 class CategoryController extends BaseController
 {
@@ -17,8 +15,9 @@ class CategoryController extends BaseController
         try {
             $categories = Category::with('merchant')->latest()->get();
             if ($categories->isEmpty()) {
-                return $this->sendResponse([],'No categories found.');
+                return $this->sendResponse([], 'No categories found.');
             }
+
             return $this->sendResponse(CategoryResource::collection($categories), 'Categories retrieved successfully.');
         } catch (Exception $e) {
             return $this->sendError('Error fetching categories.', $e->getMessage());
@@ -36,17 +35,18 @@ class CategoryController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
             // Get the merchant's ID
             $merchantID = $authUser->merchant->id;
 
-            $categories = Category::with('merchant')->where('merchant_id', $merchantID)->latest()->get();
+            $categories = Category::with('merchant')->where('shop_id', $merchantID)->latest()->get();
             if ($categories->isEmpty()) {
-                return $this->sendResponse([],'No categories found.');
+                return $this->sendResponse([], 'No categories found.');
             }
+
             return $this->sendResponse(CategoryResource::collection($categories), 'Categories retrieved successfully.');
         } catch (Exception $e) {
             return $this->sendError('Error fetching categories.', $e->getMessage());
@@ -74,7 +74,7 @@ class CategoryController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -83,7 +83,7 @@ class CategoryController extends BaseController
 
             // Check for duplicate category name for the same merchant
             $existingCategory = Category::where('name', $request->name)
-                ->where('merchant_id', $merchantID)
+                ->where('shop_id', $merchantID)
                 ->first();
 
             if ($existingCategory) {
@@ -93,7 +93,7 @@ class CategoryController extends BaseController
             // Create the category with the merchant_id
             $category = Category::create([
                 'name' => $request->name,
-                'merchant_id' => $merchantID
+                'shop_id' => $merchantID,
             ]);
 
             DB::commit();
@@ -101,6 +101,7 @@ class CategoryController extends BaseController
             return $this->sendResponse(new CategoryResource($category), 'Category created successfully.');
         } catch (Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Error creating category.', $e->getMessage());
         }
     }
@@ -117,14 +118,14 @@ class CategoryController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
             // Get the merchant's ID
             $merchantID = $authUser->merchant->id;
 
-            $category = Category::with('merchant')->where('merchant_id', $merchantID)->find($id);
+            $category = Category::with('merchant')->where('shop_id', $merchantID)->find($id);
 
             if (is_null($category)) {
                 return $this->sendError('Category not found.');
@@ -157,7 +158,7 @@ class CategoryController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -172,13 +173,13 @@ class CategoryController extends BaseController
                 return $this->sendError('Category not found.');
             }
 
-            if ($category->merchant_id !== $merchantID) {
+            if ($category->shop_id !== $merchantID) {
                 return $this->sendError('You are not authorized to update this category.');
             }
 
             // Check for duplicate category name for the same merchant (excluding the current category)
             $existingCategory = Category::where('name', $request->name)
-                ->where('merchant_id', $merchantID)
+                ->where('shop_id', $merchantID)
                 ->where('id', '!=', $id)
                 ->first();
 
@@ -188,7 +189,7 @@ class CategoryController extends BaseController
 
             // Update the category
             $category->update([
-                'name' => $request->name
+                'name' => $request->name,
             ]);
 
             DB::commit();
@@ -196,10 +197,10 @@ class CategoryController extends BaseController
             return $this->sendResponse(new CategoryResource($category), 'Category updated successfully.');
         } catch (Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Error updating category.', $e->getMessage());
         }
     }
-
 
     public function destroy($id)
     {
@@ -218,39 +219,39 @@ class CategoryController extends BaseController
             return $this->sendResponse([], 'Category deleted successfully.');
         } catch (Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Error deleting category.', $e->getMessage());
         }
     }
 
     public function search(Request $request)
     {
-         try {
+        try {
 
-             // Get authenticated user
-             $authUser = auth()->user();
+            // Get authenticated user
+            $authUser = auth()->user();
 
-             if ($authUser->user_type == 'employee') {
-                 $authUser->merchant = $authUser->employee->merchant;
-             }
+            if ($authUser->user_type == 'employee') {
+                $authUser->merchant = $authUser->employee->merchant;
+            }
 
+            // Ensure the authenticated user has a merchant relation
+            if (! $authUser || ! $authUser->merchant) {
+                return $this->sendError('Merchant not found for the authenticated user.');
+            }
 
-             // Ensure the authenticated user has a merchant relation
-             if (!$authUser || !$authUser->merchant) {
-                 return $this->sendError('Merchant not found for the authenticated user.');
-             }
-
-             // Get the merchant's ID
-             $merchantID = $authUser->merchant->id;
+            // Get the merchant's ID
+            $merchantID = $authUser->merchant->id;
 
             // Get search input from the request
             $search = $request->input('search');
 
-             // Query the Category model, searching by name if a search term is provided
+            // Query the Category model, searching by name if a search term is provided
             $categoriesQuery = Category::with('merchant')
                 ->when($search, function ($query, $search) {
                     return $query->where('name', 'LIKE', "%$search%");
                 })
-                ->where('merchant_id', $merchantID)
+                ->where('shop_id', $merchantID)
                 ->select('id', 'name') // Select only id and name
                 ->latest()
                 ->get();
@@ -265,5 +266,4 @@ class CategoryController extends BaseController
             return $this->sendError('Error fetching categories.', $e->getMessage());
         }
     }
-
 }

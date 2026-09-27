@@ -44,7 +44,7 @@ it('lists invoices with number, formatted amount, method and only the right butt
     $paidRow = $rows->firstWhere('invoice_no', 'INV-'.str_pad((string) $paid->id, 6, '0', STR_PAD_LEFT));
     $pendingRow = $rows->firstWhere('invoice_no', 'INV-'.str_pad((string) $pending->id, 6, '0', STR_PAD_LEFT));
 
-    expect($paidRow['amount'])->toBe('92,000 SLSH')
+    expect($paidRow['amount'])->toBe('92,000 SLSH ($8.76)')
         ->and($paidRow['method'])->toBe('Cash')
         // a paid invoice has a document; pending does not, and only pending cash can be confirmed
         ->and($paidRow['action'])->toContain("/admin/invoices/{$paid->id}/pdf")->toContain("/admin/invoices/{$paid->id}/document")
@@ -157,4 +157,25 @@ it('numbers invoices with a zero-padded id', function () {
     $invoice = makeInvoice();
 
     expect(app(InvoiceDocumentService::class)->number($invoice))->toBe('INV-'.str_pad((string) $invoice->id, 6, '0', STR_PAD_LEFT));
+});
+
+it('shows a USD sale invoice with its SLSH equivalent too, at the order\'s frozen rate', function () {
+    $admin = merchantPagesAdmin(['view-invoice']);
+
+    $shop = Merchant::create(['phone_number' => '+252634990601', 'business_name' => 'Cash Shop', 'is_approved' => true, 'exchange_rate' => 8500]);
+    $order = App\Models\Order::create([
+        'shop_id' => $shop->id, 'order_status' => 'Complete', 'sub_total' => 40, 'vat' => 0, 'exelo_amount' => 0,
+        'total_price' => 40, 'total_price_sls' => 340000, 'exchange_rate' => 8500, 'order_type' => 'shop',
+    ]);
+    $invoice = makeInvoice([
+        'merchant_id' => $shop->id, 'order_id' => $order->id, 'amount' => 40, 'currency' => 'USD', 'type' => 'Sale', 'rail' => 'cash', 'subscription_plan_id' => null,
+    ]);
+
+    $row = app(InvoiceDocumentService::class)->listRow($invoice->fresh());
+
+    expect($row['amount'])->toBe('$40.00 (340,000 SLSH)');
+
+    $this->actingAs($admin, 'web')->get(route('admin.invoices.document', $invoice->id))
+        ->assertOk()
+        ->assertSee('$40.00 (340,000 SLSH)');
 });

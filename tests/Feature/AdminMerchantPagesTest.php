@@ -1,8 +1,10 @@
 <?php
 
 use App\Models\Employee;
+use App\Models\File;
 use App\Models\Invoice;
 use App\Models\Merchant;
+use App\Models\MerchantAccount;
 use App\Models\MerchantSubscription;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
@@ -185,4 +187,33 @@ it('requires delete-merchant to delete, then removes the merchant and login toge
         ->and(User::find($owner->id))->toBeNull()
         ->and(User::withTrashed()->find($owner->id)->email)->toBe("deleted{$merchantId}@email.com")
         ->and(Merchant::withTrashed()->find($merchantId)->phone_number)->toBe('0');
+});
+
+it('shows the merchant account, every shop it runs, and the shop logo', function () {
+    $admin = merchantPagesAdmin();
+
+    $owner = User::create(['name' => 'Nasra Yusuf', 'email' => 'nasra-owner@example.test', 'password' => Hash::make('x'), 'user_type' => 'merchant']);
+    $account = MerchantAccount::create([
+        'user_id' => $owner->id, 'first_name' => 'Nasra', 'last_name' => 'Yusuf',
+        'phone_number' => '+252655990001', 'phone_verified_at' => now(),
+    ]);
+
+    $file = File::create([
+        'public_id' => 'file_logo_1', 'purpose' => 'merchant_logo', 'disk' => 'public',
+        'path' => 'logos/nasra.png', 'content_type' => 'image/png', 'bytes' => 100,
+    ]);
+
+    $main = Merchant::create(['merchant_id' => $account->id, 'user_id' => $owner->id, 'business_name' => 'Nasra Main', 'phone_number' => '+252634880001', 'is_approved' => true]);
+    $main->forceFill(['logo_file_id' => 'file_logo_1'])->save();
+    $second = Merchant::create(['merchant_id' => $account->id, 'business_name' => 'Nasra Two', 'phone_number' => '+252634880002', 'is_approved' => false]);
+
+    $this->actingAs($admin, 'web')->get(route('view-merchant', $main->id))
+        ->assertOk()
+        ->assertSee('Merchant account')
+        ->assertSee('Nasra Yusuf')
+        ->assertSee('+252655990001')
+        ->assertSee('Nasra Main')
+        ->assertSee('Nasra Two')
+        ->assertSee('Viewing')
+        ->assertSee($file->url(), false);
 });

@@ -56,7 +56,7 @@ class CheckoutService
                 'cart_version' => $cart->version,
                 'quote_id' => $data['quote_id'] ?? null,
                 'idempotency_key' => 'pay:'.$data['idempotency_key'],
-                'tendered' => $data['amount_tendered']['amount'] ?? null,
+                'tendered' => $data['amount_tendered'] ?? null,
             ]);
 
             $payload = $charge['data'];
@@ -68,13 +68,12 @@ class CheckoutService
             }
 
             $order = Order::findOrFail($payload['order']['id']);
-            $changeDue = isset($data['amount_tendered']) ? Money::usd($data['amount_tendered']['amount'] - $payload['customer_charge']['amount']) : null;
 
             return ['data' => [
                 'status' => 'paid',
                 'charge_id' => $payload['charge_id'],
-                'order' => ['id' => $order->id, 'order_status' => 'Complete', 'total' => Money::usd(Money::toMinor((float) $order->total_price, 'USD'))],
-                'change_due' => $changeDue,
+                'order' => ['id' => $order->id, 'order_status' => 'Complete'] + $this->orders->totalBlock($order, $merchant),
+                'change_due' => $payload['change_due'] ?? null,
                 'receipt' => $payload['receipt'],
                 'cart' => $this->carts->snapshot($cart->refresh(), $merchant),
             ], 'message' => 'Sale complete', 'status' => 200];
@@ -133,9 +132,8 @@ class CheckoutService
                     'order_status' => 'Pending',
                     'name' => $order->name,
                     'mobile_number' => $order->mobile_number,
-                    'total' => Money::usd(Money::toMinor((float) $order->total_price, 'USD')),
                     'created_at' => ApiResponse::iso($order->created_at),
-                ],
+                ] + $this->orders->totalBlock($order, $merchant),
                 'cart' => $this->carts->snapshot($cart->refresh(), $merchant),
             ], 'message' => 'Order held for '.$order->name, 'status' => 201];
         }));

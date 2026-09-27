@@ -26,6 +26,8 @@ it('lists the wallets and only the rails the shop can really use', function () {
 
     test()->withToken($token)->getJson('/api/v1/payments/methods')
         ->assertOk()
+        ->assertJsonPath('data.shop.id', $owner->merchant->id)
+        ->assertJsonPath('data.shop.business_name', $owner->merchant->business_name)
         ->assertJsonPath('data.accepts', ['cash'])
         ->assertJsonPath('data.wallets.0.rail', 'zaad')
         ->assertJsonPath('data.wallets.0.status', 'not_set')
@@ -53,10 +55,11 @@ it('needs a token for the payment endpoints', function () {
 });
 
 it('quotes cash without any fee', function () {
-    makeMerchant('2580');
+    $owner = makeMerchant('2580');
 
     test()->withToken(ownerToken())->postJson('/api/v1/payments/quote', quoteBody())
         ->assertOk()
+        ->assertJsonPath('data.shop.id', $owner->merchant->id)
         ->assertJsonPath('data.amount.amount', 3774)
         ->assertJsonPath('data.customer_charge.amount', 3774)
         ->assertJsonPath('data.merchant_receives.amount', 3774)

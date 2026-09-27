@@ -267,7 +267,7 @@ class CartService
             return ['status' => 'rejected'] + $result + ['reason' => ['code' => 'cart.quantity_invalid', 'message' => 'Quantity must be at least 1']];
         }
 
-        $product = Product::where('merchant_id', $merchant->id)->find($line['product_id']);
+        $product = Product::where('shop_id', $merchant->id)->find($line['product_id']);
         if (! $product) {
             return ['status' => 'rejected'] + $result + ['reason' => ['code' => 'product.not_found', 'message' => 'This product was deleted']];
         }
@@ -317,7 +317,7 @@ class CartService
 
     private function product(Merchant $merchant, int $id): Product
     {
-        return Product::where('merchant_id', $merchant->id)->find($id)
+        return Product::where('shop_id', $merchant->id)->find($id)
             ?? throw new ApiException('product.not_found', 'We could not find that product', 404);
     }
 

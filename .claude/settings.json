@@ -1,7 +1,33 @@
 {
   "permissions": {
     "allow": [
-      "Bash(php -r \"echo extension_loaded\\('gd'\\)?'gd yes':'gd no', ' ', extension_loaded\\('mbstring'\\)?'mb yes':'mb no', PHP_EOL;\")"
+      "Bash(php -r \"echo extension_loaded\\('gd'\\)?'gd yes':'gd no', ' ', extension_loaded\\('mbstring'\\)?'mb yes':'mb no', PHP_EOL;\")",
+      "Bash(grep -n \"admin.*merchant\\\\|Admin\\\\\\\\\\\\\\\\MerchantController\\\\|merchants\" routes/web.php)",
+      "Bash(grep -n 'public $incrementing\\\\|protected $primaryKey\\\\|public_id' app/Models/File.php)",
+      "Bash(grep -n -A20 \"FAILED  Tests\\\\\\\\\\\\\\\\Feature\\\\\\\\\\\\\\\\AdminMerchantPagesTest > it shows the merchant\" /tmp/out3.txt)",
+      "Bash(grep -n \"assertSee\\\\|PHPUnit\\\\\\\\\\\\\\\\Framework\\\\\\\\\\\\\\\\ExpectationFailedException\\\\|Response does not contain\" /tmp/out3.txt)",
+      "Bash(vendor/bin/pint tests/Feature/AdminMerchantPagesTest.php)",
+      "Bash(vendor/bin/pint app/Services/EmployeeDirectoryService.php app/Http/Controllers/Admin/EmployeeController.php tests/Feature/AdminEmployeesPageTest.php)",
+      "Bash(vendor/bin/pint app/Services/PaymentService.php app/Services/InvoicePaymentService.php)",
+      "Bash(vendor/bin/pint tests/Feature/PaymentsV1Test.php tests/Feature/SalesV1Test.php)",
+      "Bash(python3 -c \"print\\('ok'\\)\")",
+      "Bash(vendor/bin/pint --dirty)",
+      "Bash(sed -i \"270s/where\\('merchant_id'/where\\('shop_id'/;320s/where\\('merchant_id'/where\\('shop_id'/\" app/Services/CartService.php)",
+      "Bash(sed -i \"113s/where\\('merchant_id'/where\\('shop_id'/;224s/where\\('merchant_id'/where\\('shop_id'/\" app/Services/StockService.php)",
+      "Bash(sed -i \"108s/where\\('merchant_id'/where\\('shop_id'/\" app/Services/OrderService.php)",
+      "Bash(sed -i \"178s/where\\('products.merchant_id'/where\\('products.shop_id'/;191s/where\\('products.merchant_id'/where\\('products.shop_id'/;216s/where\\('products.merchant_id'/where\\('products.shop_id'/;247s/where\\('products.merchant_id'/where\\('products.shop_id'/\" app/Services/DashboardService.php)",
+      "Bash(sed -i \"141s/where\\('merchant_id'/where\\('shop_id'/;201s/where\\('products.merchant_id'/where\\('products.shop_id'/;264s/where\\('products.merchant_id'/where\\('products.shop_id'/;279s/where\\('merchant_id'/where\\('shop_id'/;300s/where\\('products.merchant_id'/where\\('products.shop_id'/;353s/where\\('merchant_id'/where\\('shop_id'/\" app/Services/ReportService.php)",
+      "Bash(xargs grep -l \"Product\\\\|Category\")",
+      "Bash(vendor/bin/pint tests/Feature/InventoryV1Test.php)",
+      "Bash(vendor/bin/pint tests/Feature/SalesV1Test.php)",
+      "Bash(grep -E \"Error|Failed asserting|\\\\.php:[0-9]+$\")",
+      "Bash(vendor/bin/pint app/Http/Controllers/Admin/OrderController.php)",
+      "Bash(vendor/bin/pint tests/Feature/AdminOrdersPageTest.php)",
+      "Bash(vendor/bin/pint app/Services/InvoiceDocumentService.php app/Http/Controllers/Admin/InvoiceController.php)",
+      "Bash(sed -i 's/$regTxn = Transaction::create/Transaction::create/;s/$saleTxn = Transaction::create/Transaction::create/' tests/Feature/AdminTransactionsPageTest.php)",
+      "Bash(sed -i \"s/'v_tx_paid'/'vtxpaid9901'/g;s/'v_tx_failed'/'vtxfailed9902'/g;s/'v_tx'/'vtx99'/g\" tests/Feature/AdminTransactionsPageTest.php)",
+      "Bash(vendor/bin/pint tests/Feature/AdminTransactionsPageTest.php)",
+      "Bash(grep -E \"Failed asserting|Error|\\\\.php:[0-9]+$\")"
     ]
   }
 }

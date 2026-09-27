@@ -25,7 +25,7 @@ class InventoryDirectoryService
     public function listQuery(): Builder
     {
         return Product::withTrashed()
-            ->with(['merchant', 'category'])
+            ->with(['merchant', 'merchantAccount', 'category'])
             ->select('products.*')
             ->selectSub($this->stockSub('shop'), 'qty_shop')
             ->selectSub($this->stockSub('stock'), 'qty_stock')
@@ -53,10 +53,11 @@ class InventoryDirectoryService
         $shelf = (int) $product->qty_shop;
 
         return [
-            'merchant' => $product->merchant?->business_name ?: trim($product->merchant?->first_name.' '.$product->merchant?->last_name),
+            'shop' => $product->merchant?->business_name ?: trim($product->merchant?->first_name.' '.$product->merchant?->last_name),
+            'merchant_account' => $product->merchantAccount?->fullName(),
             'category' => $product->category?->name,
             'price' => Money::usd(Money::toMinor((float) $product->price, 'USD'))['display'],
-            'shop' => $shelf,
+            'shelf_qty' => $shelf,
             'stock' => (int) $product->qty_stock,
             'transit' => (int) $product->qty_transit,
             'status' => $this->status($product, $shelf),
@@ -68,7 +69,7 @@ class InventoryDirectoryService
      */
     public function detail(Product $product): array
     {
-        $product->loadMissing(['merchant', 'category']);
+        $product->loadMissing(['merchant', 'merchantAccount', 'category']);
         $quantities = $product->inventories()->pluck('quantity', 'type');
         $shelf = (int) ($quantities['shop'] ?? 0);
 

@@ -24,6 +24,7 @@
                 <table id="CategoryTable" class="table table-striped">
                     <thead>
                     <tr>
+                        <th>Shop</th>
                         <th>Merchant</th>
                         <th>Category</th>
                         <th>Products</th>
@@ -48,7 +49,8 @@
                 serverSide: true,
                 ajax: {url: '{{ route('admin.categories.index') }}', type: 'GET'},
                 columns: [
-                    {data: 'merchant', name: 'merchant'},
+                    {data: 'shop', name: 'shop'},
+                    {data: 'merchant_account', name: 'merchant_account', orderable: false, searchable: false, defaultContent: '—'},
                     {data: 'name', name: 'name'},
                     {data: 'products_count', name: 'products_count', searchable: false},
                     {data: 'status', name: 'status', orderable: false, searchable: false, render: function (status) {
@@ -56,7 +58,7 @@
                         }},
                     {data: 'created_at', name: 'created_at'}
                 ],
-                order: [[4, 'desc']]
+                order: [[5, 'desc']]
             });
         });
     </script>

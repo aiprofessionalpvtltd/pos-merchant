@@ -2,13 +2,7 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Http\Controllers\API\BaseController;
-use App\Http\Resources\CategoryResource;
-use App\Http\Resources\ProductCatalogResource;
-use App\Http\Resources\ProductResource;
 use App\Http\Resources\TopSellingProductResource;
-use App\Models\CartItem;
-use App\Models\Category;
 use App\Models\InventoryHistory;
 use App\Models\Invoice;
 use App\Models\Order;
@@ -18,60 +12,55 @@ use App\Models\ProductInventory;
 use App\Models\Transaction;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
 
 class DashboardController extends BaseController
 {
-
-//    public function mainDashboard()
-//    {
-//        try {
-//            // Get authenticated user
-//            $authUser = auth()->user();
-//
-//            if ($authUser->user_type == 'employee') {
-//                $authUser->merchant = $authUser->employee->merchant;
-//            }
-//
-//
-//            // Ensure the authenticated user exists and has a merchant
-//            if (!$authUser || !$authUser->merchant) {
-//                return $this->sendError('Merchant not found for the authenticated user.');
-//            }
-//
-//            // Get merchant ID from authenticated user's merchant relation
-//            $merchantID = $authUser->merchant->id;
-//
-//            if ($authUser->user_type == 'employee') {
-//                $authUser->merchant = $authUser->employee->merchant;
-//                $pendingCount = Order::where('user_id', $authUser->id)->where('order_status', 'Pending')->count();
-//                $completeCount = Order::where('user_id', $authUser->id)->where('order_status', 'Complete')->count();
-//
-//            } else {
-//                $pendingCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Pending')->count();
-//                $completeCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Complete')->count();
-//
-//            }
-//
-//            // Prepare response data
-//            $data = [
-//                'pending_order_count' => $pendingCount,
-//                'complete_order_count' => $completeCount,
-//
-//
-//            ];
-//
-//            // Return success response with the statistics
-//            return $this->sendResponse($data, 'Overall product statistics retrieved successfully.');
-//
-//        } catch (\Exception $e) {
-//            return $this->sendError('Error fetching overall product statistics.', [$e->getMessage()]);
-//        }
-//    }
-
+    //    public function mainDashboard()
+    //    {
+    //        try {
+    //            // Get authenticated user
+    //            $authUser = auth()->user();
+    //
+    //            if ($authUser->user_type == 'employee') {
+    //                $authUser->merchant = $authUser->employee->merchant;
+    //            }
+    //
+    //
+    //            // Ensure the authenticated user exists and has a merchant
+    //            if (!$authUser || !$authUser->merchant) {
+    //                return $this->sendError('Merchant not found for the authenticated user.');
+    //            }
+    //
+    //            // Get merchant ID from authenticated user's merchant relation
+    //            $merchantID = $authUser->merchant->id;
+    //
+    //            if ($authUser->user_type == 'employee') {
+    //                $authUser->merchant = $authUser->employee->merchant;
+    //                $pendingCount = Order::where('user_id', $authUser->id)->where('order_status', 'Pending')->count();
+    //                $completeCount = Order::where('user_id', $authUser->id)->where('order_status', 'Complete')->count();
+    //
+    //            } else {
+    //                $pendingCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Pending')->count();
+    //                $completeCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Complete')->count();
+    //
+    //            }
+    //
+    //            // Prepare response data
+    //            $data = [
+    //                'pending_order_count' => $pendingCount,
+    //                'complete_order_count' => $completeCount,
+    //
+    //
+    //            ];
+    //
+    //            // Return success response with the statistics
+    //            return $this->sendResponse($data, 'Overall product statistics retrieved successfully.');
+    //
+    //        } catch (\Exception $e) {
+    //            return $this->sendError('Error fetching overall product statistics.', [$e->getMessage()]);
+    //        }
+    //    }
 
     public function getOverallProductStatistics()
     {
@@ -83,9 +72,8 @@ class DashboardController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -97,31 +85,31 @@ class DashboardController extends BaseController
 
             // Total products in shop (associated with this merchant)
             $totalProductsInShop = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
-                $query->where('merchant_id', $merchantID);
+                $query->where('shop_id', $merchantID);
             })->where('type', 'shop')->sum('quantity');
 
             // Total products in stock (associated with this merchant)
             $totalProductsInStock = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
-                $query->where('merchant_id', $merchantID);
+                $query->where('shop_id', $merchantID);
             })->where('type', 'stock')->sum('quantity');
 
             // Overall total quantity (sum of both stock and shop)
             $overallTotal = $totalProductsInShop + $totalProductsInStock;
 
             $totalProductsSold = OrderItem::whereHas('product', function ($query) use ($merchantID) {
-                $query->where('merchant_id', $merchantID);
+                $query->where('shop_id', $merchantID);
             })
                 ->whereBetween('created_at', [Carbon::now()->startOfMonth(), Carbon::now()->endOfMonth()])
                 ->sum('quantity');
 
             // New products added to the shop in the last 7 days
             $newProductsInShop = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
-                $query->where('merchant_id', $merchantID);
+                $query->where('shop_id', $merchantID);
             })->where('type', 'shop')->where('created_at', '>=', $sevenDaysAgo)->sum('quantity');
 
             // New products added to the stock in the last 7 days
             $newProductsInStock = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
-                $query->where('merchant_id', $merchantID);
+                $query->where('shop_id', $merchantID);
             })->where('type', 'stock')->where('created_at', '>=', $sevenDaysAgo)->sum('quantity');
 
             // Total new products in the last 7 days
@@ -148,14 +136,13 @@ class DashboardController extends BaseController
                 ? ($newProductsInStock / $overallTotal) * 100
                 : 0;
 
-//            if ($authUser->user_type == 'employee') {
-//                $pendingCount = Order::where('user_id', $authUser->id)->where('order_status', 'Pending')->count();
-//                $completeCount = Order::where('user_id', $authUser->id)->where('order_status', 'Complete')->count();
-//            } else {
-                $pendingCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Pending')->count();
-                $completeCount = Order::where('merchant_id', $merchantID)->where('order_status', 'Complete')->count();
-//            }
-
+            //            if ($authUser->user_type == 'employee') {
+            //                $pendingCount = Order::where('user_id', $authUser->id)->where('order_status', 'Pending')->count();
+            //                $completeCount = Order::where('user_id', $authUser->id)->where('order_status', 'Complete')->count();
+            //            } else {
+            $pendingCount = Order::where('shop_id', $merchantID)->where('order_status', 'Pending')->count();
+            $completeCount = Order::where('shop_id', $merchantID)->where('order_status', 'Complete')->count();
+            //            }
 
             if ($authUser->user_type == 'merchant') {
                 $currentSubscriptionID = $authUser->merchant->currentSubscription->subscription_plan_id;
@@ -183,7 +170,6 @@ class DashboardController extends BaseController
                 $latestClient = $this->getLatestClientsForNormalMerchant()->getData(true);
                 $latestClient = $latestClient['data'];
             }
-
 
             $pendingTransaction = $this->getPendingOrders()->getData(true);
             $pendingTransaction = $pendingTransaction['data'];
@@ -233,8 +219,7 @@ class DashboardController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -244,21 +229,21 @@ class DashboardController extends BaseController
             $startOfWeek = now()->startOfWeek();
             $endOfWeek = now()->endOfWeek();
 
-// Set start and end of the previous week
+            // Set start and end of the previous week
             $startOfPreviousWeek = now()->subWeek()->startOfWeek();
             $endOfPreviousWeek = now()->subWeek()->endOfWeek();
 
-// Get total transaction amount for the current week (no order_id)
+            // Get total transaction amount for the current week (no order_id)
             $currentWeekTransactions = Transaction::where('merchant_id', $merchantID)
                 ->whereBetween('created_at', [$startOfWeek, $endOfWeek])
                 ->sum('transaction_amount');
 
-// Get total transaction amount for the previous week (no order_id)
+            // Get total transaction amount for the previous week (no order_id)
             $previousWeekTransactions = Transaction::where('merchant_id', $merchantID)
                 ->whereBetween('created_at', [$startOfPreviousWeek, $endOfPreviousWeek])
                 ->sum('transaction_amount');
 
-// Calculate the percentage change between the current week and previous week
+            // Calculate the percentage change between the current week and previous week
             if ($previousWeekTransactions > 0) {
                 $totalAmountPercentageChange = (($currentWeekTransactions - $previousWeekTransactions) / $previousWeekTransactions) * 100;
 
@@ -270,7 +255,6 @@ class DashboardController extends BaseController
                 if ($totalAmountPercentageChange < 0) {
                     $totalAmountPercentageChange = 0;
                 }
-
 
             } else {
                 // If no transactions in the previous week, we can't calculate a percentage change
@@ -286,14 +270,13 @@ class DashboardController extends BaseController
                 ->get();
 
             $soldProductsData = OrderItem::whereHas('order', function ($query) use ($merchantID) {
-                $query->where('merchant_id', $merchantID);
+                $query->where('shop_id', $merchantID);
             })
                 ->select(DB::raw('DATE(created_at) as sold_date'),
                     DB::raw('SUM(quantity) as total_products'))
                 ->groupBy(DB::raw('DATE(created_at)'))
                 ->whereBetween(DB::raw('DATE(created_at)'), [$startOfWeek, $endOfWeek])
                 ->get();
-
 
             // Prepare response data for the week
             $data = $this->prepareWeeklySalesData($startOfWeek, $endOfWeek, $weeklyInvoiceData, $soldProductsData);
@@ -322,8 +305,7 @@ class DashboardController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -410,7 +392,6 @@ class DashboardController extends BaseController
         return $data;
     }
 
-
     public function getTopSellingProducts()
     {
         try {
@@ -421,9 +402,8 @@ class DashboardController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -432,7 +412,7 @@ class DashboardController extends BaseController
 
             // Retrieve top-selling products based on the orders placed by the merchant
             $topSellingProducts = Product::with('inventories')->whereHas('orderItems.order', function ($query) use ($merchantID) {
-                $query->where('merchant_id', $merchantID);
+                $query->where('shop_id', $merchantID);
             })
                 ->withCount(['orderItems as total_quantity_sold' => function ($query) {
                     $query->select(\DB::raw('SUM(quantity)'));
@@ -442,9 +422,8 @@ class DashboardController extends BaseController
                 ->get();
 
             // Return success response with top-selling products
-//            return $this->sendResponse(TopSellingProductResource::collection($topSellingProducts), 'Top-selling products retrieved successfully.');
+            //            return $this->sendResponse(TopSellingProductResource::collection($topSellingProducts), 'Top-selling products retrieved successfully.');
             return TopSellingProductResource::collection($topSellingProducts);
-
 
         } catch (\Exception $e) {
             return $this->sendError('Error fetching top-selling products.', [$e->getMessage()]);
@@ -461,9 +440,8 @@ class DashboardController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -473,24 +451,23 @@ class DashboardController extends BaseController
             // Count products where any inventory's quantity is less than or equal to the alarm_limit
             $alarmLimitCount = Product::whereHas('inventories', function ($query) {
                 $query->whereColumn('quantity', '<=', 'alarm_limit')->where('type', 'shop');
-            })->where('merchant_id', $merchantID)->count();
+            })->where('shop_id', $merchantID)->count();
 
             // Count products where any inventory's quantity is less than or equal to the stock_limit
             $stockLimitCount = Product::whereHas('inventories', function ($query) {
                 $query->whereColumn('quantity', '<=', 'stock_limit')->where('type', 'shop');
-            })->where('merchant_id', $merchantID)->count();
+            })->where('shop_id', $merchantID)->count();
 
             // Return the response with both counts
             return [
                 'alarm_limit_count' => $alarmLimitCount,
-                'stock_limit_count' => $stockLimitCount
+                'stock_limit_count' => $stockLimitCount,
             ];
 
         } catch (\Exception $e) {
             return $this->sendError('Error fetching product limit counts.', [$e->getMessage()]);
         }
     }
-
 
     // Function to get products based on alarm limit
     public function getProductsByAlarmLimit()
@@ -503,9 +480,8 @@ class DashboardController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -518,7 +494,7 @@ class DashboardController extends BaseController
                 ->with(['inventories' => function ($query) {
                     $query->select('id', 'product_id', 'type', 'quantity'); // Select relevant fields
                 }])
-                ->where('merchant_id', $merchantID)
+                ->where('shop_id', $merchantID)
                 ->get(['id', 'product_name']); // Select only the necessary fields from Product
 
             // Transform the products to include shop and stock quantities
@@ -550,8 +526,7 @@ class DashboardController extends BaseController
         }
     }
 
-
-// Function to get products based on stock limit
+    // Function to get products based on stock limit
     public function getProductsByStockLimit()
     {
         try {
@@ -562,9 +537,8 @@ class DashboardController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -577,7 +551,7 @@ class DashboardController extends BaseController
             })
                 ->with(['inventories' => function ($query) {
                     $query->select('id', 'product_id', 'type', 'quantity'); // Select relevant fields
-                }])->where('merchant_id', $merchantID)
+                }])->where('shop_id', $merchantID)
                 ->get(['id', 'product_name']); // Select only the necessary fields from Product
 
             // Transform the products to include shop and stock quantities
@@ -615,7 +589,7 @@ class DashboardController extends BaseController
             // Get the authenticated merchant
             $authUser = auth()->user();
 
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -629,7 +603,7 @@ class DashboardController extends BaseController
                 ->limit(10) // Limit to 5 latest invoices
                 ->get();
 
-//            dd($transactions);
+            //            dd($transactions);
             // Format the response
             $transactionData = $transactions->map(function ($transaction) {
                 return [
@@ -639,7 +613,7 @@ class DashboardController extends BaseController
                     'payment_method' => $transaction->payment_method, // Assuming mobile number stored in the invoice
                     'order_date' => dateInsert($transaction->created_at), // Use invoice creation date
                     'invoice_amount' => convertShillingToUSD($transaction->transaction_amount), // Use invoice amount
-                    'name_initial' => 'N/A' // Since no order details exist, initials not applicable
+                    'name_initial' => 'N/A', // Since no order details exist, initials not applicable
                 ];
             });
 
@@ -655,7 +629,7 @@ class DashboardController extends BaseController
             // Get the authenticated merchant
             $authUser = auth()->user();
 
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -681,7 +655,7 @@ class DashboardController extends BaseController
                     'payment_method' => $transaction->payment_method, // Payment method
                     'order_date' => dateInsert($transaction->created_at), // Invoice creation date
                     'invoice_amount' => convertShillingToUSD($transaction->transaction_amount), // Invoice amount in USD
-                    'name_initial' => 'N/A' // Initials not applicable if no order details
+                    'name_initial' => 'N/A', // Initials not applicable if no order details
                 ];
             });
 
@@ -690,7 +664,6 @@ class DashboardController extends BaseController
             return $this->sendError('An error occurred while fetching transactions.', ['error' => $e->getMessage()]);
         }
     }
-
 
     public function getInvoicesWithOrders()
     {
@@ -702,7 +675,7 @@ class DashboardController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -720,13 +693,14 @@ class DashboardController extends BaseController
             // Format the response
             $invoiceData = $invoices->map(function ($invoice) {
                 $order = $invoice->order ?? '';
+
                 return [
                     'invoice_id' => $invoice->id,
                     'order_id' => $order->id ?? null,
                     'name' => $order->name ? $order->name : $invoice->mobile_number,
                     'order_date' => $order ? dateInsert($order->created_at) : 'N/A',
                     'invoice_amount' => convertShillingToUSD($order->total_price),
-                    'name_initial' => $this->getInitials($order ? ($order->name) : 'N/A')
+                    'name_initial' => $this->getInitials($order ? ($order->name) : 'N/A'),
                 ];
             });
 
@@ -746,14 +720,14 @@ class DashboardController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
             $merchantID = $authUser->merchant->id;
 
             // Fetch pending orders for the authenticated merchant
-            $pendingOrders = Order::where('merchant_id', $merchantID)
+            $pendingOrders = Order::where('shop_id', $merchantID)
                 ->where('order_status', 'Pending')
                 ->orderBy('created_at', 'desc') // Order by creation date descending
                 ->limit(5) // Limit to 5 latest pending orders
@@ -767,7 +741,7 @@ class DashboardController extends BaseController
                     'order_date' => dateInsert($order->created_at),
                     'invoice_amount' => convertShillingToUSD($order->total_price ?? 0),
                     'invoice_amount_in_usd' => convertShillingToUSD($order->total_price ?? 0),
-                    'name_initial' => $this->getInitials($order->name ?? 'N A')
+                    'name_initial' => $this->getInitials($order->name ?? 'N A'),
                 ];
             });
 
@@ -787,14 +761,14 @@ class DashboardController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
             $merchantID = $authUser->merchant->id;
 
             // Fetch the latest clients based on orders for the authenticated merchant
-            $latestClients = Order::where('merchant_id', $merchantID)
+            $latestClients = Order::where('shop_id', $merchantID)
                 ->orderBy('created_at', 'desc') // Order by creation date descending
                 ->limit(5) // Limit to 5 latest clients
                 ->get();
@@ -803,7 +777,7 @@ class DashboardController extends BaseController
             $clientData = $latestClients->map(function ($order) {
                 return [
                     'name' => $order->name ?? $order->mobile_number,
-                    'name_initial' => $this->getInitials($order->name ?? 'N A')
+                    'name_initial' => $this->getInitials($order->name ?? 'N A'),
                 ];
             });
 
@@ -823,56 +797,54 @@ class DashboardController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
             $merchantID = $authUser->merchant->id;
 
             // Fetch the latest clients based on invoices having an order_id for the authenticated merchant
-//            $latestClients = Order::whereHas('invoice', function ($query) {
-//                $query->whereNotNull('order_id');
-//            })
-//                ->where('merchant_id', $merchantID)
-//                ->orderBy('id', 'desc') // Order by creation date descending
-//                ->limit(5) // Limit to 5 latest clients
-//                ->get();
+            //            $latestClients = Order::whereHas('invoice', function ($query) {
+            //                $query->whereNotNull('order_id');
+            //            })
+            //                ->where('merchant_id', $merchantID)
+            //                ->orderBy('id', 'desc') // Order by creation date descending
+            //                ->limit(5) // Limit to 5 latest clients
+            //                ->get();
 
             // Fetch the latest clients based on invoices having an order_id for the authenticated merchant
 
             // Format the response
-//            $clientData = $latestClients->map(function ($order) {
-//                // Access the associated invoice
-//                $invoice = $order->invoice;
-//
-//                // Check payment method and format the name accordingly
-//                if ($invoice && $invoice->payment_method === 'card') {
-//                    $name = trim(($invoice->first_name ?? '') . ' ' . ($invoice->last_name ?? ''));
-//                } else {
-//                    $name = $invoice->mobile_number ?? 'N/A';
-//                }
-//
-//                return [
-//                    'name' => $name ?: 'N/A',
-//                    'payment_method' => $invoice->payment_method,
-//                    'order_id' => $order->id ?? null,
-//                    'name_initial' => $this->getInitials($name ?: 'Not Available'),
-//                ];
-//            });
+            //            $clientData = $latestClients->map(function ($order) {
+            //                // Access the associated invoice
+            //                $invoice = $order->invoice;
+            //
+            //                // Check payment method and format the name accordingly
+            //                if ($invoice && $invoice->payment_method === 'card') {
+            //                    $name = trim(($invoice->first_name ?? '') . ' ' . ($invoice->last_name ?? ''));
+            //                } else {
+            //                    $name = $invoice->mobile_number ?? 'N/A';
+            //                }
+            //
+            //                return [
+            //                    'name' => $name ?: 'N/A',
+            //                    'payment_method' => $invoice->payment_method,
+            //                    'order_id' => $order->id ?? null,
+            //                    'name_initial' => $this->getInitials($name ?: 'Not Available'),
+            //                ];
+            //            });
 
             $latestClients = Invoice::where('merchant_id', $merchantID)
                 ->orderBy('id', 'desc') // Order by creation date descending
                 ->limit(5) // Limit to 5 latest clients
                 ->get();
 
-
             $clientData = $latestClients->map(function ($invoice) {
                 // Access the associated invoice
 
-
                 // Check payment method and format the name accordingly
                 if ($invoice && $invoice->payment_method === 'card') {
-                    $name = trim(($invoice->first_name ?? '') . ' ' . ($invoice->last_name ?? ''));
+                    $name = trim(($invoice->first_name ?? '').' '.($invoice->last_name ?? ''));
                 } else {
                     $name = $invoice->mobile_number ?? 'N/A';
                 }
@@ -884,7 +856,6 @@ class DashboardController extends BaseController
                     'name_initial' => $this->getInitials($name ?: 'Not Available'),
                 ];
             });
-
 
             return $this->sendResponse($clientData, 'Latest clients for normal merchants fetched successfully.');
         } catch (\Exception $e) {
@@ -898,7 +869,7 @@ class DashboardController extends BaseController
             // Get the authenticated merchant
             $authUser = auth()->user();
 
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -916,13 +887,13 @@ class DashboardController extends BaseController
             $clientData = $latestClients->map(function ($invoice) {
                 // Show first_name + last_name if present, otherwise mobile_number
                 $name = $invoice->first_name && $invoice->last_name
-                    ? $invoice->first_name . ' ' . $invoice->last_name
+                    ? $invoice->first_name.' '.$invoice->last_name
                     : $invoice->mobile_number;
 
                 return [
                     'name' => $name,
                     'order_id' => null,
-                    'name_initial' => $this->getInitials($name ?? 'Not Available')
+                    'name_initial' => $this->getInitials($name ?? 'Not Available'),
                 ];
             });
 
@@ -943,7 +914,7 @@ class DashboardController extends BaseController
             }
 
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -963,9 +934,9 @@ class DashboardController extends BaseController
             }, 'order.items.product' => function ($query) {
                 $query->withTrashed(); // Include soft-deleted products
             }]) // Eager load order items and products for VAT calculation
-            ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
-                return $query->whereBetween('created_at', [$startDate, $endDate]);
-            })
+                ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
+                    return $query->whereBetween('created_at', [$startDate, $endDate]);
+                })
                 ->where('merchant_id', $merchantID)
                 ->get();
 
@@ -1032,7 +1003,7 @@ class DashboardController extends BaseController
             $totalAmount = $cashTotal + $edahabTotal + $zaadTotal + $totalVatAmount;
 
             $responseData = [
-                'date_range' => showDate($startDate) . ' - ' . showDate($endDate),
+                'date_range' => showDate($startDate).' - '.showDate($endDate),
                 'transaction_data' => $transactionData,
                 'totals' => [
                     'cash_total' => round($cashTotal),
@@ -1068,7 +1039,7 @@ class DashboardController extends BaseController
             }
 
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -1089,11 +1060,11 @@ class DashboardController extends BaseController
             }
 
             // Fetch inventory history records within the date range and for the merchant
-            $inventoryHistories = InventoryHistory::with(['product' => function($query) {
+            $inventoryHistories = InventoryHistory::with(['product' => function ($query) {
                 $query->withTrashed(); // Include soft-deleted products
             }, 'user'])
                 ->whereHas('product', function ($query) use ($merchantID) {
-                    $query->where('merchant_id', $merchantID);
+                    $query->where('shop_id', $merchantID);
                 })
                 ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
                     return $query->whereBetween('created_at', [$startDate, $endDate]);
@@ -1102,7 +1073,7 @@ class DashboardController extends BaseController
 
             // Group by date, product, and locations, then sum the quantities
             $summaryByDate = $inventoryHistories->groupBy(function ($history) {
-                return $history->created_at->format('Y-m-d') . '_' . $history->product_id . '_' . $history->from_location . '_' . $history->to_location;
+                return $history->created_at->format('Y-m-d').'_'.$history->product_id.'_'.$history->from_location.'_'.$history->to_location;
             })->map(function ($records) {
                 $firstRecord = $records->first();
 
@@ -1203,5 +1174,4 @@ class DashboardController extends BaseController
             return $this->sendError('Error retrieving inventory summary by date.', [$e->getMessage()]);
         }
     }
-
 }

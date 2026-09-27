@@ -396,7 +396,7 @@ class EmployeeService
      */
     public function metrics(Employee $employee, Carbon $from, Carbon $to): array
     {
-        $orders = Order::where('merchant_id', $employee->shop_id)
+        $orders = Order::where('shop_id', $employee->shop_id)
             ->where('user_id', $employee->user_id)
             ->whereIn('order_status', self::SALE_STATUSES)
             ->whereBetween('created_at', [$from, $to])
@@ -438,7 +438,7 @@ class EmployeeService
             ->whereBetween('start_time', [$from->format('Y-m-d H:i:s'), $to->format('Y-m-d H:i:s')])
             ->get(['user_id', 'start_time', 'end_time'])->groupBy('user_id');
 
-        $sales = Order::where('merchant_id', $merchant->id)->whereIn('user_id', $userIds)
+        $sales = Order::where('shop_id', $merchant->id)->whereIn('user_id', $userIds)
             ->whereIn('order_status', self::SALE_STATUSES)->whereBetween('created_at', [$from, $to])
             ->selectRaw('user_id, coalesce(sum(total_price), 0) as sales')->groupBy('user_id')->pluck('sales', 'user_id');
 

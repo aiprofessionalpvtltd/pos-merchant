@@ -1191,12 +1191,16 @@ unchanged.
 
 ### Staff across shops (2026-09-26)
 
-- **Schema.** `employees.merchant_id` holds a **shop id** (the legacy column name; see
-  [data-model.md](data-model.md)). New: index `employees(merchant_id, status)`;
-  `shifts.merchant_id` (a shop id, filled for existing shifts from the person's staff
-  record, or an owner's first shop) with index `(merchant_id, user_id, start_time)`; and
-  a unique index `employees(user_id, merchant_id)`, one staff record per person per shop.
-  The migration refuses to run if that pair already has duplicates.
+- **Schema.** `employees.shop_id` is the shop (FK `shops.id`); `employees.merchant_id`
+  is the merchant that owns that shop (FK `merchants.id`), filled in automatically
+  from the shop when a staff row is created (see [data-model.md](data-model.md)).
+  Before 2026-09-26 this table had only `merchant_id`, holding a shop id under the
+  legacy name; it was renamed and the real `merchant_id` added on top. Index
+  `employees(shop_id, status)`; `shifts.merchant_id` (a shop id, filled for existing
+  shifts from the person's staff record, or an owner's first shop) with index
+  `(merchant_id, user_id, start_time)`; and a unique index `employees(user_id, shop_id)`,
+  one staff record per person per shop. The migrations refuse to run if that pair
+  already has duplicates.
 - **Code.** `User::employments()` (all staff records), `User::actingEmployee()` (the
   record in the current shop, used for permissions), `Employee::shop()`,
   `MerchantAccount::employees()`, `Shift::forShop()`. `EmployeeService` adds

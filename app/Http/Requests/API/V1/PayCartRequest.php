@@ -20,7 +20,7 @@ class PayCartRequest extends FormRequest
             'quote_id' => ['sometimes', 'nullable', 'string', 'max:64'],
             'amount_tendered' => ['sometimes', 'array'],
             'amount_tendered.amount' => ['required_with:amount_tendered', 'integer', 'min:0', 'max:100000000'],
-            'amount_tendered.currency' => ['required_with:amount_tendered', 'in:USD'],
+            'amount_tendered.currency' => ['required_with:amount_tendered', 'in:USD,SLSH'],
             'customer' => ['sometimes', 'array'],
             'customer.wallet_number' => ['sometimes', 'nullable', 'string', 'max:20'],
             'customer.name' => ['sometimes', 'nullable', 'string', 'max:100'],

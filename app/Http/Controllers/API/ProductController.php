@@ -2,20 +2,17 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Http\Controllers\API\BaseController;
 use App\Http\Resources\CategoryResource;
 use App\Http\Resources\ProductCatalogResource;
 use App\Http\Resources\ProductResource;
-use App\Http\Resources\TopSellingProductResource;
 use App\Models\Category;
 use App\Models\InventoryHistory;
 use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductInventory;
 use Illuminate\Http\Request;
-use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\Validator;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 
 class ProductController extends BaseController
 {
@@ -48,7 +45,7 @@ class ProductController extends BaseController
             'image' => 'nullable|image|mimes:jpeg,png,jpg,gif', // Image validation
             'bar_code' => 'nullable|string|max:255',
             'quantity' => 'required|integer', // Inventory quantity
-            'type' => 'required|in:shop,stock' // Inventory type: shop or stock
+            'type' => 'required|in:shop,stock', // Inventory type: shop or stock
         ]);
 
         if ($validator->fails()) {
@@ -66,7 +63,7 @@ class ProductController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -79,7 +76,7 @@ class ProductController extends BaseController
                 $input['image'] = $request->file('image')->store('products', 'public');
             }
 
-            $product = NULL;
+            $product = null;
 
             if ($request->input('bar_code')) {
                 // Check if the product already exists by product_name and category_id
@@ -87,7 +84,6 @@ class ProductController extends BaseController
                     ->where('category_id', $request->input('category_id'))
                     ->first();
             }
-
 
             $input['price'] = $request->price;
             $input['price_sls'] = convertUSDToShilling($request->price);
@@ -97,13 +93,12 @@ class ProductController extends BaseController
             // Calculate final price with VAT
             $input['total_price'] = $request->price + ($request->price * $request->vat);
 
-
             if ($product) {
                 // If the product exists, update it
                 $product->update($input);
             } else {
                 // If the product does not exist, create a new one
-                $input['merchant_id'] = $merchantID;
+                $input['shop_id'] = $merchantID;
                 $product = Product::create($input);
             }
 
@@ -116,7 +111,7 @@ class ProductController extends BaseController
             $inventoryData = [
                 'product_id' => $product->id,
                 'quantity' => $request->input('quantity'),
-                'type' => $request->input('type')
+                'type' => $request->input('type'),
             ];
 
             if ($existingInventory) {
@@ -139,6 +134,7 @@ class ProductController extends BaseController
             return $this->sendResponse(new ProductResource($product), 'Product and Inventory created or updated successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Product creation or update failed.', [$e->getMessage()]);
         }
     }
@@ -153,14 +149,14 @@ class ProductController extends BaseController
         }
 
         // Ensure the authenticated user has a merchant relation
-        if (!$authUser || !$authUser->merchant) {
+        if (! $authUser || ! $authUser->merchant) {
             return $this->sendError('Merchant not found for the authenticated user.');
         }
 
         // Get the merchant's ID
         $merchantID = $authUser->merchant->id;
 
-        $product = Product::with('category', 'inventories')->where('merchant_id', $merchantID)->find($id);
+        $product = Product::with('category', 'inventories')->where('shop_id', $merchantID)->find($id);
 
         if (is_null($product)) {
             return $this->sendError('Single Product not found.');
@@ -179,7 +175,7 @@ class ProductController extends BaseController
         }
 
         // Ensure the authenticated user has a merchant relation
-        if (!$authUser || !$authUser->merchant) {
+        if (! $authUser || ! $authUser->merchant) {
             return $this->sendError('Merchant not found for the authenticated user.');
         }
 
@@ -187,7 +183,7 @@ class ProductController extends BaseController
         $merchantID = $authUser->merchant->id;
 
         // Validate the type input (must be either 'stock', 'shop', or 'transportation')
-        if (!in_array($type, ['stock', 'shop', 'transportation'])) {
+        if (! in_array($type, ['stock', 'shop', 'transportation'])) {
             return $this->sendError('Invalid type provided. It must be either "stock", "shop", or "transportation".');
         }
 
@@ -195,7 +191,7 @@ class ProductController extends BaseController
         $product = Product::with(['category', 'inventories' => function ($query) use ($type) {
             // Filter the inventories based on the provided type
             $query->where('type', $type);
-        }])->where('merchant_id', $merchantID)->find($id);
+        }])->where('shop_id', $merchantID)->find($id);
 
         // Check if the product exists and has inventories of the specified type
         if (is_null($product) || $product->inventories->isEmpty()) {
@@ -216,7 +212,7 @@ class ProductController extends BaseController
         }
 
         // Ensure the authenticated user has a merchant relation
-        if (!$authUser || !$authUser->merchant) {
+        if (! $authUser || ! $authUser->merchant) {
             return $this->sendError('Merchant not found for the authenticated user.');
         }
 
@@ -226,7 +222,7 @@ class ProductController extends BaseController
         $product = Product::with(['category', 'inventories' => function ($query) use ($type) {
             // Filter the inventories based on the provided type
             $query->where('type', $type);
-        }])->where('merchant_id', $merchantID)
+        }])->where('shop_id', $merchantID)
             ->where('bar_code', $barcode)->first();
 
         if (is_null($product)) {
@@ -251,7 +247,7 @@ class ProductController extends BaseController
         }
 
         // Ensure the authenticated user has a merchant relation
-        if (!$authUser || !$authUser->merchant) {
+        if (! $authUser || ! $authUser->merchant) {
             return $this->sendError('Merchant not found for the authenticated user.');
         }
 
@@ -259,7 +255,7 @@ class ProductController extends BaseController
         $merchantID = $authUser->merchant->id;
 
         $product = Product::with('category', 'inventories')
-            ->where('merchant_id', $merchantID)
+            ->where('shop_id', $merchantID)
             ->where('bar_code', $barcode)->first();
 
         if (is_null($product)) {
@@ -300,7 +296,7 @@ class ProductController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -308,10 +304,10 @@ class ProductController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Find the product by ID
-            $product = Product::where('merchant_id', $merchantID)->find($id);
+            $product = Product::where('shop_id', $merchantID)->find($id);
 
-            if (!$product) {
-                return $this->sendError('Product not found.', ['Product not found with ID ' . $id]);
+            if (! $product) {
+                return $this->sendError('Product not found.', ['Product not found with ID '.$id]);
             }
 
             // Prepare an array to store the updated fields
@@ -333,7 +329,6 @@ class ProductController extends BaseController
                 $input['total_price'] = $request->price + ($request->price * $product->vat / 100);
             }
 
-
             // Check if a new image has been uploaded
             if ($request->hasFile('image')) {
                 // Remove the existing image if it exists
@@ -347,12 +342,12 @@ class ProductController extends BaseController
             }
 
             // Update the product only with the fields that are provided
-            if (!empty($input)) {
+            if (! empty($input)) {
                 $product->update($input);
             }
 
             // Retrieve the updated product data
-            $productData = Product::where('merchant_id', $merchantID)->find($product->id);
+            $productData = Product::where('shop_id', $merchantID)->find($product->id);
 
             // Commit the transaction
             DB::commit();
@@ -362,6 +357,7 @@ class ProductController extends BaseController
         } catch (\Exception $e) {
             // Rollback the transaction on error
             DB::rollBack();
+
             return $this->sendError('Product update failed.', [$e->getMessage()]);
         }
     }
@@ -372,9 +368,11 @@ class ProductController extends BaseController
             DB::beginTransaction();
             $product->delete();
             DB::commit();
+
             return $this->sendResponse([], 'Product deleted successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Product deletion failed.', [$e->getMessage()]);
         }
     }
@@ -389,9 +387,8 @@ class ProductController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -399,7 +396,7 @@ class ProductController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             $products = Product::with(['category', 'inventories', 'merchant'])
-                ->where('merchant_id', $merchantID)->get();
+                ->where('shop_id', $merchantID)->get();
 
             if ($products->isEmpty()) {
                 return $this->sendResponse([], 'No products found.');
@@ -445,9 +442,8 @@ class ProductController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -456,12 +452,12 @@ class ProductController extends BaseController
 
             // Total products in shop (associated with this merchant)
             $totalProductsInShop = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
-                $query->where('merchant_id', $merchantID);
+                $query->where('shop_id', $merchantID);
             })->where('type', 'shop')->sum('quantity');
 
             // Total products in stock (associated with this merchant)
             $totalProductsInStock = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
-                $query->where('merchant_id', $merchantID);
+                $query->where('shop_id', $merchantID);
             })->where('type', 'stock')->sum('quantity');
 
             // Overall total quantity (sum of both stock and shop)
@@ -481,8 +477,8 @@ class ProductController extends BaseController
                 'total_products_in_shop' => $totalProductsInShop,
                 'total_products_in_stock' => $totalProductsInStock,
                 'overall_total' => $overallTotal,
-                'shop_percentage' => round($shopPercentage, 2) . '%',
-                'stock_percentage' => round($stockPercentage, 2) . '%',
+                'shop_percentage' => round($shopPercentage, 2).'%',
+                'stock_percentage' => round($stockPercentage, 2).'%',
             ];
 
             // Return success response with the statistics
@@ -504,7 +500,7 @@ class ProductController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -512,9 +508,9 @@ class ProductController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Validate if the category exists
-            $category = Category::where('merchant_id', $merchantID)->find($category_id);
+            $category = Category::where('shop_id', $merchantID)->find($category_id);
 
-            if (!$category) {
+            if (! $category) {
                 return $this->sendError('Category not found.');
             }
 
@@ -526,7 +522,6 @@ class ProductController extends BaseController
             if ($products->isEmpty()) {
                 return $this->sendResponse([], 'No products found in this category.');
             }
-
 
             // Return response with product data
             return $this->sendResponse(ProductResource::collection($products), 'Products retrieved successfully.');
@@ -546,7 +541,7 @@ class ProductController extends BaseController
             }
 
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -574,24 +569,23 @@ class ProductController extends BaseController
                 'inventories' => function ($inventoryQuery) use ($startDate, $endDate) {
                     // Apply date range filter on `created_at`
                     $inventoryQuery->whereBetween('created_at', [$startDate, $endDate]);
-                }
+                },
             ])
-                ->where('merchant_id', $merchantID)
+                ->where('shop_id', $merchantID)
                 ->get();
 
-//            dd($products);
+            //            dd($products);
             // Use the resource collection to transform the products
             return $this->sendResponse([
                 'start_date' => $startDate,
                 'end_date' => $endDate,
-                'result' => ProductCatalogResource::collection($products)
+                'result' => ProductCatalogResource::collection($products),
             ], 'All products with categories retrieved successfully.');
 
         } catch (\Exception $e) {
             return $this->sendError('Error fetching products with categories.', [$e->getMessage()]);
         }
     }
-
 
     public function getSoldProducts(Request $request)
     {
@@ -604,7 +598,7 @@ class ProductController extends BaseController
             }
 
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -616,7 +610,7 @@ class ProductController extends BaseController
             $endDate = $request->query('end_date');
 
             // If only start date is provided, set end date to today's date
-            if ($startDate && !$endDate) {
+            if ($startDate && ! $endDate) {
                 $endDate = \Carbon\Carbon::now()->endOfDay();
             }
 
@@ -633,7 +627,7 @@ class ProductController extends BaseController
             // Fetch sold products grouped by product_id and sold date (with time)
             $soldProducts = OrderItem::with(['product' => function ($query) use ($merchantID) {
                 // Load the products along with their inventories
-                $query->where('merchant_id', $merchantID)
+                $query->where('shop_id', $merchantID)
                     ->with(['category', 'inventories' => function ($inventoryQuery) {
                         // Filter inventories for 'shop' and 'stock' types
                         $inventoryQuery->whereIn('type', ['shop', 'stock']);
@@ -652,23 +646,20 @@ class ProductController extends BaseController
             // Execute the query
             $soldProducts = $soldProducts->get();
 
-
             // Prepare the result set as a nested array grouped by sold date
             $data = [];
             foreach ($soldProducts as $soldProduct) {
                 $product = $soldProduct->product;
 
-                if (!$product) {
+                if (! $product) {
                     continue; // Skip if product is not found
                 }
 
                 // Find in-shop and in-stock quantities
                 $inShopQuantity = $product->inventories
-                        ->firstWhere('type', 'shop')->quantity ?? 0;
+                    ->firstWhere('type', 'shop')->quantity ?? 0;
                 $inStockQuantity = $product->inventories
-                        ->firstWhere('type', 'stock')->quantity ?? 0;
-
-
+                    ->firstWhere('type', 'stock')->quantity ?? 0;
 
                 // Add product details to the nested structure
                 $data[] = [
@@ -676,12 +667,12 @@ class ProductController extends BaseController
                     'product_name' => $product->product_name,
                     'category_name' => $product->category->name ?? 'Uncategorized',
                     'category_id' => $product->category->id ?? null,
-                    'price' =>  ($product->total_price * $soldProduct->total_sold), // Multiply price by total sold
+                    'price' => ($product->total_price * $soldProduct->total_sold), // Multiply price by total sold
                     'price_in_sls' => convertUSDToShilling($product->total_price * $soldProduct->total_sold), // Multiply price by total sold
                     'in_shop_quantity' => $inShopQuantity,
                     'in_stock_quantity' => $inStockQuantity,
                     'total_sold' => $soldProduct->total_sold,
-//                    'sold_date' => $soldProduct->created_at->format('Y-m-d'), // Date only
+                    //                    'sold_date' => $soldProduct->created_at->format('Y-m-d'), // Date only
                     'sold_date' => showDateTime($soldProduct->created_at), // Full date and time
                 ];
             }
@@ -692,7 +683,6 @@ class ProductController extends BaseController
             return $this->sendError('Error retrieving sold product listings.', [$e->getMessage()]);
         }
     }
-
 
     public function getTotalProductsInShop(Request $request)
     {
@@ -705,7 +695,7 @@ class ProductController extends BaseController
             }
 
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -735,7 +725,7 @@ class ProductController extends BaseController
                     $inventoryQuery->whereBetween(DB::raw('DATE(updated_at)'), [$startDate, $endDate]);
                 }
             }])
-                ->where('merchant_id', $merchantID)
+                ->where('shop_id', $merchantID)
                 ->orderBy('id', 'desc')
                 ->get();
 
@@ -743,6 +733,7 @@ class ProductController extends BaseController
             $data = $productsInShop->filter(function ($product) {
                 // Check in-shop quantities
                 $inShopQuantity = $product->inventories->sum('quantity');
+
                 // Filter out products with zero shop quantities
                 return $inShopQuantity > 0;
             })->map(function ($product) {
@@ -784,7 +775,7 @@ class ProductController extends BaseController
             }
 
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -815,7 +806,7 @@ class ProductController extends BaseController
                     $inventoryQuery->whereBetween(DB::raw('DATE(updated_at)'), [$startDate, $endDate]);
                 }
             }])
-                ->where('merchant_id', $merchantID)
+                ->where('shop_id', $merchantID)
                 ->orderBy('id', 'desc')
                 ->get();
 
@@ -823,6 +814,7 @@ class ProductController extends BaseController
             $data = $productsInStock->filter(function ($product) {
                 // Check in-stock quantities
                 $inStockQuantity = $product->inventories->sum('quantity');
+
                 // Filter out products with zero stock
                 return $inStockQuantity > 0;
             })->map(function ($product) {
@@ -864,7 +856,7 @@ class ProductController extends BaseController
             }
 
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -889,7 +881,7 @@ class ProductController extends BaseController
 
             // Fetch new products added within the specified date range, grouped by product
             $newProducts = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
-                $query->where('merchant_id', $merchantID);
+                $query->where('shop_id', $merchantID);
             })
                 ->whereBetween('updated_at', [$startDate, $endDate]) // Apply date range filter
                 ->where('type', 'shop')
@@ -935,7 +927,7 @@ class ProductController extends BaseController
             }
 
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -960,7 +952,7 @@ class ProductController extends BaseController
 
             // Fetch new products added within the specified date range, grouped by product
             $newProducts = ProductInventory::whereHas('product', function ($query) use ($merchantID) {
-                $query->where('merchant_id', $merchantID)->orderBy('id', 'desc');
+                $query->where('shop_id', $merchantID)->orderBy('id', 'desc');
             })
                 ->whereBetween('updated_at', [$startDate, $endDate]) // Apply date range filter
                 ->where('type', 'stock')
@@ -1007,7 +999,7 @@ class ProductController extends BaseController
             }
 
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -1027,9 +1019,9 @@ class ProductController extends BaseController
                 $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
             }
 
-            // Fetch inventory inventories for the merchant based on the product's merchant_id
+            // Fetch inventory inventories for the merchant based on the product's shop_id
             $inventoryReport = InventoryHistory::with(['product' => function ($query) use ($merchantID) {
-                $query->where('merchant_id', $merchantID);
+                $query->where('shop_id', $merchantID);
             }])
                 ->when($startDate, function ($query) use ($startDate) {
                     return $query->where('created_at', '>=', $startDate);
@@ -1072,7 +1064,7 @@ class ProductController extends BaseController
             }
 
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -1092,9 +1084,9 @@ class ProductController extends BaseController
                 $endDate = \Carbon\Carbon::createFromFormat('Y-m-d', $endDate)->endOfDay();
             }
 
-            // Fetch inventory inventories for the merchant based on product's merchant_id
+            // Fetch inventory inventories for the merchant based on product's shop_id
             $inventorySummary = InventoryHistory::with(['product' => function ($query) use ($merchantID) {
-                $query->where('merchant_id', $merchantID);
+                $query->where('shop_id', $merchantID);
             }])
                 ->when($startDate && $endDate, function ($query) use ($startDate, $endDate) {
                     return $query->where('created_at', '>=', $startDate)
@@ -1151,7 +1143,6 @@ class ProductController extends BaseController
             $startDate = $request->query('start_date');
             $endDate = $request->query('end_date');
 
-
             // Call the existing inventory report function
             $inventoryReport = $this->getInventoryReport($request)->getData(true);
             $inventoryReport = $inventoryReport['data'];
@@ -1166,14 +1157,14 @@ class ProductController extends BaseController
                 $authUser->user_type = $authUser->employee->role;
             }
 
-            $downloadedBy = strtoupper($authUser->name . ' (' . $authUser->user_type . ')');
+            $downloadedBy = strtoupper($authUser->name.' ('.$authUser->user_type.')');
 
             // Prepare the combined response
             $combinedResponse = [
                 'downloaded_by' => $downloadedBy, // Get the response data
-                'date_range' => $startDate . ' - ' . $endDate, // Get the response data
+                'date_range' => $startDate.' - '.$endDate, // Get the response data
                 'inventory_report' => $inventoryReport, // Get the response data
-                'inventory_summary' => $inventorySummary // Get the response data
+                'inventory_summary' => $inventorySummary, // Get the response data
             ];
 
             // Return the combined response
@@ -1182,6 +1173,4 @@ class ProductController extends BaseController
             return $this->sendError('Error retrieving combined inventory report and summary.', [$e->getMessage()]);
         }
     }
-
-
 }

@@ -16,8 +16,10 @@ shops                      a shop: name, own phone, address, codes, payout walle
   │ 1
   │
   │ many   <table>.merchant_id → shops.id   (legacy column name, see below)
-products · categories · carts · orders · invoices · sales · transactions
-employees · shifts · files · merchant_subscriptions · personal_access_tokens
+  │        or <table>.shop_id → shops.id    (fixed name, on some tables)
+carts · invoices · sales · transactions · files · merchant_subscriptions
+personal_access_tokens (merchant_id)  ·  employees · products · categories
+orders (shop_id, plus a real merchant_id)
 ```
 
 **Each shop has many employees**, and one person (one `users` row) can be an employee
@@ -83,16 +85,37 @@ for the legacy API.
 
 ### Tables that belong to a shop
 
-`products`, `categories`, `carts`, `orders`, `invoices`, `sales`, `transactions`,
-`files`, `merchant_subscriptions` and `personal_access_tokens` each
-have a **`merchant_id` column that holds a shop id** (`shops.id`). The name comes
-from before shops had their own table. It stays until the legacy API is retired,
-then becomes `shop_id`.
+`carts`, `invoices`, `sales`, `transactions`, `files`, `merchant_subscriptions`
+and `personal_access_tokens` each have a **`merchant_id` column that holds a
+shop id** (`shops.id`). The name comes from before shops had their own table.
+It stays until the legacy API is retired, then becomes `shop_id`.
 
 `personal_access_tokens.merchant_id` is the **current shop of that device's
 session** (see [multiple-shop.md](multiple-shop.md)).
 
-> `employees` no longer uses the legacy name: it has `shop_id` and `merchant_id` (a real merchant id).
+> `employees`, `products`, `categories` and `orders` no longer use the legacy
+> name: each has its own `shop_id` (the shop) and a real `merchant_id` (the
+> merchant that owns that shop, filled in automatically from the shop). Their
+> legacy API responses keep exposing the shop id under the field name
+> `merchant_id`, for existing clients — see
+> [inventory.md](inventory.md#schema-2026-09-28) and
+> [orders.md](orders.md#implementation-notes).
+
+### `transactions`: a log of every payment (2026-09-30)
+
+One row per settled invoice — `Paid`, `Failed`, `Expired` or `Cancelled` — kept
+in sync automatically by `InvoiceObserver`, whichever v1 module created the
+invoice: registration, verification, subscription, or a sale/order. This table
+predates v1 and used to be written only by the legacy payment endpoints; it is
+now a complete log across both.
+
+| Column | Holds |
+| --- | --- |
+| `invoice_id` | The invoice this row logs (one row per invoice; re-synced in place if the invoice changes again, e.g. an order linked after payment) |
+| `merchant_id` | The shop that was paid, or `null` for a **registration or verification** payment — both happen before any shop exists. **Nullable** since this migration; every other row here is non-null |
+| `order_id` | The order this paid for, for a sale; `null` otherwise |
+| `transaction_amount` | Always **shillings** (matching older rows), even for a USD invoice: converted at the rate the sale actually settled at — the order's own frozen rate when there is one, else the shop's current rate |
+| `transaction_status`, `transaction_message`, `phone_number`, `transaction_id`, `payment_method` | Copied from the invoice at the moment it settled |
 
 ### `employees`: a person's job in one shop
 
@@ -194,6 +217,9 @@ Full requests and responses: [merchant-onboarding.md](merchant-onboarding.md#f-t
 | `2026_09_26_000006_store_full_preferences_on_every_shop` | Fills `shops.preferences` with the full receipt, register and alert options for every existing shop, keeping anything already set. Rolls back to storing only differences |
 
 | `2026_09_26_000007_add_shop_id_and_merchant_id_to_employees_table` | Renames `employees.merchant_id` (a shop id) to `shop_id` (FK `shops`), adds a new `merchant_id` (FK `merchants`) backfilled from each shop's owner |
+| `2026_09_28_000001_add_shop_id_and_merchant_id_to_products_and_categories` | Same rename for `products` and `categories`: `merchant_id` (a shop id) becomes `shop_id` (FK `shops`), with a new `merchant_id` (FK `merchants`) backfilled from each shop's owner |
+| `2026_09_29_000001_add_shop_id_and_merchant_id_to_orders_table` | Same rename for `orders`: `merchant_id` (a shop id) becomes `shop_id` (FK `shops`), with a new `merchant_id` (FK `merchants`) backfilled from each shop's owner. The offline uniqueness check becomes `(shop_id, client_order_id)` |
+| `2026_09_30_000001_make_merchant_id_nullable_on_transactions_table` | Makes `transactions.merchant_id` nullable, so a transaction synced from a registration or verification invoice (no shop yet) can be logged |
 
 All roll back. The renamed `shops` table keeps its old constraint names (for
 example `merchants_user_id_foreign`), so new constraints on either table must be

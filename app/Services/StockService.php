@@ -110,7 +110,7 @@ class StockService
      */
     public function alerts(Merchant $merchant, array $filters): array
     {
-        $rows = Product::where('merchant_id', $merchant->id)
+        $rows = Product::where('shop_id', $merchant->id)
             ->with(['inventories'])
             ->get()
             ->map(function (Product $product) {
@@ -221,7 +221,7 @@ class StockService
 
     private function lockedProduct(Merchant $merchant, int $id): Product
     {
-        return Product::where('merchant_id', $merchant->id)->lockForUpdate()->find($id)
+        return Product::where('shop_id', $merchant->id)->lockForUpdate()->find($id)
             ?? throw new ApiException('product.not_found', 'We could not find that product', 404);
     }
 

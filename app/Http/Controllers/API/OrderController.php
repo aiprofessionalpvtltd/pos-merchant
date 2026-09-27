@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\API;
 
-use App\Http\Controllers\API\BaseController;
 use App\Http\Resources\CartItemResource;
 use App\Http\Resources\OrderResource;
 use App\Http\Resources\TransactionResource;
@@ -15,11 +14,9 @@ use App\Models\Product;
 use App\Models\ProductInventory;
 use App\Models\Transaction;
 use Carbon\Carbon;
-use Illuminate\Http\Resources\Json\JsonResource;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Facades\Validator;
 
 class OrderController extends BaseController
 {
@@ -48,7 +45,7 @@ class OrderController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -56,16 +53,16 @@ class OrderController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Find the product by ID
-            $product = Product::with('inventories')->where('merchant_id', $merchantID)->find($request->product_id);
+            $product = Product::with('inventories')->where('shop_id', $merchantID)->find($request->product_id);
 
-            if (!$product) {
-                return $this->sendError('Product not found.', ['Product not found with ID ' . $request->product_id]);
+            if (! $product) {
+                return $this->sendError('Product not found.', ['Product not found with ID '.$request->product_id]);
             }
 
             // Check if the product has an inventory with the requested cart_type
             $inventory = $product->inventories->where('type', $request->cart_type)->first();
 
-            if (!$inventory) {
+            if (! $inventory) {
                 return $this->sendError('No inventory found for the specified cart type.');
             }
 
@@ -79,13 +76,11 @@ class OrderController extends BaseController
                 ['merchant_id' => $merchantID, 'user_id' => $authUser->id, 'cart_type' => $request->cart_type]
             );
 
-
             // Calculate Exelo amount (on item price)
             $exeloCharge = env('EXELO_CHARGE');
             $exeloAmount = ($product->total_price) * $exeloCharge;
 
             $cartItemPrice = $product->total_price + $exeloAmount;
-
 
             // Add the product to the cart
             $cartItem = CartItem::updateOrCreate(
@@ -102,6 +97,7 @@ class OrderController extends BaseController
         } catch (\Exception $e) {
             // Rollback the transaction on error
             DB::rollBack();
+
             return $this->sendError('Failed to add item to cart.', $e->getMessage());
         }
     }
@@ -125,7 +121,7 @@ class OrderController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -139,7 +135,7 @@ class OrderController extends BaseController
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
-            if (!$cart) {
+            if (! $cart) {
                 return $this->sendError('Cart not found.');
             }
 
@@ -175,7 +171,7 @@ class OrderController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -189,7 +185,7 @@ class OrderController extends BaseController
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
-            if (!$cart) {
+            if (! $cart) {
                 return $this->sendResponse(['items' => false], 'Cart not found.');
 
             }
@@ -204,6 +200,7 @@ class OrderController extends BaseController
             if ($expiredItems->count() > 0) {
                 $cart->items()->delete();  // Delete all items from the cart
                 $cart->delete();  // Delete the cart itself
+
                 return $this->sendResponse(['items' => false], 'Cart and items deleted due to expiration.');
             }
 
@@ -229,7 +226,6 @@ class OrderController extends BaseController
             return $this->sendError('Validation Error.', $validator->errors());
         }
 
-
         try {
             // Get authenticated user
             $authUser = auth()->user();
@@ -239,7 +235,7 @@ class OrderController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -253,41 +249,39 @@ class OrderController extends BaseController
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
-            if (!$cart) {
+            if (! $cart) {
                 return $this->sendError('Cart not found.');
             }
 
             // Find the product by ID
-            $product = Product::where('merchant_id', $merchantID)->find($request->product_id);
+            $product = Product::where('shop_id', $merchantID)->find($request->product_id);
 
-            if (!$product) {
-                return $this->sendError('Product not found.', ['Product not found with ID ' . $request->product_id]);
+            if (! $product) {
+                return $this->sendError('Product not found.', ['Product not found with ID '.$request->product_id]);
             }
 
             // Check if the product has an inventory with the requested cart_type
             $inventory = $product->inventories->where('type', $request->cart_type)->first();
 
-            if (!$inventory) {
+            if (! $inventory) {
                 return $this->sendError('No inventory found for the specified cart type.');
             }
 
             // Check if the requested quantity is available in the inventory
             if ($request->quantity > $inventory->quantity) {
-                return $this->sendError('Requested quantity exceeds available stock. Available stock: ' . $inventory->quantity);
+                return $this->sendError('Requested quantity exceeds available stock. Available stock: '.$inventory->quantity);
             }
-
 
             // Find the specific cart item by product_id
             $cartItem = $cart->items->where('product_id', $request->product_id)->first();
 
-            if (!$cartItem) {
+            if (! $cartItem) {
                 return $this->sendError('Product not found in the cart.');
             }
 
             // Store old values for comparison
             $oldQuantity = $cartItem->quantity;
             $oldPrice = $cartItem->price;
-
 
             // Update the quantity for the cart item
             $cartItem->quantity = $request->quantity;
@@ -335,11 +329,10 @@ class OrderController extends BaseController
     {
         $validator = $this->validateRequest($request, [
             'cart_type' => 'required|in:shop,stock',
-            'product_id' => 'required|exists:products,id',]);
+            'product_id' => 'required|exists:products,id', ]);
         if ($validator->fails()) {
             return $this->sendError('Validation Error.', $validator->errors());
         }
-
 
         try {
             // Get authenticated user
@@ -350,7 +343,7 @@ class OrderController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -364,21 +357,21 @@ class OrderController extends BaseController
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
-            if (!$cart) {
+            if (! $cart) {
                 return $this->sendError('Cart not found.');
             }
 
             // Find the product by ID
-            $product = Product::where('merchant_id', $merchantID)->find($request->product_id);
+            $product = Product::where('shop_id', $merchantID)->find($request->product_id);
 
-            if (!$product) {
-                return $this->sendError('Product not found.', ['Product not found with ID ' . $request->product_id]);
+            if (! $product) {
+                return $this->sendError('Product not found.', ['Product not found with ID '.$request->product_id]);
             }
 
             // Find the specific cart item by product_id
             $cartItem = $cart->items->where('product_id', $request->product_id)->first();
 
-            if (!$cartItem) {
+            if (! $cartItem) {
                 return $this->sendError('Product not found in the cart.');
             }
 
@@ -414,7 +407,7 @@ class OrderController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -428,8 +421,8 @@ class OrderController extends BaseController
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
-            if (!$cart || $cart->items->isEmpty()) {
-//                DB::rollBack();
+            if (! $cart || $cart->items->isEmpty()) {
+                //                DB::rollBack();
                 return $this->sendResponse([], 'Cart is empty.');
             }
 
@@ -440,9 +433,8 @@ class OrderController extends BaseController
                 $subtotal += $item->price * $item->quantity;
             }
 
-
             $vatCharge = env('VAT_CHARGE');
-//            $vat = $subtotal * $vatCharge;
+            //            $vat = $subtotal * $vatCharge;
 
             // Calculate Exelo amount (on sub total)
             $exeloCharge = env('EXELO_CHARGE');
@@ -453,9 +445,9 @@ class OrderController extends BaseController
 
             // Prepare the response data
             $data = [
-                'subtotal' => round($subtotal,2),
-                'subtotal_in_sls' => convertUSDToShilling(round($subtotal,2)),
-                'exelo_amount' => round($exeloAmount,2),
+                'subtotal' => round($subtotal, 2),
+                'subtotal_in_sls' => convertUSDToShilling(round($subtotal, 2)),
+                'exelo_amount' => round($exeloAmount, 2),
                 'total' => round($totalPriceWithVAT, 2),
                 'total_in_sls' => convertUSDToShilling($totalPriceWithVAT),
                 'cart_items' => $cart->items->map(function ($item) {
@@ -468,7 +460,7 @@ class OrderController extends BaseController
                         'total_price' => round($item->quantity * $item->price, 2),
                         'total_price_in_sls' => convertUSDToShilling($item->quantity * $item->price),
                     ];
-                })
+                }),
             ];
 
             DB::commit();
@@ -476,6 +468,7 @@ class OrderController extends BaseController
             return $this->sendResponse($data, 'Checkout details retrieved successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Error retrieving checkout details.', $e->getMessage());
         }
     }
@@ -492,7 +485,6 @@ class OrderController extends BaseController
             return $this->sendError('Validation Error.', $validator->errors());
         }
 
-
         DB::beginTransaction();
 
         try {
@@ -504,7 +496,7 @@ class OrderController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -518,20 +510,23 @@ class OrderController extends BaseController
                 ->with('items.product') // Load products in the cart items
                 ->first();
 
-            if (!$cart || $cart->items->isEmpty()) {
+            if (! $cart || $cart->items->isEmpty()) {
                 DB::rollBack();
+
                 return $this->sendError('Cart is empty.');
             }
 
             $invoice = Invoice::where('type', 'POS')->find($request->invoice_id);
-            if (!$invoice) {
+            if (! $invoice) {
                 DB::rollBack();
+
                 return $this->sendError('Invoice not found.');
             }
 
             $transaction = Transaction::where('merchant_id', $merchantID)->whereNull('order_id')->latest()->first();
-            if (!$transaction) {
+            if (! $transaction) {
                 DB::rollBack();
+
                 return $this->sendError('transaction not found.');
             }
 
@@ -545,8 +540,9 @@ class OrderController extends BaseController
                     ->where('type', $request->cart_type)
                     ->first();
 
-                if (!$inventory || $inventory->quantity < $item->quantity) {
+                if (! $inventory || $inventory->quantity < $item->quantity) {
                     DB::rollBack();
+
                     return $this->sendError("Insufficient stock for product: {$product->product_name}.");
                 }
 
@@ -556,7 +552,7 @@ class OrderController extends BaseController
 
             // Calculate VAT (10%)
             $vatCharge = env('VAT_CHARGE');
-//            $vat = $totalPrice * $vatCharge;
+            //            $vat = $totalPrice * $vatCharge;
             $vat = 0;
             // Calculate Exelo amount (on sub total)
             $exeloCharge = env('EXELO_CHARGE');
@@ -565,19 +561,19 @@ class OrderController extends BaseController
             // Calculate total price including VAT and Exelo amount
             $totalPriceWithVAT = $totalPrice + $vat;
 
-//            dd([
-//                'merchant_id' => $merchantID,
-//                'user_id' => $authUser->id,
-//                'sub_total' => round($totalPrice),
-//                'vat' => round($vat),
-//                'exelo_amount' => round($exeloAmount),
-//                'total_price' => round($totalPriceWithVAT),
-//                'order_type' => $request->cart_type,
-//                'order_status' => 'Paid',
-//            ]);
+            //            dd([
+            //                'merchant_id' => $merchantID,
+            //                'user_id' => $authUser->id,
+            //                'sub_total' => round($totalPrice),
+            //                'vat' => round($vat),
+            //                'exelo_amount' => round($exeloAmount),
+            //                'total_price' => round($totalPriceWithVAT),
+            //                'order_type' => $request->cart_type,
+            //                'order_status' => 'Paid',
+            //            ]);
             // Create an order
             $order = Order::create([
-                'merchant_id' => $merchantID,
+                'shop_id' => $merchantID,
                 'user_id' => $authUser->id,
                 'sub_total' => round($totalPrice),
                 'vat' => round($vat),
@@ -617,10 +613,9 @@ class OrderController extends BaseController
 
             // update invoice
             $invoice->order_id = $order->id;
-            $invoice->merchant_id = $order->merchant_id;
+            $invoice->merchant_id = $order->shop_id;
             $invoice->user_id = $order->user_id;
             $invoice->save();
-
 
             $transaction->order_id = $order->id;
             $transaction->save();
@@ -629,6 +624,7 @@ class OrderController extends BaseController
             return $this->sendResponse($order, 'Order placed successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Error placing order.', $e->getMessage());
         }
     }
@@ -656,44 +652,42 @@ class OrderController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
             // Get the merchant's ID
             $merchantID = $authUser->merchant->id;
 
-
             // Fetch the order by order_id
-            $order = Order::where('merchant_id', $merchantID)->where('user_id', $authUser->id)
+            $order = Order::where('shop_id', $merchantID)->where('user_id', $authUser->id)
                 ->find($request->order_id);
 
-            if (!$order) {
+            if (! $order) {
                 return $this->sendError('Order not found.');
             }
 
-            $order->order_status = "Paid";
+            $order->order_status = 'Paid';
             $order->save();
 
-
             $invoice = Invoice::where('type', 'POS')->find($request->invoice_id);
-            if (!$invoice) {
+            if (! $invoice) {
                 DB::rollBack();
+
                 return $this->sendError('Invoice not found.');
             }
             // Update the invoice with the order_id and merchant_id from the order
             $invoice->order_id = $order->id;
-            $invoice->merchant_id = $order->merchant_id;
+            $invoice->merchant_id = $order->shop_id;
             $invoice->user_id = $order->user_id;
             $invoice->save();
 
-
             $transaction = Transaction::where('merchant_id', $merchantID)->whereNull('order_id')->latest()->first();
-            if (!$transaction) {
+            if (! $transaction) {
                 DB::rollBack();
+
                 return $this->sendError('transaction not found.');
             }
-
 
             $transaction->order_id = $order->id;
             $transaction->save();
@@ -703,6 +697,7 @@ class OrderController extends BaseController
             return $this->sendResponse(new OrderResource($order), 'Invoice updated successfully with the order.');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Error updating the invoice.', $e->getMessage());
         }
     }
@@ -733,7 +728,7 @@ class OrderController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -748,8 +743,9 @@ class OrderController extends BaseController
                 ->first();
 
             // Check if cart exists and is not empty
-            if (!$cart || $cart->items->isEmpty()) {
+            if (! $cart || $cart->items->isEmpty()) {
                 DB::rollBack();
+
                 return $this->sendError('Cart is empty.');
             }
 
@@ -763,8 +759,9 @@ class OrderController extends BaseController
                     ->where('type', $request->cart_type)
                     ->first();
 
-                if (!$inventory || $inventory->quantity < $item->quantity) {
+                if (! $inventory || $inventory->quantity < $item->quantity) {
                     DB::rollBack();
+
                     return $this->sendError("Insufficient stock for product: {$product->product_name}.");
                 }
 
@@ -772,10 +769,9 @@ class OrderController extends BaseController
                 $totalPrice += $item->price * $item->quantity;
             }
 
-
             // Calculate VAT (10%)
-//            $vatCharge = env('VAT_CHARGE');
-//            $vat = $totalPrice * $vatCharge;
+            //            $vatCharge = env('VAT_CHARGE');
+            //            $vat = $totalPrice * $vatCharge;
             $vat = 0;
 
             // Calculate Exelo amount (on sub total)
@@ -788,10 +784,9 @@ class OrderController extends BaseController
             // Handle signature as base64 image upload
             $signaturePath = $this->saveBase64Image($request->signature, 'signatures');
 
-
             // Create the order
             $order = Order::create([
-                'merchant_id' => $merchantID,
+                'shop_id' => $merchantID,
                 'user_id' => $authUser->id,
                 'name' => $request->input('name') ?? null,
                 'mobile_number' => $request->input('mobile_number') ?? null,
@@ -837,6 +832,7 @@ class OrderController extends BaseController
             return $this->sendResponse(new OrderResource($order), 'Pending Order placed successfully.');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Error placing order.', $e->getMessage());
         }
     }
@@ -865,7 +861,7 @@ class OrderController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -873,10 +869,9 @@ class OrderController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Retrieve the order by the provided order_id
-            $order = Order::where('merchant_id', $merchantID)->where('user_id', $authUser->id)->where('order_status', 'Pending')->find($request->order_id);
+            $order = Order::where('shop_id', $merchantID)->where('user_id', $authUser->id)->where('order_status', 'Pending')->find($request->order_id);
 
-
-            if (!$order) {
+            if (! $order) {
                 return $this->sendError('Order not found.');
             }
 
@@ -888,6 +883,7 @@ class OrderController extends BaseController
             return $this->sendResponse(new OrderResource($order), 'Order status updated to Complete.');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Error updating invoice status.', $e->getMessage());
         }
     }
@@ -908,7 +904,6 @@ class OrderController extends BaseController
 
         try {
 
-
             // Get authenticated user
             $authUser = auth()->user();
 
@@ -917,7 +912,7 @@ class OrderController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -925,10 +920,9 @@ class OrderController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Retrieve the order by the provided order_id
-            $order = Order::where('merchant_id', $merchantID)->where('user_id', $authUser->id)->where('order_status', 'Complete')->find($request->order_id);
+            $order = Order::where('shop_id', $merchantID)->where('user_id', $authUser->id)->where('order_status', 'Complete')->find($request->order_id);
 
-
-            if (!$order) {
+            if (! $order) {
                 return $this->sendError('Order not found.');
             }
 
@@ -940,6 +934,7 @@ class OrderController extends BaseController
             return $this->sendResponse(new OrderResource($order), 'Order status updated to Pending.');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Error updating invoice status.', $e->getMessage());
         }
     }
@@ -959,7 +954,7 @@ class OrderController extends BaseController
             $authUser = auth()->user();
 
             // Ensure user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -971,7 +966,7 @@ class OrderController extends BaseController
 
             // Fetch orders by the given type and conditions
             $ordersQuery = Order::where('order_type', $request->order_type)
-                ->where('merchant_id', $merchantID)
+                ->where('shop_id', $merchantID)
                 ->with('items.product'); // Load related order items and products
 
             // For employees, filter orders by the authenticated user's ID
@@ -1031,7 +1026,7 @@ class OrderController extends BaseController
                 $authUser->merchant = $authUser->employee->merchant;
             }
 
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -1039,15 +1034,15 @@ class OrderController extends BaseController
 
             // Fetch orders by the given type and conditions
             $ordersQuery = Order::where('order_status', $request->order_status)
-                ->where('merchant_id', $merchantID)
+                ->where('shop_id', $merchantID)
                 ->with(['items.product' => function ($query) {
                     $query->withTrashed(); // Include soft-deleted products
                 }]);
 
             // For employees, filter orders by the authenticated user's ID
-//            if ($authUser->user_type == 'employee') {
-//                $ordersQuery->where('user_id', $authUser->id);
-//            }
+            //            if ($authUser->user_type == 'employee') {
+            //                $ordersQuery->where('user_id', $authUser->id);
+            //            }
 
             $orders = $ordersQuery->get();
 
@@ -1100,7 +1095,7 @@ class OrderController extends BaseController
             }
 
             // Ensure the authenticated user has a merchant relation
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -1108,10 +1103,10 @@ class OrderController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Retrieve the order by order_id
-            $order = Order::with('items.product')->where('merchant_id', $merchantID)
+            $order = Order::with('items.product')->where('shop_id', $merchantID)
                 ->where('user_id', $authUser->id)->find($request->order_id);
 
-            if (!$order || $order->items->isEmpty()) {
+            if (! $order || $order->items->isEmpty()) {
                 return $this->sendError('Order not found or has no items.');
             }
 
@@ -1124,7 +1119,7 @@ class OrderController extends BaseController
 
             // Calculate VAT (10%)
             $vatCharge = env('VAT_CHARGE');
-//            $vat = $subtotal * $vatCharge;
+            //            $vat = $subtotal * $vatCharge;
             $vat = 0;
 
             // Calculate Exelo amount (on sub total)
@@ -1141,9 +1136,9 @@ class OrderController extends BaseController
                 'initial_name' => $this->getInitials($order->name),
                 'mobile_number' => $order->mobile_number,
                 'signature' => Storage::url($order->signature),
-                'merchant_id' => $order->merchant_id,
+                'merchant_id' => $order->shop_id,
                 'user_id' => $order->user_id,
-                'sub_total' =>  ($subtotal),
+                'sub_total' => ($subtotal),
                 'vat' => convertShillingToUSD($vat),
                 'exelo_amount' => convertShillingToUSD($exeloAmount),
                 'total' => round($totalPriceWithVAT, 2),
@@ -1155,8 +1150,8 @@ class OrderController extends BaseController
                         'product_id' => $item->product->id,
                         'product_name' => $item->product->product_name,
                         'quantity' => $item->quantity,
-                        'price' =>  ($item->price),
-                        'total_price' =>  ($item->quantity * $item->price),
+                        'price' => ($item->price),
+                        'total_price' => ($item->quantity * $item->price),
                     ];
                 }),
             ];
@@ -1174,7 +1169,7 @@ class OrderController extends BaseController
             $authUser = auth()->user();
 
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -1187,14 +1182,13 @@ class OrderController extends BaseController
 
             // Retrieve the order with items and product relationship
             // Modify the with relationship to include soft-deleted products
-            $order = Order::with(['items.product' => function($query) {
+            $order = Order::with(['items.product' => function ($query) {
                 $query->withTrashed(); // Include soft-deleted products
             }, 'user.merchant', 'merchant', 'invoice'])
-                ->where('merchant_id', $merchantID)
+                ->where('shop_id', $merchantID)
                 ->find($orderID);
 
-
-            if (!$order || $order->items->isEmpty()) {
+            if (! $order || $order->items->isEmpty()) {
                 return $this->sendError('Order not found or has no items.');
             }
 
@@ -1223,7 +1217,6 @@ class OrderController extends BaseController
 
             // Determine if it's edahab_number or zaad_number
             $mobileNumberType = in_array($mobileNumberPrefix, $dahabPrefixes) ? 'E-Dahab' : 'Zaad';
-
 
             // Prepare the response data
             $data = [
@@ -1254,16 +1247,15 @@ class OrderController extends BaseController
                     return [
                         'product_name' => $item->product->product_name,
                         'quantity' => $item->quantity,
-                        'price' =>  ($item->price),
-                        'total_price' =>  ($item->quantity * $item->price),
+                        'price' => ($item->price),
+                        'total_price' => ($item->quantity * $item->price),
                     ];
                 }),
-                'sub_total' =>  ($subtotal),
-                'vat' =>  ($vat),
-                'vat_charge' => env('VAT_CHARGE') * 100 . '%',
-                'exelo_amount' =>  ($exeloAmount),
-                'total' =>  ($totalPriceWithVAT)
-
+                'sub_total' => ($subtotal),
+                'vat' => ($vat),
+                'vat_charge' => env('VAT_CHARGE') * 100 .'%',
+                'exelo_amount' => ($exeloAmount),
+                'total' => ($totalPriceWithVAT),
 
             ];
 
@@ -1280,7 +1272,7 @@ class OrderController extends BaseController
             $authUser = auth()->user();
 
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -1297,14 +1289,14 @@ class OrderController extends BaseController
                 ->find($invoiceID);
 
             // Check if the transaction exists
-            if (!$transaction) {
+            if (! $transaction) {
                 return $this->sendError('Transaction not found.');
             }
 
-             if($transaction->invoice){
+            if ($transaction->invoice) {
 
                 $invoice = $transaction->invoice;
-            }else{
+            } else {
                 $invoice = $transaction;
             }
             // Dahab and Zaad prefixes
@@ -1314,10 +1306,10 @@ class OrderController extends BaseController
             $mobileNumberPrefix = substr($phoneNo, 0, 2);
 
             // Determine if it's edahab_number or zaad_number
-            if($transaction->payment_method == 'number'){
+            if ($transaction->payment_method == 'number') {
                 $mobileNumberType = in_array($mobileNumberPrefix, $dahabPrefixes) ? 'E-Dahab' : 'Zaad';
 
-            }else{
+            } else {
                 $mobileNumberType = $transaction->payment_method;
             }
 
@@ -1342,7 +1334,7 @@ class OrderController extends BaseController
                     'mobile_number' => $mobileNO,
                     'account' => $mobileNumberType,
                     'initial_name' => $this->getInitials($transaction->customer_name ?? 'Not Available'),
-                ]
+                ],
             ];
 
             return $this->sendResponse($data, 'Invoice details retrieved successfully.');
@@ -1350,7 +1342,6 @@ class OrderController extends BaseController
             return $this->sendError('Error retrieving invoice details.', $e->getMessage());
         }
     }
-
 
     public function transactionByCash(Request $request)
     {
@@ -1378,7 +1369,7 @@ class OrderController extends BaseController
             }
 
             // Ensure merchant is available for the authenticated user
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -1389,7 +1380,6 @@ class OrderController extends BaseController
             $orderID = $request->order_id;
             $phoneNumber = $authUser->merchant->phone_number;
 
-
             // Check if cart exists and is not empty
             if ($cartType != null && $orderID == null) {
                 // Fetch user's cart based on cart type
@@ -1398,7 +1388,7 @@ class OrderController extends BaseController
                     ->where('cart_type', $cartType)
                     ->with('items.product') // Load products in the cart items
                     ->first();
-//                dd($cart && $cart->items->isNotEmpty());
+                //                dd($cart && $cart->items->isNotEmpty());
                 if ($cart && $cart->items->isNotEmpty()) {
                     $totalPrice = 0;
 
@@ -1409,8 +1399,9 @@ class OrderController extends BaseController
                             ->where('type', $cartType)
                             ->first();
 
-                        if (!$inventory || $inventory->quantity < $item->quantity) {
+                        if (! $inventory || $inventory->quantity < $item->quantity) {
                             DB::rollBack();
+
                             return $this->sendError("Insufficient stock for product: {$product->product_name}.");
                         }
 
@@ -1427,14 +1418,13 @@ class OrderController extends BaseController
                     $exeloFee = $totalPrice * 0.0285; // Exelo fee for merchants: 2.85%
                     $amountSentToMerchant = $totalPrice - $exeloFee;
 
-//                dd($totalPrice,$exeloAmount , $amountSentToMerchant);
+                    //                dd($totalPrice,$exeloAmount , $amountSentToMerchant);
                     // Total price including VAT
                     $totalPriceWithVAT = $totalPrice + $vat;
 
-
                     // Create the order
                     $order = Order::create([
-                        'merchant_id' => $merchantID,
+                        'shop_id' => $merchantID,
                         'user_id' => $authUser->id,
                         'name' => $request->input('name'),
                         'mobile_number' => $request->input('mobile_number'),
@@ -1471,7 +1461,7 @@ class OrderController extends BaseController
                         'order_id' => $order->id,
                         'transaction_amount' => $amountSentToMerchant,
                         'transaction_status' => 'Approved',
-                        'transaction_message' => $amountSentToMerchant . ' amount received by cash with the deduction of exelo fee ' . $exeloFee,
+                        'transaction_message' => $amountSentToMerchant.' amount received by cash with the deduction of exelo fee '.$exeloFee,
                         'phone_number' => $phoneNumber,
                         'transaction_id' => 'N/A',
                         'merchant_id' => $merchantID,
@@ -1484,14 +1474,14 @@ class OrderController extends BaseController
                 }
             } elseif ($orderID != null) {
                 // Fetch the order by order_id
-                $order = Order::where('merchant_id', $merchantID)
+                $order = Order::where('shop_id', $merchantID)
                     ->find($orderID);
 
-                if (!$order) {
+                if (! $order) {
                     return $this->sendError('Order not found.');
                 }
 
-                $order->order_status = "Paid";
+                $order->order_status = 'Paid';
                 $order->save();
 
                 $exeloFee = $order->sub_total * 0.0285; // Exelo fee for merchants: 2.85%
@@ -1502,7 +1492,7 @@ class OrderController extends BaseController
                     'order_id' => $order->id,
                     'transaction_amount' => $amountSentToMerchant,
                     'transaction_status' => 'Approved',
-                    'transaction_message' => $amountSentToMerchant . ' amount received from  by cash with the deduction of exelo fee ' . $exeloFee,
+                    'transaction_message' => $amountSentToMerchant.' amount received from  by cash with the deduction of exelo fee '.$exeloFee,
                     'phone_number' => $phoneNumber,
                     'transaction_id' => 'N/A',
                     'merchant_id' => $merchantID,
@@ -1523,12 +1513,12 @@ class OrderController extends BaseController
                 ]);
             }
 
-
             DB::commit();
 
             return $this->sendResponse(new TransactionResource($transaction), 'Transaction by Cash successfully completed.');
         } catch (\Exception $e) {
             DB::rollBack();
+
             return $this->sendError('Error processing Transaction by Cash.', $e->getMessage());
         }
     }
@@ -1540,7 +1530,7 @@ class OrderController extends BaseController
             $authUser = auth()->user();
 
             // Ensure the authenticated user exists and has a merchant
-            if (!$authUser || !$authUser->merchant) {
+            if (! $authUser || ! $authUser->merchant) {
                 return $this->sendError('Merchant not found for the authenticated user.');
             }
 
@@ -1552,10 +1542,10 @@ class OrderController extends BaseController
             $merchantID = $authUser->merchant->id;
 
             // Retrieve the order with its items
-            $order = Order::with('items')->where('merchant_id', $merchantID)->find($orderID);
+            $order = Order::with('items')->where('shop_id', $merchantID)->find($orderID);
 
             // If the order doesn't exist, return an error
-            if (!$order || $order->items->isEmpty()) {
+            if (! $order || $order->items->isEmpty()) {
                 return $this->sendError('Order not found or has no items.');
             }
 
@@ -1570,6 +1560,4 @@ class OrderController extends BaseController
             return $this->sendError('Error deleting the order.', $e->getMessage());
         }
     }
-
-
 }

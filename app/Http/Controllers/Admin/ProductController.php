@@ -25,19 +25,20 @@ class ProductController extends Controller
         if ($request->ajax()) {
             return DataTables::of($this->inventory->listQuery())
                 ->filter(fn ($query) => $this->inventory->filterStatus($query, $request->input('status')), true)
-                ->addColumn('merchant', fn (Product $product) => $this->inventory->listRow($product)['merchant'])
-                ->filterColumn('merchant', fn ($query, $keyword) => $query->whereHas('merchant', fn ($merchant) => $merchant
+                ->addColumn('shop', fn (Product $product) => $this->inventory->listRow($product)['shop'])
+                ->filterColumn('shop', fn ($query, $keyword) => $query->whereHas('merchant', fn ($merchant) => $merchant
                     ->where('business_name', 'like', "%{$keyword}%")
                     ->orWhere('first_name', 'like', "%{$keyword}%")
                     ->orWhere('last_name', 'like', "%{$keyword}%")))
-                ->orderColumn('merchant', 'products.merchant_id $1')
+                ->orderColumn('shop', 'products.shop_id $1')
+                ->addColumn('merchant_account', fn (Product $product) => $this->inventory->listRow($product)['merchant_account'])
                 ->addColumn('category', fn (Product $product) => $this->inventory->listRow($product)['category'])
                 ->filterColumn('category', fn ($query, $keyword) => $query->whereHas('category', fn ($category) => $category->where('name', 'like', "%{$keyword}%")))
                 ->orderColumn('category', 'products.category_id $1')
                 ->addColumn('price_display', fn (Product $product) => $this->inventory->listRow($product)['price'])
                 ->orderColumn('price_display', 'products.price $1')
-                ->addColumn('shop', fn (Product $product) => $this->inventory->listRow($product)['shop'])
-                ->orderColumn('shop', 'qty_shop $1')
+                ->addColumn('shelf_qty', fn (Product $product) => $this->inventory->listRow($product)['shelf_qty'])
+                ->orderColumn('shelf_qty', 'qty_shop $1')
                 ->addColumn('stock', fn (Product $product) => $this->inventory->listRow($product)['stock'])
                 ->orderColumn('stock', 'qty_stock $1')
                 ->addColumn('transit', fn (Product $product) => $this->inventory->listRow($product)['transit'])
@@ -55,7 +56,7 @@ class ProductController extends Controller
 
     public function show(int $id)
     {
-        $product = Product::withTrashed()->with(['merchant', 'category'])->findOrFail($id);
+        $product = Product::withTrashed()->with(['merchant', 'merchantAccount', 'category'])->findOrFail($id);
 
         return view('admin.product.view', ['title' => 'Product', 'product' => $product, 'detail' => $this->inventory->detail($product)]);
     }
@@ -66,15 +67,16 @@ class ProductController extends Controller
     public function categories(Request $request)
     {
         if ($request->ajax()) {
-            $categories = Category::withTrashed()->select('categories.*')->with('merchant')->withCount('products');
+            $categories = Category::withTrashed()->select('categories.*')->with(['merchant', 'merchantAccount'])->withCount('products');
 
             return DataTables::of($categories)
-                ->addColumn('merchant', fn (Category $category) => $category->merchant?->business_name ?: trim($category->merchant?->first_name.' '.$category->merchant?->last_name))
-                ->filterColumn('merchant', fn ($query, $keyword) => $query->whereHas('merchant', fn ($merchant) => $merchant
+                ->addColumn('shop', fn (Category $category) => $category->merchant?->business_name ?: trim($category->merchant?->first_name.' '.$category->merchant?->last_name))
+                ->filterColumn('shop', fn ($query, $keyword) => $query->whereHas('merchant', fn ($merchant) => $merchant
                     ->where('business_name', 'like', "%{$keyword}%")
                     ->orWhere('first_name', 'like', "%{$keyword}%")
                     ->orWhere('last_name', 'like', "%{$keyword}%")))
-                ->orderColumn('merchant', 'categories.merchant_id $1')
+                ->orderColumn('shop', 'categories.shop_id $1')
+                ->addColumn('merchant_account', fn (Category $category) => $category->merchantAccount?->fullName())
                 ->orderColumn('products_count', 'products_count $1')
                 ->addColumn('status', fn (Category $category) => $category->trashed() ? 'Deleted' : 'Active')
                 ->editColumn('created_at', fn (Category $category) => $category->created_at?->format('d M Y H:i'))

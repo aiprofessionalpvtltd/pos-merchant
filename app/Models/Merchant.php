@@ -94,6 +94,23 @@ class Merchant extends Model
         return $this->belongsTo(User::class)->withDefault();
     }
 
+    /**
+     * The merchant account that owns this shop (table `merchants`). Null for shops
+     * created before the account/shop split, or in older tests that skip it.
+     */
+    public function merchantAccount()
+    {
+        return $this->belongsTo(MerchantAccount::class, 'merchant_id');
+    }
+
+    /**
+     * The shop's logo (`logo_file_id` holds a `files.public_id`, not a `files.id`).
+     */
+    public function logoFile()
+    {
+        return $this->belongsTo(File::class, 'logo_file_id', 'public_id');
+    }
+
     public function subscriptions()
     {
         return $this->hasMany(MerchantSubscription::class);

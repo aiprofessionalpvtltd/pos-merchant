@@ -70,11 +70,12 @@
                     <div class="card-header"><h5 class="card-title mb-0">Details</h5></div>
                     <div class="card-body">
                         <table class="table table-sm mb-0">
-                            <tr><th>Merchant</th><td>
+                            <tr><th>Shop</th><td>
                                     @if($employee->merchant)
                                         <a href="{{ route('view-merchant', $employee->merchant->id) }}">{{ $merchantName }}</a>
                                     @else — @endif
                                 </td></tr>
+                            <tr><th>Merchant</th><td>{{ $employee->merchantAccount?->fullName() ?? '—' }}</td></tr>
                             <tr><th>Phone</th><td>{{ $employee->phone_number }}</td></tr>
                             <tr><th>Role</th><td>{{ $employee->role ?: '—' }}</td></tr>
                             <tr><th>Date of birth</th><td>{{ $employee->dob ? \Illuminate\Support\Carbon::parse($employee->dob)->format('d M Y') : '—' }}</td></tr>
@@ -97,6 +98,27 @@
                         @empty
                             <p class="text-muted mb-0">No permissions.</p>
                         @endforelse
+                    </div>
+                </div>
+
+                <div class="card">
+                    <div class="card-header"><h5 class="card-title mb-0">Other shops this person works in</h5></div>
+                    <div class="card-body">
+                        @if($detail['other_shops']->isEmpty())
+                            <p class="text-muted mb-0">Only this shop.</p>
+                        @else
+                            <table class="table table-sm mb-0">
+                                <thead><tr><th>Shop</th><th>Role</th></tr></thead>
+                                <tbody>
+                                @foreach($detail['other_shops'] as $other)
+                                    <tr>
+                                        <td><a href="{{ route('view-merchant', $other['shop_id']) }}">{{ $other['shop_name'] ?? '—' }}</a></td>
+                                        <td>{{ $other['role'] ?: '—' }}</td>
+                                    </tr>
+                                @endforeach
+                                </tbody>
+                            </table>
+                        @endif
                     </div>
                 </div>
             </div>

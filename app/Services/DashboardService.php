@@ -60,7 +60,7 @@ class DashboardService
 
     private function revenueTotal(Merchant $merchant, Carbon $from, Carbon $to): int
     {
-        $total = Order::where('merchant_id', $merchant->id)
+        $total = Order::where('shop_id', $merchant->id)
             ->whereNotNull('paid_at')->whereBetween('paid_at', [$from, $to])
             ->sum('total_price');
 
@@ -79,12 +79,12 @@ class DashboardService
             $weekStart = $currentWeekStart->copy()->subWeeks($i);
             $weekEnd = $weekStart->copy()->endOfWeek();
 
-            $rows = Order::where('merchant_id', $merchant->id)
+            $rows = Order::where('shop_id', $merchant->id)
                 ->whereNotNull('paid_at')->whereBetween('paid_at', [$weekStart, $weekEnd])
                 ->selectRaw('DATE(paid_at) as day, SUM(total_price) as sales, COUNT(*) as order_count')
                 ->groupBy('day')->get()->keyBy('day');
 
-            $productsSoldByDay = OrderItem::whereHas('order', fn ($q) => $q->where('merchant_id', $merchant->id)->whereNotNull('paid_at')->whereBetween('paid_at', [$weekStart, $weekEnd]))
+            $productsSoldByDay = OrderItem::whereHas('order', fn ($q) => $q->where('shop_id', $merchant->id)->whereNotNull('paid_at')->whereBetween('paid_at', [$weekStart, $weekEnd]))
                 ->join('orders', 'orders.id', '=', 'order_items.order_id')
                 ->selectRaw('DATE(orders.paid_at) as day, SUM(order_items.quantity) as qty')
                 ->groupBy('day')->pluck('qty', 'day');
@@ -126,8 +126,8 @@ class DashboardService
      */
     private function orderCounts(Merchant $merchant): array
     {
-        $pending = Order::where('merchant_id', $merchant->id)->whereRaw('LOWER(order_status) = ?', ['pending']);
-        $complete = Order::where('merchant_id', $merchant->id)->whereRaw("LOWER(order_status) IN ('complete', 'paid')");
+        $pending = Order::where('shop_id', $merchant->id)->whereRaw('LOWER(order_status) = ?', ['pending']);
+        $complete = Order::where('shop_id', $merchant->id)->whereRaw("LOWER(order_status) IN ('complete', 'paid')");
 
         return [
             'pending_count' => $pending->count(),
@@ -175,7 +175,7 @@ class DashboardService
     {
         return (int) DB::table('product_inventories')
             ->join('products', 'products.id', '=', 'product_inventories.product_id')
-            ->where('products.merchant_id', $merchant->id)
+            ->where('products.shop_id', $merchant->id)
             ->where('product_inventories.type', $location)
             ->sum('product_inventories.quantity');
     }
@@ -188,7 +188,7 @@ class DashboardService
     {
         $rows = DB::table('inventory_histories')
             ->join('products', 'products.id', '=', 'inventory_histories.product_id')
-            ->where('products.merchant_id', $merchant->id)
+            ->where('products.shop_id', $merchant->id)
             ->whereBetween('inventory_histories.created_at', [$from, $to])
             ->where(fn ($q) => $q->where('from_location', $location)->orWhere('to_location', $location))
             ->select('kind', 'from_location', 'to_location', 'quantity')
@@ -213,7 +213,7 @@ class DashboardService
     {
         return (int) DB::table('inventory_histories')
             ->join('products', 'products.id', '=', 'inventory_histories.product_id')
-            ->where('products.merchant_id', $merchant->id)
+            ->where('products.shop_id', $merchant->id)
             ->where('inventory_histories.kind', 'opening')
             ->where('inventory_histories.to_location', $location)
             ->whereBetween('inventory_histories.created_at', [$from, $to])
@@ -223,7 +223,7 @@ class DashboardService
     private function unitsSold(Merchant $merchant, Carbon $from, Carbon $to): int
     {
         return (int) OrderItem::join('orders', 'orders.id', '=', 'order_items.order_id')
-            ->where('orders.merchant_id', $merchant->id)
+            ->where('orders.shop_id', $merchant->id)
             ->whereNotNull('orders.paid_at')->whereBetween('orders.paid_at', [$from, $to])
             ->sum('order_items.quantity');
     }
@@ -244,7 +244,7 @@ class DashboardService
     {
         $rows = OrderItem::join('orders', 'orders.id', '=', 'order_items.order_id')
             ->join('products', 'products.id', '=', 'order_items.product_id')
-            ->where('products.merchant_id', $merchant->id)
+            ->where('products.shop_id', $merchant->id)
             ->whereNotNull('orders.paid_at')->whereBetween('orders.paid_at', [$from, $to])
             ->selectRaw('products.id as product_id, products.product_name, products.price, products.image, products.image_file_id, SUM(order_items.quantity) as quantity_sold, SUM(order_items.quantity * order_items.price) as revenue')
             ->groupBy('products.id', 'products.product_name', 'products.price', 'products.image', 'products.image_file_id')
@@ -275,7 +275,7 @@ class DashboardService
      */
     private function orderRows(Merchant $merchant, bool $paid, int $limit): array
     {
-        $query = Order::where('merchant_id', $merchant->id)
+        $query = Order::where('shop_id', $merchant->id)
             ->when($paid, fn ($q) => $q->whereNotNull('paid_at'), fn ($q) => $q->whereRaw('LOWER(order_status) = ?', ['pending']))
             ->orderByDesc($paid ? 'paid_at' : 'created_at')
             ->limit($limit);
@@ -304,7 +304,7 @@ class DashboardService
      */
     private function latestClients(Merchant $merchant): array
     {
-        return Order::where('merchant_id', $merchant->id)
+        return Order::where('shop_id', $merchant->id)
             ->whereNotNull('name')
             ->orderByDesc('created_at')
             ->limit(self::LATEST_CLIENTS_LIMIT)

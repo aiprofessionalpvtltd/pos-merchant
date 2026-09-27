@@ -2,28 +2,18 @@
 
 namespace App\Http\Controllers\Admin;
 
-
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
 use App\Models\Invoice;
 use App\Services\InvoiceDocumentService;
 use App\Services\InvoicePaymentService;
 use Barryvdh\DomPDF\Facade\Pdf;
-use Illuminate\Support\Facades\Log;
-use App\Models\Sale;
-use Carbon\Carbon;
-use DB;
-use File;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Validator;
-use Spatie\Permission\Models\Role;
-use Spatie\Permission\Middlewares\PermissionMiddleware;
+use Illuminate\Support\Facades\Log;
 use Yajra\DataTables\DataTables;
-
 
 class InvoiceController extends Controller
 {
-
     public function __construct()
     {
         $this->middleware('auth');
@@ -41,7 +31,7 @@ class InvoiceController extends Controller
     public function show(Request $request, InvoiceDocumentService $documents)
     {
         if ($request->ajax()) {
-            $invoices = Invoice::with('merchant')->select('invoices.*');
+            $invoices = Invoice::with(['merchant', 'order'])->select('invoices.*');
 
             return DataTables::of($invoices)
                 ->filter(fn ($query) => $query->when($request->input('status'), fn ($inner, $status) => $inner->where('status', $status)), true)
@@ -68,14 +58,14 @@ class InvoiceController extends Controller
                     $buttons = '';
 
                     if ($documents->isAvailable($invoice)) {
-                        $buttons .= '<a class="btn btn-sm btn-outline-primary me-1" target="_blank" title="View invoice" href="' . route('admin.invoices.document', $invoice->id) . '">View</a>'
-                            . '<a class="btn btn-sm btn-primary me-1" title="Download PDF" href="' . route('admin.invoices.pdf', $invoice->id) . '">PDF</a>';
+                        $buttons .= '<a class="btn btn-sm btn-outline-primary me-1" target="_blank" title="View invoice" href="'.route('admin.invoices.document', $invoice->id).'">View</a>'
+                            .'<a class="btn btn-sm btn-primary me-1" title="Download PDF" href="'.route('admin.invoices.pdf', $invoice->id).'">PDF</a>';
                     }
 
                     $isPendingCash = $invoice->rail === 'cash' && $invoice->status === 'Pending' && $invoice->type === 'Subscription';
 
                     if ($isPendingCash && auth()->user()->can('edit-invoice')) {
-                        $buttons .= '<button type="button" class="btn btn-sm btn-success confirm-cash" data-url="' . route('admin.invoices.confirm-cash', $invoice->id) . '">Confirm cash received</button>';
+                        $buttons .= '<button type="button" class="btn btn-sm btn-success confirm-cash" data-url="'.route('admin.invoices.confirm-cash', $invoice->id).'">Confirm cash received</button>';
                     }
 
                     return $buttons;
@@ -86,6 +76,7 @@ class InvoiceController extends Controller
         }
 
         $title = 'All Invoices';
+
         return view('admin.invoice.index', compact('title'));
     }
 
@@ -134,9 +125,4 @@ class InvoiceController extends Controller
 
         return response()->json(['success' => true, 'message' => 'Cash payment confirmed. The plan has started.']);
     }
-
-
-
-
-
 }

@@ -7,6 +7,16 @@ into SQLite on the device so scanning keeps working when the line drops. The
 endpoints here are shaped to make that mirror correct: delta pulls, tombstones, and
 client-supplied identity for products created offline.
 
+**Every endpoint here is shop-based**, like the rest of the app since multiple
+shops per merchant ([multiple-shop.md](multiple-shop.md)): a product or category
+belongs to the token's **current shop**, never one the caller names. In the
+database, `products.shop_id` and `categories.shop_id` hold the shop, and a
+`merchant_id` on each row (filled in automatically from the shop) holds the
+merchant that owns it — the same split as [`employees`](employees.md#staff-across-shops-2026-09-26).
+Nothing in the JSON responses changes: the API's `merchant_id` field is unchanged
+and still means the shop, kept for existing clients (see
+[Schema](#schema-2026-09-28)).
+
 > **Status: implemented.** All eleven endpoints are live and tested, and every
 > response below is captured from the running API, including product photos via
 > [`image_file_id`](files.md#1-post-apiv1files--upload-a-file).
@@ -422,8 +432,9 @@ duplicates anything.
 | Status | Code | Meaning |
 | --- | --- | --- |
 | `403` | `auth.permission_denied` | No `inventory` permission |
+| `404` | `file.not_found` | `image_file_id` does not belong to this shop |
 | `409` | `product.barcode_taken` | Another product owns the barcode (`error.details.existing_product_id`, `error.field: bar_code`) |
-| `422` | `validation.failed` | Missing fields, an unknown or foreign `category_id`, a bad currency |
+| `422` | `validation.failed` | Missing fields, an unknown or foreign `category_id`, a bad currency, or `image_file_id` was not uploaded as a product image |
 
 ```json
 {
@@ -461,7 +472,8 @@ Needs the `inventory` permission.
 
 **Headers:** `If-Match: 1` (optional): the `version` you last read.
 
-**Request:** any subset
+**Request.** Every field except `idempotency_key` is optional: send only what
+changed.
 
 ```json
 {
@@ -479,6 +491,7 @@ Needs the `inventory` permission.
 | `vat_rate` | number | no | `0` to `1` |
 | `category_id` | int \| null | no | `null` removes the category |
 | `limits.stock_limit`, `limits.alarm_limit` | int | no | |
+| `image_file_id` | string \| null | no | From [`POST /files`](files.md#1-post-apiv1files--upload-a-file). Must be a file this shop uploaded; `null` removes the photo |
 | `idempotency_key` | string | yes | UUID, one per attempt |
 
 `client_uuid` and quantities **cannot** be changed here. Quantities change through
@@ -486,7 +499,23 @@ Needs the `inventory` permission.
 [correction](#10-patch-apiv1inventoryproduct_idquantities--correct-the-quantities),
 never through a product edit, which keeps an audit trail of every stock movement.
 
-**Response `200`**
+**Request changing every field at once** (for reference — a real request is
+usually just one or two fields, as above):
+
+```json
+{
+  "product_name": "Basmati Rice 5kg Premium",
+  "bar_code": "RCE-005-B",
+  "price": { "amount": 1900, "currency": "USD" },
+  "vat_rate": 0.05,
+  "category_id": 24,
+  "limits": { "stock_limit": 15, "alarm_limit": 5 },
+  "image_file_id": "file_01JBXQ7K9M",
+  "idempotency_key": "b8e0d3f5-4c1a-4e7b-9a52-0d6c3f7e8a19"
+}
+```
+
+**Response `200`** (for the first request above — only `product_name` and `price` change)
 
 ```json
 {
@@ -518,10 +547,11 @@ never through a product edit, which keeps an audit trail of every stock movement
 | Status | Code | Meaning |
 | --- | --- | --- |
 | `404` | `product.not_found` | No such product in this shop |
+| `404` | `file.not_found` | `image_file_id` does not belong to this shop |
 | `409` | `resource.version_conflict` | `If-Match` is stale; `error.details.current` has the current product |
 | `409` | `product.barcode_taken` | Another product owns the barcode |
 | `409` | `idempotency.key_reused` | Same key, different request |
-| `422` | `validation.failed` | `idempotency_key` missing, or a bad field |
+| `422` | `validation.failed` | `idempotency_key` missing, a bad field, or `image_file_id` was not uploaded as a product image |
 
 ```json
 {
@@ -901,3 +931,21 @@ How it behaves:
   `category.name_taken`, `inventory.insufficient_quantity`.
 - **Legacy routes** (`/api/products/*`, `/api/inventory/*`, `/api/categories/*`)
   keep working alongside.
+
+### Schema (2026-09-28)
+
+- **`products.shop_id`, `categories.shop_id`** are the shop (FK `shops.id`).
+  Before this date each table had only `merchant_id`, holding a shop id under the
+  legacy name (the same pattern [`employees` had](employees.md#staff-across-shops-2026-09-26)
+  before it was fixed). `client_uuid` uniqueness on `products` is now
+  `(shop_id, client_uuid)`.
+- **`products.merchant_id`, `categories.merchant_id`** are new: the merchant that
+  owns that shop (FK `merchants.id`), filled in automatically from the shop when a
+  row is created.
+- **The API is unchanged.** Every response here still uses the field name
+  `merchant_id` for the shop id, exactly as before — this is a database-only
+  change, kept for existing clients. Use [`GET /merchant?include=`](merchant-onboarding.md)
+  to find the real merchant account, or `GET /account` for its shops.
+- **Not covered.** `product_inventories` and `inventory_histories` have no
+  `merchant_id` of their own; they are scoped through `product_id`, so nothing
+  changed there.

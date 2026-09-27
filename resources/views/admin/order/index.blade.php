@@ -27,6 +27,7 @@
                     <thead>
                     <tr>
                         <th>Order ID</th>
+                        <th>Shop</th>
                         <th>Merchant</th>
                         <th>Customer</th>
                         <th>Sub Total</th>
@@ -61,7 +62,8 @@
                 },
                 columns: [
                     {data: 'id', name: 'id'},
-                    {data: 'merchant', name: 'merchant'},
+                    {data: 'shop', name: 'shop'},
+                    {data: 'merchant_account', name: 'merchant_account', orderable: false, searchable: false, defaultContent: '—'},
                     {data: 'customer', name: 'customer'},
                     {data: 'sub_total', name: 'sub_total'},
                     {data: 'vat', name: 'vat'},
