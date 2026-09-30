@@ -22,8 +22,8 @@ shop, [switch the current shop](multiple-shop.md#4-post-shopsidselect--switch-sh
 > | `GET /payments/methods` | **Live** |
 > | `POST /payments/quote` | **Live** |
 > | `POST /payments/charges` | **Live** for `cash`, `zaad` and `edahab` (sales and held orders) |
-> | `GET /payments/charges/{charge_id}` | **Live** for every payment of the shop: sales (`chg_…`) and subscriptions (`inv_…`) |
-> | `POST /payments/charges/{charge_id}/confirm` | **Live** for eDahab: the app submits the SMS `Code` + `Txn Id` |
+> | `GET /payments/charges/{charge_id}` | **Live** for every payment of the shop: sales (`chg_…`) and subscriptions (`inv_…`). This is **Verify** for eDahab. |
+> | `POST /payments/charges/{charge_id}/confirm` | **Do not use in the app.** The payer already has the eDahab SMS. Verify with GET. |
 > | `cancel`, `payouts`, `card/session`, webhooks | **Specified, not built yet.** The examples are the **contract to build against**, not captured output. |
 >
 > Sales are also taken through [`POST /cart/pay`](cart.md#post-cartpay) and
@@ -43,7 +43,6 @@ subscription upgrades and POS sales with only a `type` string to tell them apart
 | POST | [`/payments/quote`](#2-post-apiv1paymentsquote--price-a-payment-before-charging) | Bearer · `pos` |
 | POST | [`/payments/charges`](#3-post-apiv1paymentscharges--start-a-payment) | Bearer · `pos` |
 | GET | [`/payments/charges/{charge_id}`](#4-get-apiv1paymentschargescharge_id--check-a-payment) | Bearer |
-| POST | [`/payments/charges/{charge_id}/confirm`](#5-post-apiv1paymentschargescharge_idconfirm--confirm-a-payment) | Bearer · `pos` |
 | POST | [`/payments/charges/{charge_id}/cancel`](#6-post-apiv1paymentschargescharge_idcancel--cancel-a-pending-payment) | Bearer · `pos` |
 | POST | [`/payments/payouts`](#7-post-apiv1paymentspayouts--send-money-to-a-phone-number) | Bearer · `pos` · PIN confirmation |
 | POST | [`/payments/card/session`](#8-post-apiv1paymentscardsession--start-a-card-payment) | Bearer · `pos` |
@@ -70,8 +69,7 @@ Full URL = `{BASE_URL}/api/v1` + path.
 | 1 | GET | `/api/v1/payments/methods` | Which wallets the shop is paid on and which rails it accepts | Bearer | — | `200` | `401` |
 | 2 | POST | `/api/v1/payments/quote` | What an amount costs the customer and yields the shop | Bearer, `pos` | `amount`, `rail`, `purpose` | `200` | `403 auth.permission_denied`, `422 payment.rail_unavailable` |
 | 3 | POST | `/api/v1/payments/charges` | Start a payment on any rail | Bearer, `pos` | `rail`, `purpose`, `amount`, `idempotency_key`, rail fields | `202` wallet / `200` cash | `402 payment.declined`, `409 payment.cart_changed`, `409 idempotency.key_reused`, `410 quote.expired`, `422 payment.rail_unavailable`, `502 payment.provider_unavailable` |
-| 4 | GET | `/api/v1/payments/charges/{charge_id}` | Check a payment, poll until it settles | Bearer | — | `200` | `404 charge.not_found` |
-| 5 | POST | `/api/v1/payments/charges/{charge_id}/confirm` | Submit the eDahab SMS (`Code` + `Txn Id`) and re-check status | Bearer, `pos` | `provider_transaction_id`, `confirmation_code`, `idempotency_key` | `200` | `404 charge.not_found`, `409 payment.already_settled`, `422 payment.rail_unavailable` |
+| 4 | GET | `/api/v1/payments/charges/{charge_id}` | Verify / poll a payment until it settles (EXELO calls eDahab `CheckInvoiceStatus`) | Bearer | — | `200` | `404 charge.not_found` |
 | 6 | POST | `/api/v1/payments/charges/{charge_id}/cancel` | Abandon a pending payment | Bearer, `pos` | — | `200` | `404 charge.not_found`, `409 payment.already_settled` |
 | 7 | POST | `/api/v1/payments/payouts` | Send money to a phone number | Bearer, `pos`, PIN confirmation | `phone_number`, `amount`, `rail`, `idempotency_key` | `200` | `401 auth.confirmation_required`, `402 payment.declined`, `422 payment.wallet_invalid`, `502 payment.provider_unavailable` |
 | 8 | POST | `/api/v1/payments/card/session` | Get a client token to tokenise a card | Bearer, `pos` | — | `200` | `422 payment.rail_unavailable`, `502 payment.provider_unavailable` |
@@ -157,7 +155,7 @@ pending ──► authorized ──► paid
 
 ### Idempotency
 
-`POST /payments/charges`, `/confirm` and `/payouts` take an `idempotency_key`
+`POST /payments/charges` and `/payouts` take an `idempotency_key`
 (a UUID the app generates once per attempt). A retry with the same key and body
 returns the **original** response and never charges twice. The same key with a
 different body returns `409 idempotency.key_reused`. Keys are remembered for 24
@@ -370,7 +368,6 @@ required.** Needs the `pos` permission.
 | `next_action` | Client does |
 | --- | --- |
 | `await_customer_approval` | Show "Ask the customer to approve", poll `poll` every `poll_after` seconds |
-| `confirm` | Ask for the customer's code, then call [`/confirm`](#5-post-apiv1paymentschargescharge_idconfirm--confirm-a-payment) |
 | `none` | Already final; read `status` |
 
 **`prompt: "declined"`** (eDahab only). If the customer turned the payment prompt
@@ -510,47 +507,12 @@ first final status ([Status lifecycle](#status-lifecycle)).
 | --- | --- | --- |
 | `404` | `charge.not_found` | No such payment for this shop |
 
-## 5. POST `/api/v1/payments/charges/{charge_id}/confirm` — Confirm a payment
+## 5. POST `/api/v1/payments/charges/{charge_id}/confirm` — unused by the app
 
-**Purpose:** The app parsed the payer's eDahab SMS and is submitting `Code` and
-`Txn Id`. We store them on the charge, then call eDahab `CheckInvoiceStatus`.
-Never treat the SMS as settlement on its own. Needs the `pos` permission.
-
-Also used if a rail ever reports `next_action: "confirm"`. Replaces
-`POST /api/zaad/commit` for that case; v1 still commits Zaad itself.
-
-**Request**
-
-```json
-{
-  "provider_transaction_id": "MP260930.1500.A34551",
-  "confirmation_code": "740852",
-  "message": "550 Shilling you have sent to EXELO LTD(657496464).Code:740852 Txn Id:MP260930.1500.A34551.Your balance is: 392.2 Shilling.at :30-09-2026[-eDahab-Service- Shilling]",
-  "amount": 550,
-  "idempotency_key": "2c81f0a6-5b1d-4d0e-9d55-0c2a1f6e8a11"
-}
-```
-
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `provider_transaction_id` | string | yes | `Txn Id` from the SMS |
-| `confirmation_code` | string | yes | `Code` from the SMS |
-| `message` | string | no | Full SMS text |
-| `amount` | number | no | Amount in the SMS |
-| `idempotency_key` | string | yes | UUID, one per attempt |
-
-**Response `200`**: same body as
+The payer already has the eDahab SMS. The app must **not** call this endpoint
+and must **not** call eDahab. Verify with
 [`GET /payments/charges/{charge_id}`](#4-get-apiv1paymentschargescharge_id--check-a-payment).
-A paid charge also includes `provider_transaction_id` and `confirmation_code`.
-
-**Errors**
-
-| Status | Code | Meaning |
-| --- | --- | --- |
-| `404` | `charge.not_found` | No such payment for this shop |
-| `409` | `payment.already_settled` | The payment already failed, expired or was cancelled |
-| `422` | `payment.rail_unavailable` | Not an eDahab charge |
-| `422` | `validation.failed` | Missing `provider_transaction_id` or `confirmation_code` |
+The route may still exist on the server; do not wire it in the client.
 
 ## 6. POST `/api/v1/payments/charges/{charge_id}/cancel` — Cancel a pending payment
 
@@ -804,7 +766,7 @@ sale charges.
 
 ## Implementation notes
 
-Endpoints 1, 2, 3 and 4 are built. Endpoints 5 to 9 (`confirm`, `cancel`, payouts,
+Endpoints 1, 2, 3 and 4 are built. Endpoints 6 to 9 (`cancel`, payouts,
 card session and webhooks) are not. How the built part works, and what is open:
 
 - **A sale charge is an `invoices` row** of type `Sale`, the same table that holds

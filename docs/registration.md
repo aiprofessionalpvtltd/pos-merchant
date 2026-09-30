@@ -10,7 +10,6 @@ so most of this module is unauthenticated and keyed on the phone number.
 | POST | [`/registration/phone/check`](#post-registrationphonecheck) | — |
 | POST | [`/registration/invoices`](#post-registrationinvoices) | — |
 | GET | [`/registration/invoices/{invoice_id}`](#get-registrationinvoicesinvoice_id) | — |
-| POST | [`/registration/invoices/{invoice_id}/confirm`](#5c-post-apiv1registrationinvoicesinvoice_idconfirm--submit-the-edahab-sms) | — |
 | POST | [`/merchants`](#post-merchants) | — |
 | POST | [`/merchants/{id}/verification/complete`](#post-merchantsidverificationcomplete) | Bearer |
 
@@ -36,11 +35,10 @@ brand-new install to a signed-in shop. Full URL = `{BASE_URL}/api/v1` + path.
 | # | Method | Full path | Purpose | Auth | Body / query | Success | Errors |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | GET | `/api/v1/geo/states` | Load the state dropdown | — | — | `200` | — |
-| 2 | POST | `/api/v1/registration/phone/check` | Check whether a phone number can register | — | `phone_number` | `200` | `422 validation.failed` |
+| 2 | POST | `/api/v1/registration/phone/check` | Number free? Open invoice? (enter number / reopen app) | — | `phone_number` | `200` | `422 validation.failed`, `502 payment.provider_unavailable` |
 | 3 | GET | `/api/v1/registration/quote` | Get the signup fee | — | `?purpose=registration` (or `verification`) | `200` | `422 validation.failed` |
 | 4 | POST | `/api/v1/registration/invoices` | Request the signup payment | — | `phone_number`, `wallet_number`, `rail` (`zaad`\|`edahab`), `purpose`, `quote_id`, `idempotency_key` | `202` | `409 registration.phone_taken`, `410 quote.expired`, `422 payment.wallet_invalid`, `502 payment.provider_unavailable` |
-| 5 | GET | `/api/v1/registration/invoices/{invoice_id}` | Check the payment status | — | — | `200` (`status`: `pending`, `paid`, `failed`, `expired`, `cancelled`) | `404 invoice.not_found`, `502 payment.provider_unavailable` |
-| 5c | POST | `/api/v1/registration/invoices/{invoice_id}/confirm` | Save the eDahab SMS (Code + Txn Id) and re-check status | — | `provider_transaction_id`, `confirmation_code`, `idempotency_key`, optional `message`, `amount` | `200` | `404 invoice.not_found`, `409 payment.already_settled`, `422 payment.rail_unavailable` |
+| 5 | GET | `/api/v1/registration/invoices/{invoice_id}` | Verify payment (EXELO calls eDahab `CheckInvoiceStatus`) | — | — | `200` (`status`: `pending`, `paid`, `failed`, `expired`, `cancelled`) | `404 invoice.not_found`, `502 payment.provider_unavailable` |
 | 6 | POST | `/api/v1/merchants` | Create the merchant account | — | `invoice_id`, `first_name`, `last_name`, `dob` (`YYYY-MM-DD`), `phone_number`, `business_name`, `state` (code), `city`; optional `email`, `merchant_code`, `other_merchant_code` | `201` | `402 registration.invoice_unpaid`, `409 registration.invoice_consumed`, `409 registration.phone_taken`, `422 validation.failed` |
 | 7 | POST | `/api/v1/auth/pin` | Set the first PIN and sign in | — + `X-EXELO-Device-Id` | `phone_number`, `pin` (4 digits), `pin_confirmation` | `201` + token | `409 auth.pin_already_set`, `422 auth.pin_too_weak`, `422 validation.failed`, `400 request.device_id_missing` |
 | 8 | POST | `/api/v1/merchants/{id}/verification/complete` | Confirm payout wallets | Bearer | optional `invoice_id` | `200` | `401`, `402 registration.invoice_unpaid`, `403 auth.merchant_only`, `404 merchant.not_found`, `409 registration.invoice_consumed` |
@@ -164,9 +162,11 @@ Every example below is real output from the running API (tokens shortened,
 }
 ```
 
-### 2. POST `/api/v1/registration/phone/check` — Check whether a phone number can register
+### 2. POST `/api/v1/registration/phone/check` — Number free, or already paying?
 
-**Purpose:** First call of registration. Tells the app if the number is new, already registered, or has already paid the fee but never finished, so the user is never charged twice.
+**Purpose:** Call when the merchant enters their mobile and when they open the
+app again. Tells the app if the number is new, already registered, has a
+**pending** payment to Verify, or already paid and never finished.
 
 **Request**
 
@@ -189,6 +189,30 @@ Every example below is real output from the running API (tokens shortened,
 }
 ```
 
+**Response `200` — payment started, still pending**
+
+```json
+{
+  "success": true,
+  "message": "Finish the payment you already started.",
+  "data": {
+    "available": true,
+    "registration_complete": false,
+    "invoice_required": false,
+    "pending_invoice": {
+      "invoice_id": "inv_01M2W762W927DAYTDR5DSJYS7G",
+      "status": "pending",
+      "purpose": "registration",
+      "expires_at": "2026-09-19T07:05:42Z"
+    }
+  }
+}
+```
+
+Save `pending_invoice.invoice_id` and call
+[`GET /registration/invoices/{invoice_id}`](#5-get-apiv1registrationinvoicesinvoice_id--check-the-payment-status)
+(Verify). Do not issue a new invoice until this one expires, fails, or is cancelled.
+
 **Response `200` — fee already paid, account not created**
 
 ```json
@@ -202,6 +226,7 @@ Every example below is real output from the running API (tokens shortened,
     "pending_invoice": {
       "invoice_id": "inv_01M2W762W927DAYTDR5DSJYS7G",
       "status": "paid",
+      "purpose": "registration",
       "paid_at": "2026-09-19T06:55:42Z"
     }
   }
@@ -222,6 +247,10 @@ Every example below is real output from the running API (tokens shortened,
   }
 }
 ```
+
+An unused **verification** invoice on an existing account is returned in
+`pending_invoice` with `purpose: "verification"`. Sign in; do not start a new
+registration.
 
 ### 3. GET `/api/v1/registration/quote` — Get the signup fee
 
@@ -327,7 +356,12 @@ from `base.usd` + `exelo_fee.usd` by a cent. The same fields come back for
 
 ### 5. GET `/api/v1/registration/invoices/{invoice_id}` — Check the payment status
 
-**Purpose:** Polled by the app every few seconds after the payment request, until the status is `paid`. A `paid` invoice is required to create the merchant.
+**Purpose:** The **Verify** button. The app must **not** call eDahab and must
+**not** send the eDahab SMS here. EXELO calls `CheckInvoiceStatus` using the
+InvoiceId stored when the invoice was issued. Save `invoice_id` on the device so
+Verify still works after the app is closed.
+
+A `paid` invoice is required to create the merchant.
 
 **Response `200` — still waiting**
 
@@ -379,45 +413,12 @@ spinner. The field is absent otherwise.
 
 **Response `404`** — `{ "error": { "code": "invoice.not_found" } }`
 
-### 5c. POST `/api/v1/registration/invoices/{invoice_id}/confirm` — Submit the eDahab SMS
+### 5c. POST `/api/v1/registration/invoices/{invoice_id}/confirm` — unused by the app
 
-**Purpose:** There is no fourth eDahab API. After the merchant pays on the
-handset, eDahab texts them `Code` and `Txn Id`. The app posts those here so we
-store them on the invoice, then we call `CheckInvoiceStatus`. Payment is only
-marked `paid` when eDahab says so.
-
-**Request**
-
-```json
-{
-  "provider_transaction_id": "MP260930.1500.A34551",
-  "confirmation_code": "740852",
-  "message": "550 Shilling you have sent to EXELO LTD(657496464).Code:740852 Txn Id:MP260930.1500.A34551.Your balance is: 392.2 Shilling.at :30-09-2026[-eDahab-Service- Shilling]",
-  "amount": 550,
-  "idempotency_key": "2c81f0a6-5b1d-4d0e-9d55-0c2a1f6e8a11"
-}
-```
-
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `provider_transaction_id` | string | yes | `Txn Id` from the SMS (`MP…`) |
-| `confirmation_code` | string | yes | `Code` from the SMS |
-| `message` | string | no | Full SMS text, for support |
-| `amount` | number | no | Amount in the SMS |
-| `idempotency_key` | string | yes | UUID, one per tap |
-
-**Response `200`**: same body as
-[`GET /registration/invoices/{invoice_id}`](#5-get-apiv1registrationinvoicesinvoice_id--check-the-payment-status).
-If eDahab is still `Pending`, `status` stays `pending` — keep polling GET, or
-confirm again with a **new** idempotency key after a few seconds.
-
-**Errors**
-
-| Status | Code | Meaning |
-| --- | --- | --- |
-| `404` | `invoice.not_found` | No such signup/verification invoice |
-| `409` | `payment.already_settled` | Invoice already failed, expired or cancelled |
-| `422` | `payment.rail_unavailable` | Not an eDahab invoice |
+The merchant already has the eDahab SMS. The app must **not** call this
+endpoint. Use [GET `/registration/invoices/{invoice_id}`](#5-get-apiv1registrationinvoicesinvoice_id--check-the-payment-status)
+(Verify) instead. The route may still exist on the server; do not wire it in the
+client.
 
 ### 5b. POST `/api/v1/registration/invoices/{invoice_id}/simulate-payment` — Simulate a payment (local testing only)
 
@@ -1023,9 +1024,11 @@ Branch on `data`:
 
 | Result | Meaning | Client does |
 | --- | --- | --- |
-| `available: false` | Number already has an account, or belonged to a shop that was closed (see `message`) | Send the user to login (`POST /auth/lookup`), or ask for another number |
-| `available: true`, `invoice_required: true` | New number, fee not paid | Go to step 3 |
-| `available: true`, `invoice_required: false`, `pending_invoice` set | Fee already paid, account never created | **Skip to step 6** with `pending_invoice.invoice_id`. Do not charge again. |
+| `available: false`, `pending_invoice` null | Number already has an account | Login (`POST /auth/lookup`), or another number |
+| `available: false`, `pending_invoice` set | Account exists; unused verification invoice | Sign in, then Verify / complete with that `invoice_id` |
+| `available: true`, `invoice_required: true` | New number, no invoice | Go to step 3 |
+| `pending_invoice.status` `pending` | Payment started | Save `invoice_id`, Verify (`GET /registration/invoices/{id}`) |
+| `pending_invoice.status` `paid`, `purpose` `registration` | Fee paid, no account yet | **Skip to step 6** with that `invoice_id`. Do not charge again. |
 
 ### Step 3 — Show the price
 
@@ -1266,14 +1269,19 @@ learn overlapping facts.
     "pending_invoice": {
       "invoice_id": "inv_01JBXR3P7Q",
       "status": "paid",
+      "purpose": "registration",
       "paid_at": "2026-09-18T13:41:02Z"
     }
   }
 }
 ```
 
-This third case matters on a weak link: a merchant who paid and then lost
-connectivity must not be charged twice. The client resumes with the existing
+**Response `200` — payment started, still pending** — same shape with
+`"status": "pending"`, `"expires_at": "…"`, and message
+`"Finish the payment you already started."` Resume with Verify, not a new Pay.
+
+This matters on a weak link: a merchant who paid (or started paying) and then
+lost connectivity must not be charged twice. The client resumes with the existing
 `invoice_id`.
 
 ---
@@ -1329,10 +1337,7 @@ registration and verification cases.
 Zaad is a two-step rail: it issues a transaction that must then be committed.
 In the legacy API the client did this itself via `POST /api/zaad/commit` with
 `transactionId` and `referenceId`. In v1 the server owns the commit and the
-client only polls. If a rail ever needs explicit customer confirmation from the
-app, `next_action` will be `confirm` and
-[`POST /payments/charges/{id}/confirm`](payments.md#post-paymentschargesidconfirm)
-is used.
+client only polls. Do not send the eDahab SMS to EXELO.
 
 **Errors**
 

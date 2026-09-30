@@ -94,6 +94,22 @@ it('says a fresh number is available and needs an invoice', function () {
         ->assertJsonPath('data.pending_invoice', null);
 });
 
+it('returns the open registration invoice when the number already started paying', function () {
+    fakeEdahab('Pending');
+
+    $invoice = issueInvoice()->assertStatus(202)->json('data.invoice_id');
+
+    $this->postJson('/api/v1/registration/phone/check', ['phone_number' => NEW_PHONE])
+        ->assertOk()
+        ->assertJsonPath('message', 'Finish the payment you already started.')
+        ->assertJsonPath('data.available', true)
+        ->assertJsonPath('data.invoice_required', false)
+        ->assertJsonPath('data.pending_invoice.invoice_id', $invoice)
+        ->assertJsonPath('data.pending_invoice.status', 'pending')
+        ->assertJsonPath('data.pending_invoice.purpose', 'registration')
+        ->assertJsonStructure(['data' => ['pending_invoice' => ['expires_at']]]);
+});
+
 it('issues an invoice, polls to paid, registers, then lets the merchant set a PIN', function () {
     fakeEdahab();
 
@@ -118,7 +134,9 @@ it('issues an invoice, polls to paid, registers, then lets the merchant set a PI
 
     $this->postJson('/api/v1/registration/phone/check', ['phone_number' => NEW_PHONE])
         ->assertJsonPath('data.invoice_required', false)
-        ->assertJsonPath('data.pending_invoice.invoice_id', $invoice);
+        ->assertJsonPath('data.pending_invoice.invoice_id', $invoice)
+        ->assertJsonPath('data.pending_invoice.status', 'paid')
+        ->assertJsonPath('data.pending_invoice.purpose', 'registration');
 
     $this->postJson('/api/v1/merchants', registrationBody($invoice))
         ->assertCreated()

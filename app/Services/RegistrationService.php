@@ -65,31 +65,31 @@ class RegistrationService
     public function checkPhone(string $phoneNumber): array
     {
         if ($taken = $this->completedMerchant($phoneNumber)) {
+            $pending = $this->resumeInvoice($phoneNumber, self::TYPES['verification']);
+
             return [
-                'message' => $this->phoneTaken($taken)->getMessage(),
-                'data' => ['available' => false, 'registration_complete' => true, 'invoice_required' => false, 'pending_invoice' => null],
+                'message' => $pending
+                    ? $this->resumeMessage($pending)
+                    : $this->phoneTaken($taken)->getMessage(),
+                'data' => [
+                    'available' => false,
+                    'registration_complete' => true,
+                    'invoice_required' => false,
+                    'pending_invoice' => $pending,
+                ],
             ];
         }
 
-        $paid = Invoice::paid()
-            ->where('type', self::TYPES['registration'])
-            ->whereNull('consumed_at')
-            ->whereIn('mobile_number', PhoneNumber::variants($phoneNumber))
-            ->latest('id')
-            ->first();
+        $pending = $this->resumeInvoice($phoneNumber, self::TYPES['registration']);
 
-        if ($paid) {
+        if ($pending) {
             return [
-                'message' => 'You already paid. Continue where you left off.',
+                'message' => $this->resumeMessage($pending),
                 'data' => [
                     'available' => true,
                     'registration_complete' => false,
                     'invoice_required' => false,
-                    'pending_invoice' => [
-                        'invoice_id' => $this->publicId($paid),
-                        'status' => 'paid',
-                        'paid_at' => ApiResponse::iso($paid->paid_at ?? $paid->updated_at),
-                    ],
+                    'pending_invoice' => $pending,
                 ],
             ];
         }
@@ -641,6 +641,87 @@ class RegistrationService
         }
 
         throw new ApiException('validation.failed', 'Please check the form', 422, ['phone_number' => ['This number has no EXELO account']], 'phone_number');
+    }
+
+    /**
+     * Latest unused paid or still-open invoice for this number and purpose, after a live status check.
+     *
+     * @return array{invoice_id: string, status: string, purpose: string, paid_at?: ?string, expires_at?: ?string}|null
+     */
+    private function resumeInvoice(string $phoneNumber, string $type): ?array
+    {
+        $variants = PhoneNumber::variants($phoneNumber);
+
+        $paid = Invoice::paid()
+            ->where('type', $type)
+            ->whereNull('consumed_at')
+            ->whereIn('mobile_number', $variants)
+            ->latest('id')
+            ->first();
+
+        if ($paid) {
+            return $this->pendingInvoicePayload($paid);
+        }
+
+        $open = Invoice::query()
+            ->where('type', $type)
+            ->where('status', 'Pending')
+            ->whereNull('consumed_at')
+            ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->whereIn('mobile_number', $variants)
+            ->latest('id')
+            ->first();
+
+        if (! $open) {
+            return null;
+        }
+
+        try {
+            $this->payments->refresh($open);
+        } catch (ApiException $e) {
+            if ($e->errorCode !== 'payment.provider_unavailable') {
+                throw $e;
+            }
+        }
+
+        $open = $open->fresh();
+
+        if (! in_array($open->status, ['Pending', 'Paid'], true) || $open->consumed_at) {
+            return null;
+        }
+
+        return $this->pendingInvoicePayload($open);
+    }
+
+    /**
+     * @param  array{status: string}  $pending
+     */
+    private function resumeMessage(array $pending): string
+    {
+        return $pending['status'] === 'paid'
+            ? 'You already paid. Continue where you left off.'
+            : 'Finish the payment you already started.';
+    }
+
+    /**
+     * @return array{invoice_id: string, status: string, purpose: string, paid_at?: ?string, expires_at?: ?string}
+     */
+    private function pendingInvoicePayload(Invoice $invoice): array
+    {
+        $purpose = array_search($invoice->type, self::TYPES, true) ?: strtolower($invoice->type);
+        $payload = [
+            'invoice_id' => $this->publicId($invoice),
+            'status' => strtolower($invoice->status),
+            'purpose' => $purpose,
+        ];
+
+        if ($invoice->status === 'Paid') {
+            $payload['paid_at'] = ApiResponse::iso($invoice->paid_at ?? $invoice->updated_at);
+        } else {
+            $payload['expires_at'] = ApiResponse::iso($invoice->expires_at);
+        }
+
+        return $payload;
     }
 
     private function publicId(Invoice $invoice): string

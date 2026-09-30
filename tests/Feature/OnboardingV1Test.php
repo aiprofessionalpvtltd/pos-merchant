@@ -195,11 +195,27 @@ it('makes the merchant verify from their own number', function () {
     ])->assertStatus(422)->assertJsonPath('error.details.wallet_number.0', 'Pay from the number you are verifying');
 });
 
+it('returns a verification invoice when an existing merchant re-enters their number', function () {
+    merchantAccount();
+
+    $invoiceId = onboardingPay('verification', 'resume-verify');
+
+    test()->postJson('/api/v1/registration/phone/check', ['phone_number' => MERCHANT_PHONE])
+        ->assertOk()
+        ->assertJsonPath('data.available', false)
+        ->assertJsonPath('data.registration_complete', true)
+        ->assertJsonPath('data.invoice_required', false)
+        ->assertJsonPath('data.pending_invoice.invoice_id', $invoiceId)
+        ->assertJsonPath('data.pending_invoice.status', 'paid')
+        ->assertJsonPath('data.pending_invoice.purpose', 'verification');
+});
+
 it('keeps the merchant\'s own number out of shops and new accounts', function () {
     merchantAccount();
 
     test()->postJson('/api/v1/registration/phone/check', ['phone_number' => MERCHANT_PHONE])
-        ->assertJsonPath('data.available', false);
+        ->assertJsonPath('data.available', false)
+        ->assertJsonPath('data.pending_invoice', null);
 
     expect(App\Models\MerchantAccount::where('phone_number', MERCHANT_PHONE)->count())->toBe(1);
 });

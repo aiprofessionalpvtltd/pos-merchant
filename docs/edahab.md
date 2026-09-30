@@ -437,9 +437,7 @@ App                     EXELO server                         eDahab
  │                        │ ◄──────────────────── InvoiceId     │
  │ ◄── 202 pending ────── │ invoices row, status Pending        │  push prompt
  │                        │                                     │  ──► payer approves
- │ POST …/confirm  (SMS Code + Txn Id)                          │
- │ ─────────────────────► │ store on invoice, then              │
- │ GET /payments/charges/{id}                                   │
+ │ GET /payments/charges/{id}  (Verify — do not POST /confirm)  │
  │ ─────────────────────► │ CheckInvoiceStatus?hash=… ────────► │
  │ ◄── pending / paid ─── │ ◄──────────────── InvoiceStatus     │
  │                        │ on Paid: InvoicePaid → order created, cart cleared
