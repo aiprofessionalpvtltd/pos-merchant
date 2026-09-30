@@ -4,9 +4,11 @@ namespace App\Http\Controllers\API\V1;
 
 use App\Exceptions\ApiException;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\API\V1\ConfirmPaymentRequest;
 use App\Models\Invoice;
 use App\Services\InvoicePaymentService;
 use App\Support\ApiResponse;
+use App\Support\Idempotency;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -19,6 +21,34 @@ class PaymentChargeController extends Controller
 
     public function show(Request $request, string $chargeId): JsonResponse
     {
+        $invoice = $this->payments->refresh($this->ownedInvoice($request, $chargeId));
+
+        return ApiResponse::success($this->payments->chargePayload($invoice->refresh()));
+    }
+
+    /**
+     * The app parsed the payer's eDahab SMS and is submitting Code + Txn Id.
+     */
+    public function confirm(ConfirmPaymentRequest $request, string $chargeId): JsonResponse
+    {
+        $invoice = $this->ownedInvoice($request, $chargeId);
+        $body = $request->validated();
+
+        $result = Idempotency::run("m{$invoice->merchant_id}:charge-confirm:{$invoice->id}", $body['idempotency_key'], $body, function () use ($invoice, $body) {
+            $invoice = $this->payments->confirm($invoice, $body);
+
+            return [
+                'data' => $this->payments->chargePayload($invoice),
+                'message' => $invoice->status === 'Paid' ? 'Payment received' : null,
+                'status' => 200,
+            ];
+        });
+
+        return ApiResponse::success($result['data'], $result['message'], $result['status']);
+    }
+
+    private function ownedInvoice(Request $request, string $chargeId): Invoice
+    {
         $merchant = $request->user()->actingMerchant()
             ?? throw new ApiException('merchant.not_found', 'We could not find that shop', 404);
 
@@ -30,8 +60,6 @@ class PaymentChargeController extends Controller
             throw new ApiException('charge.not_found', 'We could not find that payment', 404);
         }
 
-        $invoice = $this->payments->refresh($invoice);
-
-        return ApiResponse::success($this->payments->chargePayload($invoice->refresh()));
+        return $invoice;
     }
 }

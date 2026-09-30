@@ -15,7 +15,7 @@ class HomeController extends Controller
      */
     public function __construct()
     {
-        $this->middleware('auth')->except('verifyPayment' ,'deleteAccount' ,'delete');
+        $this->middleware('auth')->except('deleteAccount', 'delete');
     }
 
     /**
@@ -28,11 +28,6 @@ class HomeController extends Controller
         return view('home');
     }
 
-    public function verifyPayment(Request  $request)
-    {
-        dd($request->all());
-     }
-
     public function delete()
     {
         return view('auth.delete_account');
@@ -40,7 +35,7 @@ class HomeController extends Controller
 
     public function deleteAccount(Request $request)
     {
-         $validator = Validator::make($request->all(), [
+        $validator = Validator::make($request->all(), [
             'phone_number' => 'required|string|max:20',
 
         ]);
@@ -54,8 +49,8 @@ class HomeController extends Controller
         $phoneNumber = str_replace(' ', '', $request->phone_number);
         $merchant = Merchant::where('phone_number', $phoneNumber)->first();
 
-        if (!$merchant) {
-             return redirect()->back()->with('error', 'Phone number not found');
+        if (! $merchant) {
+            return redirect()->back()->with('error', 'Phone number not found');
 
         }
 
@@ -76,8 +71,5 @@ class HomeController extends Controller
 
         return redirect()->back()->with('success', 'Account Deleted');
 
-
     }
-
-
 }

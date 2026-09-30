@@ -13,7 +13,7 @@ and [Subscription](subscription.md). The other wallet is documented in
 >
 > | eDahab call | Used by | State |
 > | --- | --- | --- |
-> | `IssueInvoice` | `WalletGateway::issue()` (charges, registration, subscription) | **Live**. `ReturnUrl` is not sent yet |
+> | `IssueInvoice` | `WalletGateway::issue()` (charges, registration, subscription) | **Live**. Sends `ReturnUrl` as `{APP_URL}/verifyPayment` |
 > | `CheckInvoiceStatus` | `WalletGateway::status()` (charge polling) | **Live** |
 > | `agentPayment` | Legacy `API\PaymentController::makeMerchantPayment()` only | **Legacy only**. Not in `WalletGateway`, no v1 endpoint |
 > | Hosted payment page | — | **Not used** |
@@ -33,14 +33,15 @@ docs, tickets or chat.** Read them through `config('exelo.providers.edahab')`, n
 | `EXELO_API_KEY` | `exelo.providers.edahab.api_key` | `apiKey` sent in every body |
 | `EXELO_AGENT_CODE` | `exelo.providers.edahab.agent_code` | `AgentCode` on `IssueInvoice` (the shop account that receives the money) |
 | `SECRET_KEY` | `exelo.providers.edahab.secret` | Signs every request (see [Signing](#signing-requests)). Never sent on the wire |
-| `EDAHAB_RETURN_URL` *(to add)* | `exelo.providers.edahab.return_url` | Where the hosted payment page sends the customer back to |
+| `EDAHAB_RETURN_URL` | `exelo.providers.edahab.return_url` | Where the hosted payment page sends the customer back to. Defaults to `{APP_URL}/verifyPayment` |
 | `API_TIMEOUT` | `exelo.providers.timeout` | HTTP timeout in seconds (default 30) |
 
 ```dotenv
 EXELO_API_KEY=
 EXELO_AGENT_CODE=
 SECRET_KEY=
-EDAHAB_RETURN_URL=https://exelo.aiprofessionals.co/verifyPayment
+# Optional. Defaults to {APP_URL}/verifyPayment — never the old aiprofessionals host.
+# EDAHAB_RETURN_URL=https://your-live-host/verifyPayment
 ```
 
 **Base URLs**
@@ -133,6 +134,7 @@ $payload = [
     'EdahabNumber' => '656486734',
     'Amount' => 500,
     'AgentCode' => $config['agent_code'],
+    'ReturnUrl' => $config['return_url'],
     'transactionId' => 'txn_1_'.round(microtime(true) * 1000),
     'Currency' => 'SLSH',
 ];
@@ -164,7 +166,7 @@ Content-Type: application/json
   "EdahabNumber": "656486734",
   "Amount": 500,
   "AgentCode": "<EXELO_AGENT_CODE>",
-  "ReturnUrl": "https://exelo.aiprofessionals.co/verifyPayment",
+  "ReturnUrl": "https://<this-app>/verifyPayment",
   "transactionId": "txn_1_1727164800000",
   "Currency": "SLSH"
 }
@@ -176,7 +178,7 @@ Content-Type: application/json
 | `EdahabNumber` | string | yes | Customer number, **9 digits, no `+252`**, starting `65`, `66` or `62` (see `App\Support\PhoneNumber`). From E.164: `substr($e164, 4)` |
 | `Amount` | number | yes | Whole shillings for `SLSH` |
 | `AgentCode` | string | yes | `EXELO_AGENT_CODE` |
-| `ReturnUrl` | string | for the hosted page | Where eDahab redirects after the hosted payment page. Not needed for the push-to-handset flow |
+| `ReturnUrl` | string | yes (we always send it) | `{APP_URL}/verifyPayment` (named route `verifyPayment`). **Not** `https://exelo.aiprofessionals.co/verifyPayment` — that host is retired. Override with `EDAHAB_RETURN_URL` only if this app lives on a different public URL than `APP_URL` |
 | `Currency` | string | yes | `SLSH` (what EXELO bills in). `USD` only if eDahab has enabled it on the agent account |
 | `transactionId` | string | yes (sent by the collection and the server) | Our own reference, `txn_<n>_<epoch ms>`. The Postman collection sets it at runtime (see [Postman pre-request script](#postman-pre-request-script)); `WalletGateway` sends `txn_1_<ms>` and stores it on `invoices.transaction_id` |
 
@@ -276,8 +278,7 @@ Content-Type: application/json
 | `apiKey` | string | yes | `EXELO_API_KEY` |
 | `invoiceId` | string | yes | The `InvoiceId` from `IssueInvoice` |
 
-`WalletGateway` calls the endpoint as `checkInvoiceStatus` (lower-case `c`);
-eDahab accepts either.
+The server posts to `CheckInvoiceStatus` (same casing as the documented URL).
 
 **Response `200`: still open** (captured 2026-09-25, straight after the declined
 `IssueInvoice` above)
@@ -413,15 +414,17 @@ For a customer who pays in a browser instead of approving a push prompt:
 GET https://edahab.net/api/payment?invoiceId={InvoiceId}
 ```
 
-1. Call [`IssueInvoice`](#1-issueinvoice--bill-a-customers-wallet) **with `ReturnUrl`**.
-2. Send the customer to `https://edahab.net/api/payment?invoiceId={InvoiceId}`.
-3. The customer pays; eDahab redirects to `ReturnUrl`.
-4. On `ReturnUrl`, **do not trust the redirect**. Look up the invoice and call
+1. Call [`IssueInvoice`](#1-issueinvoice--bill-a-customers-wallet) **with `ReturnUrl`**
+   (`{APP_URL}/verifyPayment`, not the old aiprofessionals host).
+2. Pending eDahab charges also carry `payment_url`:
+   `https://edahab.net/api/payment?invoiceId={InvoiceId}`.
+3. The customer pays; eDahab redirects to `GET /verifyPayment?invoiceId=…`
+   (the exact query string is still to capture; `invoiceId`, `InvoiceId` and
+   `invoice_id` are accepted).
+4. On `ReturnUrl`, **do not trust the redirect**. `EdahabReturnController`
+   looks up the invoice and calls
    [`CheckInvoiceStatus`](#2-checkinvoicestatus--has-the-customer-paid); only a
    `Paid` answer from eDahab settles it.
-
-The query string eDahab appends to `ReturnUrl` is not documented in the collection.
-Capture it from a sandbox run before building the return route.
 
 ---
 
@@ -433,7 +436,9 @@ App                     EXELO server                         eDahab
  │  rail: edahab ───────► │ IssueInvoice?hash=… ──────────────► │
  │                        │ ◄──────────────────── InvoiceId     │
  │ ◄── 202 pending ────── │ invoices row, status Pending        │  push prompt
- │                        │                                     │  ──► customer approves
+ │                        │                                     │  ──► payer approves
+ │ POST …/confirm  (SMS Code + Txn Id)                          │
+ │ ─────────────────────► │ store on invoice, then              │
  │ GET /payments/charges/{id}                                   │
  │ ─────────────────────► │ CheckInvoiceStatus?hash=… ────────► │
  │ ◄── pending / paid ─── │ ◄──────────────── InvoiceStatus     │
@@ -450,10 +455,10 @@ for each. ✅ = built (2026-09-25, Phases 0–2 of the plan in
 
 | # | Gap | Change | Files |
 | --- | --- | --- | --- |
-| 1 | `ReturnUrl` is never sent | Add `return_url` to `exelo.providers.edahab` (`EDAHAB_RETURN_URL`), send it from `issueEdahab()` when set | `config/exelo.php`, `.env.example`, `app/Services/WalletGateway.php` |
+| 1 ✅ | `ReturnUrl` used the old `exelo.aiprofessionals.co` host and was never sent | Send `ReturnUrl` from `EdahabProvider::issue()` as `{APP_URL}/verifyPayment` (`EDAHAB_RETURN_URL` override) | `config/exelo.php`, `EdahabProvider` |
 | 2 | `agentPayment` exists only in the legacy controller, which posts unauthenticated, re-encodes the body after hashing and loops on `env()` | Add `WalletGateway::payout(string $walletE164, int $amount, string $transactionId): array` using `postEdahab('agentPayment', …)` | `app/Services/WalletGateway.php` |
 | 3 | No v1 payout endpoint | Build [`POST /payments/payouts`](payments.md#7-post-apiv1paymentspayouts--send-money-to-a-phone-number): FormRequest → `PayoutService` (idempotency, PIN confirmation scope `payments.payout`, `DB::transaction`) → `WalletGateway::payout()`. Record in a `payouts` table (new migration) and log to activity | `routes/api.php`, `V1\PaymentController`, `StorePayoutRequest`, `PayoutService`, `Payout` model + migration, `PayoutResource` |
-| 4 | Hosted page not supported | Return `payment_url` (`https://edahab.net/api/payment?invoiceId=…`) on eDahab charges; add a named `verifyPayment` return route that re-checks status via `WalletGateway::status()` and shows the result | `ChargeService`, `routes/web.php`, a small controller + view |
+| 4 ✅ | Hosted page not supported | Pending eDahab charges include `payment_url`; `GET /verifyPayment` re-checks status via `InvoicePaymentService::returnFromEdahab()` | `InvoicePaymentService`, `EdahabReturnController`, `routes/web.php` |
 | 5 ✅ | `.env.example` has no eDahab keys | Add the empty keys listed under [Configuration](#configuration) | `.env.example` |
 | 6 ✅ | The prompt outcome in the `IssueInvoice` response is ignored, and `Unpaid` from `CheckInvoiceStatus` would count as failed | In `issueEdahab()`: keep the invoice `Pending` on `StatusCode 7` (it stays open at eDahab) but return a `prompt: "declined"` hint; if `InvoiceStatus == "Paid"`, return it so the caller settles at once. In `edahabStatus()`: treat `Unpaid` as pending | `app/Services/WalletGateway.php`, and the callers in `ChargeService` / registration / subscription for the hint and the paid-at-issue case |
 | 7 ✅ | `IssueInvoice` waits for the customer, so a 30 s timeout can end the call while the prompt is still open | Give eDahab calls their own, longer timeout (e.g. 90 s); on a timeout, keep the invoice `Pending` and let polling find the result instead of returning an error | `config/exelo.php`, `app/Services/WalletGateway.php` |

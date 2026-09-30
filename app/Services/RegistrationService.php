@@ -11,6 +11,7 @@ use App\Models\Shop;
 use App\Models\SubscriptionPlan;
 use App\Models\User;
 use App\Support\ApiResponse;
+use App\Support\Idempotency;
 use App\Support\PhoneNumber;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -172,26 +173,26 @@ class RegistrationService
             $this->payments->refresh($invoice);
         }
 
-        return match ($invoice->status) {
-            'Pending' => ['message' => null, 'data' => [
-                'invoice_id' => $invoice->public_id,
-                'status' => 'pending',
-                'poll_after' => config('exelo.registration.poll_after_seconds'),
-                'expires_at' => ApiResponse::iso($invoice->expires_at),
-            ] + ($invoice->isPromptDeclined() ? ['prompt' => 'declined'] : [])],
-            'Paid' => ['message' => 'Payment received', 'data' => [
-                'invoice_id' => $invoice->public_id,
-                'status' => 'paid',
-                'paid_at' => ApiResponse::iso($invoice->paid_at),
-                'amount' => $this->money((int) $invoice->amount, $invoice->currency),
-                'receipt_no' => 'EXL-RCP-'.str_pad((string) $invoice->id, 5, '0', STR_PAD_LEFT),
-            ]],
-            default => ['message' => null, 'data' => [
-                'invoice_id' => $invoice->public_id,
-                'status' => strtolower($invoice->status),
-                'error_reason' => $invoice->error_reason,
-            ]],
-        };
+        return $this->invoicePayload($invoice->fresh());
+    }
+
+    /**
+     * The app parsed the payer's eDahab SMS (Code + Txn Id) for a signup or
+     * verification invoice. Store it, then re-check eDahab — never settle on the SMS alone.
+     *
+     * @param  array{provider_transaction_id: string, confirmation_code: string, message?: ?string, amount?: mixed, idempotency_key: string}  $data
+     */
+    public function confirmInvoice(string $publicId, array $data): array
+    {
+        $invoice = Invoice::where('public_id', $publicId)->whereIn('type', array_values(self::TYPES))->first();
+
+        if (! $invoice) {
+            throw new ApiException('invoice.not_found', 'We could not find that payment', 404);
+        }
+
+        return Idempotency::run("reg-invoice-confirm:{$invoice->id}", $data['idempotency_key'], $data, function () use ($invoice, $data) {
+            return $this->invoicePayload($this->payments->confirm($invoice, $data));
+        });
     }
 
     public function registerMerchant(array $input): array
@@ -546,6 +547,34 @@ class RegistrationService
         }
 
         return $this->invoiceStatus($publicId);
+    }
+
+    private function invoicePayload(Invoice $invoice): array
+    {
+        return match ($invoice->status) {
+            'Pending' => ['message' => null, 'data' => [
+                'invoice_id' => $invoice->public_id,
+                'status' => 'pending',
+                'poll_after' => config('exelo.registration.poll_after_seconds'),
+                'expires_at' => ApiResponse::iso($invoice->expires_at),
+                'provider_transaction_id' => $invoice->e_transaction_id,
+                'confirmation_code' => $invoice->meta['edahab_confirmation']['code'] ?? null,
+            ] + ($invoice->isPromptDeclined() ? ['prompt' => 'declined'] : [])],
+            'Paid' => ['message' => 'Payment received', 'data' => [
+                'invoice_id' => $invoice->public_id,
+                'status' => 'paid',
+                'paid_at' => ApiResponse::iso($invoice->paid_at),
+                'amount' => $this->money((int) $invoice->amount, $invoice->currency),
+                'receipt_no' => 'EXL-RCP-'.str_pad((string) $invoice->id, 5, '0', STR_PAD_LEFT),
+                'provider_transaction_id' => $invoice->e_transaction_id,
+                'confirmation_code' => $invoice->meta['edahab_confirmation']['code'] ?? null,
+            ]],
+            default => ['message' => null, 'data' => [
+                'invoice_id' => $invoice->public_id,
+                'status' => strtolower($invoice->status),
+                'error_reason' => $invoice->error_reason,
+            ]],
+        };
     }
 
     private function pendingPayload(Invoice $invoice, ?string $message = null): array

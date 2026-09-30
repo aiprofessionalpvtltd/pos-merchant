@@ -15,6 +15,7 @@ beforeEach(function () {
         'exelo.providers.edahab.api_key' => 'test-edahab-key',
         'exelo.providers.edahab.agent_code' => '700000',
         'exelo.providers.edahab.secret' => 'test-secret',
+        'exelo.providers.edahab.return_url' => 'http://localhost/verifyPayment',
         'exelo.providers.waafi.merchant_uid' => 'M0000001',
         'exelo.providers.waafi.api_user_id' => '1000001',
         'exelo.providers.waafi.api_key' => 'API-TEST-KEY',
@@ -57,6 +58,7 @@ it('signs an eDahab invoice with the hash of the exact body sent', function () {
             && $sent['EdahabNumber'] === '656486734'
             && $sent['Amount'] === 510
             && $sent['AgentCode'] === '700000'
+            && $sent['ReturnUrl'] === config('exelo.providers.edahab.return_url')
             && $sent['Currency'] === 'SLSH'
             && str_starts_with($sent['transactionId'], 'txn_1_');
     });
@@ -119,7 +121,7 @@ it('treats an eDahab answer without an invoice as the provider being unavailable
 });
 
 it('reads eDahab invoice statuses', function (array $response, string $status, ?string $reference) {
-    Http::fake(['edahab.net/api/api/checkInvoiceStatus*' => Http::response($response)]);
+    Http::fake(['edahab.net/api/api/CheckInvoiceStatus*' => Http::response($response)]);
 
     $result = app(WalletGateway::class)->status(edahabInvoice());
 
@@ -141,7 +143,7 @@ it('logs eDahab calls without the API key', function () {
 
     $log = ApiLog::latest('id')->first();
 
-    expect($log->url)->toStartWith('https://edahab.net/api/api/checkInvoiceStatus?hash=')
+    expect($log->url)->toStartWith('https://edahab.net/api/api/CheckInvoiceStatus?hash=')
         ->and($log->payload)->toBe(['invoiceId' => '35917256c9d0459cacbe4852e6594e8e'])
         ->and($log->response_body['InvoiceStatus'])->toBe('Pending');
 });
@@ -258,7 +260,7 @@ it('records a call that never got an answer', function () {
 
     expect(ApiLog::latest('id')->first()->only(['provider', 'operation', 'status_code', 'response_body', 'error']))->toBe([
         'provider' => 'edahab',
-        'operation' => 'checkInvoiceStatus',
+        'operation' => 'CheckInvoiceStatus',
         'status_code' => null,
         'response_body' => null,
         'error' => 'cURL error 28: Operation timed out',
@@ -306,7 +308,7 @@ it('links every provider call to the invoice it belongs to', function (string $r
     app(WalletGateway::class)->status($invoice);
 
     expect($invoice->apiLogs()->pluck('operation')->all())->toBe($rail === 'edahab'
-        ? ['IssueInvoice', 'checkInvoiceStatus']
+        ? ['IssueInvoice', 'CheckInvoiceStatus']
         : ['API_PREAUTHORIZE', 'API_PREAUTHORIZE_COMMIT']);
 })->with([
     'edahab' => ['edahab', '+252656486734', 'edahab.net/*', fixture('edahab/issue-invoice-declined.json'), fixture('edahab/check-invoice-pending.json')],
@@ -331,3 +333,37 @@ it('reports a provider HTTP error as unavailable', function (string $rail, strin
     expect(fn () => app(WalletGateway::class)->issue($rail, $rail === 'zaad' ? '+252634110101' : '+252656486734', 500, 'SLSH'))
         ->toThrow(fn (ApiException $e) => expect([$e->errorCode, $e->status])->toBe(['payment.provider_unavailable', 502]));
 })->with([['edahab', 'edahab.net/*'], ['zaad', 'api.waafipay.net/*']]);
+
+it('points ReturnUrl at this app, not the old aiprofessionals host', function () {
+    expect(config('exelo.providers.edahab.return_url'))
+        ->toEndWith('/verifyPayment')
+        ->and(config('exelo.providers.edahab.return_url'))->not->toContain('aiprofessionals');
+});
+
+it('re-checks eDahab when the payer returns from the hosted page', function () {
+    Http::fake(['edahab.net/api/api/CheckInvoiceStatus*' => Http::response([
+        'InvoiceStatus' => 'Paid',
+        'TransactionId' => 'MP260930.1500.A34551',
+    ])]);
+
+    $invoice = Invoice::create([
+        'public_id' => Invoice::generatePublicId(),
+        'invoice_id' => '35917256c9d0459cacbe4852e6594e8e',
+        'transaction_id' => 'txn_1_1',
+        'hash' => '0',
+        'mobile_number' => '+252656486734',
+        'wallet_number' => '+252656486734',
+        'rail' => 'edahab',
+        'amount' => 550,
+        'currency' => 'SLSH',
+        'status' => 'Pending',
+        'type' => 'Registration',
+    ]);
+
+    $this->get('/verifyPayment?invoiceId='.$invoice->invoice_id)
+        ->assertOk()
+        ->assertSee('Payment received');
+
+    expect($invoice->fresh()->status)->toBe('Paid')
+        ->and($invoice->fresh()->e_transaction_id)->toBe('MP260930.1500.A34551');
+});

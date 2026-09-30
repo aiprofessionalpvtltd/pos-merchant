@@ -118,7 +118,7 @@ See [multiple-shop.md](multiple-shop.md).
 | `settings.rate_out_of_range` | 422 | Exchange rate outside the allowed range (`error.field: exchange_rate`) | `min`, `max` |
 | `payment.provider_unavailable` | 502 | Wallet provider down | `retry_after` |
 | `payment.timeout` | 504 | No answer in time | `charge_id` — **poll it, do not re-charge** |
-| `payment.already_settled` | 409 | Cannot cancel a paid charge | |
+| `payment.already_settled` | 409 | Cannot confirm or cancel a payment that already failed, expired or was cancelled | |
 | `payment.cart_changed` | 409 | Cart moved since the quote, or the amount no longer matches the sale total | `current_total`, or `current` (the ticket) |
 | `payment.charge_pending` | 409 | A payment for this ticket or order is already waiting for the customer | `charge_id` |
 | `payment.tender_too_low` | 422 | Cash given is less than the amount due | `due` |

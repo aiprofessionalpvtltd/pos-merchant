@@ -43,6 +43,7 @@ A. CREATE THE MERCHANT ACCOUNT  — registration fee
    POST /registration/phone/check            is the merchant's number free?
    GET  /registration/quote?purpose=registration
    POST /registration/invoices               pay the registration fee
+   POST /registration/invoices/{id}/confirm  eDahab: submit SMS Code + Txn Id
    GET  /registration/invoices/{id}          poll until paid
    POST /merchants                           create the account (no shop yet)
    POST /auth/pin                            set PIN → token; onboarding.next_step = "verify_phone"
@@ -50,6 +51,7 @@ A. CREATE THE MERCHANT ACCOUNT  — registration fee
 B. VERIFY THE MERCHANT'S PHONE  — verification fee, paid FROM that phone
    GET  /registration/quote?purpose=verification
    POST /registration/invoices               purpose "verification"
+   POST /registration/invoices/{id}/confirm  eDahab: submit SMS Code + Txn Id
    GET  /registration/invoices/{id}          poll until paid
    POST /account/verification/complete       phone verified; next_step = "create_shop"
 
@@ -109,9 +111,11 @@ normalises it. Zaad numbers start `63`; eDahab `65`, `66` or `62`.
 **Money.** `{ "amount": 550, "currency": "SLSH", "display": "550 SLSH" }`. SLSH is
 whole shillings, USD is cents. Wallets are always billed in SLSH.
 
-**Idempotency.** `POST /registration/invoices` takes an `idempotency_key`: a new
-UUID when the user taps Pay, reused on every retry of **that** payment. The
-registration and verification payments each get their own key.
+**Idempotency.** `POST /registration/invoices` and
+`POST /registration/invoices/{id}/confirm` each take an `idempotency_key`: a new
+UUID when the user taps Pay or Confirm SMS, reused on every retry of **that**
+tap. The registration payment, the verification payment, and each SMS confirm
+each get their own key.
 
 ---
 
@@ -244,7 +248,7 @@ Show `total.slsh.display`; the split into `base` and `exelo_fee` is optional.
 ```
 
 On eDahab, `"prompt": "declined"` means the customer turned the prompt down; the
-invoice stays `pending`.
+invoice stays `pending`. When the SMS arrives, [A3b](#a3b-post-registrationinvoicesinvoice_idconfirm--submit-the-edahab-sms).
 
 **Errors**
 
@@ -255,9 +259,54 @@ invoice stays `pending`.
 | `422` | `payment.wallet_invalid` | Wallet doesn't belong to `rail` |
 | `502` | `payment.provider_unavailable` | Retry with the **same** key |
 
+### A3b. POST `/registration/invoices/{invoice_id}/confirm` — Submit the eDahab SMS
+
+On **eDahab** only (`rail: "edahab"`). After the merchant pays on the handset they
+get an SMS, for example:
+
+`550 Shilling you have sent to EXELO LTD(657496464).Code:740852 Txn Id:MP260930.1500.A34551…`
+
+There is no fourth eDahab API. The app posts `Code` and `Txn Id` here. We store
+them, then call eDahab `CheckInvoiceStatus` with the **InvoiceId from IssueInvoice**,
+not the SMS txn id. The invoice is `paid` only when eDahab says so.
+
+Zaad: skip this call; keep polling [A4](#a4-get-registrationinvoicesinvoice_id--wait-for-the-payment).
+
+**Request**
+
+```json
+{
+  "provider_transaction_id": "MP260930.1500.A34551",
+  "confirmation_code": "740852",
+  "message": "550 Shilling you have sent to EXELO LTD(657496464).Code:740852 Txn Id:MP260930.1500.A34551.Your balance is: 392.2 Shilling.at :30-09-2026[-eDahab-Service- Shilling]",
+  "amount": 550,
+  "idempotency_key": "2c81f0a6-5b1d-4d0e-9d55-0c2a1f6e8a11"
+}
+```
+
+| Field | Required | Notes |
+| --- | --- | --- |
+| `provider_transaction_id` | yes | SMS `Txn Id` (`MP…`) |
+| `confirmation_code` | yes | SMS `Code` |
+| `message` | no | Full SMS, for support |
+| `amount` | no | Amount in the SMS |
+| `idempotency_key` | yes | New UUID per Confirm tap (not the Pay key from A3) |
+
+**Response `200`**: same shape as [A4](#a4-get-registrationinvoicesinvoice_id--wait-for-the-payment).
+If still `pending`, the SMS is stored; poll A4, or confirm again with a **new** key.
+
+**Errors**
+
+| Status | Code | App does |
+| --- | --- | --- |
+| `404` | `invoice.not_found` | Unknown invoice |
+| `409` | `payment.already_settled` | Invoice already failed, expired or cancelled |
+| `422` | `payment.rail_unavailable` | Not an eDahab invoice (Zaad/cash) |
+
 ### A4. GET `/registration/invoices/{invoice_id}` — Wait for the payment
 
-Poll every `poll_after` seconds (3).
+Poll every `poll_after` seconds (3). On eDahab, call [A3b](#a3b-post-registrationinvoicesinvoice_idconfirm--submit-the-edahab-sms)
+when the SMS arrives, then keep polling here until `paid`.
 
 **Response `200`: paid**
 
@@ -270,14 +319,16 @@ Poll every `poll_after` seconds (3).
     "status": "paid",
     "paid_at": "2026-09-26T06:55:42Z",
     "amount": { "amount": 550, "currency": "SLSH", "display": "550 SLSH" },
-    "receipt_no": "EXL-RCP-00024"
+    "receipt_no": "EXL-RCP-00024",
+    "provider_transaction_id": "MP260930.1500.A34551",
+    "confirmation_code": "740852"
   }
 }
 ```
 
 | `status` | App does |
 | --- | --- |
-| `pending` | Keep polling (show "declined" if `prompt: "declined"`) |
+| `pending` | Keep polling (show "declined" if `prompt: "declined"`). eDahab: also A3b when the SMS is in |
 | `paid` | A5 |
 | `failed`, `expired`, `cancelled` | "Try again": A3 with a **new** key |
 
@@ -421,9 +472,17 @@ with `"purpose": "verification"` and the verification price set by the admin.
 | `410` | `quote.expired` | New quote (B1) |
 | `502` | `payment.provider_unavailable` | Retry with the same key |
 
+### B2b. POST `/registration/invoices/{invoice_id}/confirm` — Submit the eDahab SMS
+
+Same call as [A3b](#a3b-post-registrationinvoicesinvoice_idconfirm--submit-the-edahab-sms):
+parse `Code` and `Txn Id` from the verification-fee SMS, new `idempotency_key`.
+Skip for Zaad.
+
 ### B3. GET `/registration/invoices/{invoice_id}` — Wait for the payment
 
-As in [A4](#a4-get-registrationinvoicesinvoice_id--wait-for-the-payment).
+As in [A4](#a4-get-registrationinvoicesinvoice_id--wait-for-the-payment). On eDahab,
+[B2b](#b2b-post-registrationinvoicesinvoice_idconfirm--submit-the-edahab-sms) first
+when the SMS arrives.
 
 ### B4. POST `/account/verification/complete` — Mark the phone verified
 
@@ -757,6 +816,7 @@ POST /registration/invoices
        "wallet_number": "<the number to verify>",        ← it pays, and becomes the payout number
        "rail": "edahab" | "zaad", "purpose": "verification",
        "quote_id": "qte_…", "idempotency_key": "<new uuid>" }
+POST /registration/invoices/{invoice_id}/confirm         eDahab SMS Code + Txn Id
 GET  /registration/invoices/{invoice_id}                 → poll until "paid"
 POST /merchants/{shop_id}/verification/complete          → { "invoice_id": "inv_…" }
 ```
@@ -770,6 +830,9 @@ POST /merchants/{shop_id}/verification/complete          → { "invoice_id": "in
   response lists them in `error.details.your_shop_ids`. (A common slip: using the
   *merchant's* id from `GET /account` instead of the shop's.)
 - The verification fee is charged for **each number verified**.
+- On eDahab, submit the SMS with
+  [`POST /registration/invoices/{id}/confirm`](#a3b-post-registrationinvoicesinvoice_idconfirm--submit-the-edahab-sms)
+  before (or while) polling.
 - To just look: `GET /merchant/wallets` returns the current shop's wallets plus
   `shops[]` with **every** shop's (see
   [merchant.md, endpoint 3](merchant.md#3-get-apiv1merchantwallets--list-the-payout-wallets-and-their-status)).
@@ -901,8 +964,10 @@ number.
 | `request.device_id_missing` | 400 | A6, D2 | `X-EXELO-Device-Id` missing |
 | `quote.expired` | 410 | A3, B2 | New quote |
 | `payment.wallet_invalid` | 422 | A3, B2, E7 | Number doesn't belong to the rail |
-| `payment.provider_unavailable` | 502 | A3, B2 | Wallet provider down; retry with the same key |
-| `invoice.not_found` | 404 | A4, B3 | Unknown invoice |
+| `payment.provider_unavailable` | 502 | A3, A3b, B2, B2b | Wallet provider down; retry Pay with the same key. Confirm: SMS is stored; poll A4/B3 |
+| `invoice.not_found` | 404 | A3b, A4, B2b, B3 | Unknown invoice |
+| `payment.already_settled` | 409 | A3b, B2b | Invoice already failed, expired or cancelled |
+| `payment.rail_unavailable` | 422 | A3b, B2b | Confirm on a non-eDahab invoice |
 | `registration.phone_taken` | 409 | A3, A5, C2, E1 | Number already used by a merchant or a shop |
 | `registration.invoice_unpaid` | 402 | A5, B4 | Fee not paid yet |
 | `registration.invoice_consumed` | 409 | A5, B4 | Payment already used |
@@ -937,7 +1002,7 @@ have a shop. They add more shops the same way (E1), each with its own number.
 
 - **No real wallet:** with `EXELO_SIMULATE_PAYMENTS=true` and `APP_ENV=local`,
   `POST /registration/invoices/{invoice_id}/simulate-payment` marks a pending
-  registration or verification invoice paid.
+  registration or verification invoice paid (skips A3b / B2b).
 - **Fees:** Admin → Payment Fees.
 - **Provider calls:** the `api_logs` table.
 
@@ -950,7 +1015,10 @@ ME=+252654110101
 curl "$BASE/registration/quote?purpose=registration" -H 'Accept: application/json'
 curl -X POST $BASE/registration/invoices -H 'Accept: application/json' -H 'Content-Type: application/json' \
   -d "{\"phone_number\":\"$ME\",\"wallet_number\":\"$ME\",\"rail\":\"edahab\",\"purpose\":\"registration\",\"quote_id\":\"<quote_id>\",\"idempotency_key\":\"<uuid-1>\"}"
-curl -X POST $BASE/registration/invoices/<invoice_id>/simulate-payment -H 'Accept: application/json'
+# eDahab: when the SMS arrives (Code + Txn Id)
+curl -X POST $BASE/registration/invoices/<invoice_id>/confirm -H 'Accept: application/json' -H 'Content-Type: application/json' \
+  -d '{"provider_transaction_id":"MP260930.1500.A34551","confirmation_code":"740852","idempotency_key":"<uuid-confirm-1>"}'
+curl $BASE/registration/invoices/<invoice_id> -H 'Accept: application/json'
 curl -X POST $BASE/merchants -H 'Accept: application/json' -H 'Content-Type: application/json' \
   -d "{\"invoice_id\":\"<invoice_id>\",\"first_name\":\"Kalid\",\"last_name\":\"Ahmed\",\"dob\":\"1990-01-01\",\"phone_number\":\"$ME\"}"
 curl -X POST $BASE/auth/pin -H 'Accept: application/json' -H 'Content-Type: application/json' -H "$DEV" \
@@ -960,7 +1028,10 @@ curl -X POST $BASE/auth/pin -H 'Accept: application/json' -H 'Content-Type: appl
 curl "$BASE/registration/quote?purpose=verification" -H 'Accept: application/json'
 curl -X POST $BASE/registration/invoices -H 'Accept: application/json' -H 'Content-Type: application/json' \
   -d "{\"phone_number\":\"$ME\",\"wallet_number\":\"$ME\",\"rail\":\"edahab\",\"purpose\":\"verification\",\"quote_id\":\"<quote_id>\",\"idempotency_key\":\"<uuid-2>\"}"
-curl -X POST $BASE/registration/invoices/<invoice_id>/simulate-payment -H 'Accept: application/json'
+curl -X POST $BASE/registration/invoices/<invoice_id>/confirm -H 'Accept: application/json' -H 'Content-Type: application/json' \
+  -d '{"provider_transaction_id":"MP260930.1500.A34551","confirmation_code":"740852","idempotency_key":"<uuid-confirm-2>"}'
+# local only: simulate-payment instead of a real wallet
+# curl -X POST $BASE/registration/invoices/<invoice_id>/simulate-payment -H 'Accept: application/json'
 curl -X POST $BASE/account/verification/complete -H 'Accept: application/json' -H 'Content-Type: application/json' \
   -H "Authorization: Bearer $TOKEN" -d '{"invoice_id":"<invoice_id>"}'
 

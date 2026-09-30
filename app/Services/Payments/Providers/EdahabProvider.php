@@ -33,6 +33,7 @@ class EdahabProvider implements WalletProvider
             'EdahabNumber' => substr($walletE164, 4),
             'Amount' => $amount,
             'AgentCode' => $config['agent_code'],
+            'ReturnUrl' => $config['return_url'],
             'transactionId' => $transactionId,
             'Currency' => $currency,
         ];
@@ -62,7 +63,7 @@ class EdahabProvider implements WalletProvider
     {
         $payload = ['apiKey' => config('exelo.providers.edahab.api_key'), 'invoiceId' => $invoice->invoice_id];
 
-        [$response] = $this->post('checkInvoiceStatus', $payload, ['invoice_id' => $invoice->id, 'our_reference' => $invoice->transaction_id]);
+        [$response] = $this->post('CheckInvoiceStatus', $payload, ['invoice_id' => $invoice->id, 'our_reference' => $invoice->transaction_id]);
         $body = $response->json();
 
         // A declined invoice stays open, so eDahab's "Unpaid" is still pending.
@@ -88,7 +89,7 @@ class EdahabProvider implements WalletProvider
     private function post(string $endpoint, array $payload, array $context = []): array
     {
         $config = config('exelo.providers.edahab');
-        $body = json_encode($payload);
+        $body = json_encode($payload, JSON_UNESCAPED_SLASHES);
         $hash = hash('sha256', $body.$config['secret']);
         $url = $config['base_url'].'/'.$endpoint.'?hash='.$hash;
 

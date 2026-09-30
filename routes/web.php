@@ -1,8 +1,8 @@
 <?php
 
 use App\Http\Controllers\Admin\AdminController;
-use App\Http\Controllers\Admin\Dashboard\SuperAdminDashboardController;
 use App\Http\Controllers\Admin\CartController;
+use App\Http\Controllers\Admin\Dashboard\SuperAdminDashboardController;
 use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\EmployeeController;
 use App\Http\Controllers\Admin\InvoiceController;
@@ -10,21 +10,19 @@ use App\Http\Controllers\Admin\MerchantController;
 use App\Http\Controllers\Admin\MerchantSubscriptionController;
 use App\Http\Controllers\Admin\OrderController;
 use App\Http\Controllers\Admin\PaymentSettingController;
-use App\Http\Controllers\Admin\SubscriptionPlanController;
 use App\Http\Controllers\Admin\ProductController;
 use App\Http\Controllers\Admin\RoleController;
+use App\Http\Controllers\Admin\SubscriptionPlanController;
 use App\Http\Controllers\Admin\TransactionController;
 use App\Http\Controllers\Admin\UserController;
-use App\Http\Controllers\API\PassportAuthController;
+use App\Http\Controllers\EdahabReturnController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
-
-
 
 Auth::routes();
 
 Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
-Route::get('/verifyPayment', [App\Http\Controllers\HomeController::class, 'verifyPayment'])->name('verifyPayment');
+Route::get('/verifyPayment', EdahabReturnController::class)->name('verifyPayment');
 Route::get('/deleteAccount', [App\Http\Controllers\HomeController::class, 'delete']);
 Route::delete('/delete-account', [App\Http\Controllers\HomeController::class, 'deleteAccount'])->name('delete-account');
 
@@ -46,7 +44,6 @@ Route::middleware(['auth'])->group(function () {
     Route::post('delete-user', [UserController::class, 'delete'])->name('delete-user');
     Route::post('changePassword', [UserController::class, 'changePassword'])->name('changePassword');
 
-
     Route::get('show-role', [RoleController::class, 'show'])->name('show-role');
     Route::get('add-role', [RoleController::class, 'index'])->name('add-role');
     Route::post('store-role', [RoleController::class, 'store'])->name('store-role');
@@ -54,12 +51,10 @@ Route::middleware(['auth'])->group(function () {
     Route::put('update-role{id}', [RoleController::class, 'update'])->name('update-role');
     Route::post('destroy-role', [RoleController::class, 'destroy'])->name('destroy-role');
 
-
     //Merchant Controllers
     Route::get('/admin/merchant', [MerchantController::class, 'index'])->name('admin.merchant.index');
     Route::get('view-merchant/{id}', [MerchantController::class, 'view'])->name('view-merchant');
-     Route::post('delete-merchant', [MerchantController::class, 'delete'])->name('delete-merchant');
-
+    Route::post('delete-merchant', [MerchantController::class, 'delete'])->name('delete-merchant');
 
     //Invoice Controllers
     Route::get('/admin/invoices', [InvoiceController::class, 'show'])->name('admin.invoices.show');
@@ -67,11 +62,9 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/admin/invoices/{invoice}/document', [InvoiceController::class, 'document'])->name('admin.invoices.document');
     Route::get('/admin/invoices/{invoice}/pdf', [InvoiceController::class, 'pdf'])->name('admin.invoices.pdf');
 
-
     //Invoice Controllers
     Route::get('/admin/orders', [OrderController::class, 'show'])->name('admin.orders.show');
     Route::get('/admin/orders/{id}/view', [OrderController::class, 'view'])->name('admin.orders.view');
-
 
     //Inventory and cart records (read only)
     Route::get('/admin/products', [ProductController::class, 'index'])->name('admin.products.index');
@@ -103,10 +96,6 @@ Route::middleware(['auth'])->group(function () {
 
 });
 
-
-
-
 Auth::routes();
 
 Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
-

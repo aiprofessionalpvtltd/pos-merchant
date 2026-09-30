@@ -25,7 +25,7 @@ function fakeEdahab(string $status = 'Paid'): void
 
     Http::fake([
         'edahab.net/api/api/IssueInvoice*' => Http::response(['StatusDescription' => 'Success', 'InvoiceId' => 987654]),
-        'edahab.net/api/api/checkInvoiceStatus*' => fn () => Http::response(['InvoiceStatus' => Cache::get('test-edahab-status'), 'TransactionId' => 'TX-1']),
+        'edahab.net/api/api/CheckInvoiceStatus*' => fn () => Http::response(['InvoiceStatus' => Cache::get('test-edahab-status'), 'TransactionId' => 'TX-1']),
     ]);
 }
 
@@ -184,7 +184,7 @@ it('rejects an expired quote and a wallet on the wrong rail', function () {
 it('keeps a declined eDahab prompt pending and says it was declined', function () {
     Http::fake([
         'edahab.net/api/api/IssueInvoice*' => Http::response(fixture('edahab/issue-invoice-declined.json')),
-        'edahab.net/api/api/checkInvoiceStatus*' => Http::response(fixture('edahab/check-invoice-pending.json')),
+        'edahab.net/api/api/CheckInvoiceStatus*' => Http::response(fixture('edahab/check-invoice-pending.json')),
     ]);
 
     $invoiceId = issueInvoice('declined')
@@ -199,7 +199,7 @@ it('keeps a declined eDahab prompt pending and says it was declined', function (
         ->assertJsonPath('data.prompt', 'declined');
 
     expect(Invoice::where('public_id', $invoiceId)->first()->apiLogs()->pluck('operation')->all())
-        ->toBe(['IssueInvoice', 'checkInvoiceStatus']);
+        ->toBe(['IssueInvoice', 'CheckInvoiceStatus']);
 });
 
 it('reports provider outages as 502', function () {
@@ -239,6 +239,75 @@ it('reports wallet verification status for the signed in merchant only', functio
     $this->withToken($token)->postJson('/api/v1/merchants/999999/verification/complete')->assertStatus(404);
     app('auth')->forgetGuards();
     $this->withoutToken()->postJson("/api/v1/merchants/{$merchant->id}/verification/complete")->assertStatus(401);
+});
+
+function edahabSms(string $key = 'sms-1'): array
+{
+    return [
+        'provider_transaction_id' => 'MP260930.1500.A34551',
+        'confirmation_code' => '740852',
+        'message' => '550 Shilling you have sent to EXELO LTD(657496464).Code:740852 Txn Id:MP260930.1500.A34551.Your balance is: 392.2 Shilling.at :30-09-2026[-eDahab-Service- Shilling]',
+        'amount' => 550,
+        'idempotency_key' => $key,
+    ];
+}
+
+it('stores the eDahab SMS on confirm and settles when the provider says paid', function () {
+    fakeEdahab('Pending');
+    $invoice = issueInvoice()->json('data.invoice_id');
+    $sms = edahabSms();
+
+    $this->postJson("/api/v1/registration/invoices/{$invoice}/confirm", $sms)
+        ->assertOk()
+        ->assertJsonPath('data.status', 'pending');
+
+    $row = Invoice::where('public_id', $invoice)->first();
+    expect($row->e_transaction_id)->toBe('MP260930.1500.A34551')
+        ->and($row->meta['edahab_confirmation']['code'])->toBe('740852')
+        ->and($row->meta['edahab_confirmation']['provider_transaction_id'])->toBe('MP260930.1500.A34551')
+        ->and($row->meta['edahab_confirmation']['message'])->toContain('EXELO LTD');
+
+    $this->postJson("/api/v1/registration/invoices/{$invoice}/confirm", $sms)
+        ->assertOk()
+        ->assertJsonPath('data.status', 'pending');
+
+    fakeEdahab('Paid');
+    $this->postJson("/api/v1/registration/invoices/{$invoice}/confirm", edahabSms('sms-2'))
+        ->assertOk()
+        ->assertJsonPath('data.status', 'paid')
+        ->assertJsonPath('data.provider_transaction_id', 'MP260930.1500.A34551')
+        ->assertJsonPath('data.confirmation_code', '740852');
+
+    expect(Invoice::where('public_id', $invoice)->value('e_transaction_id'))->toBe('MP260930.1500.A34551');
+});
+
+it('saves the SMS even when eDahab status cannot be reached', function () {
+    fakeEdahab('Pending');
+    $invoice = issueInvoice()->json('data.invoice_id');
+
+    Http::fake(['edahab.net/api/api/CheckInvoiceStatus*' => Http::response('down', 503)]);
+
+    $this->postJson("/api/v1/registration/invoices/{$invoice}/confirm", edahabSms('sms-down'))
+        ->assertOk()
+        ->assertJsonPath('data.status', 'pending')
+        ->assertJsonPath('data.provider_transaction_id', 'MP260930.1500.A34551')
+        ->assertJsonPath('data.confirmation_code', '740852');
+
+    expect(Invoice::where('public_id', $invoice)->value('status'))->toBe('Pending');
+});
+
+it('refuses to confirm an unknown or already closed registration invoice', function () {
+    $this->postJson('/api/v1/registration/invoices/inv_NOPE/confirm', edahabSms())
+        ->assertStatus(404)
+        ->assertJsonPath('error.code', 'invoice.not_found');
+
+    fakeEdahab('Pending');
+    $invoice = issueInvoice()->json('data.invoice_id');
+    Invoice::where('public_id', $invoice)->update(['status' => 'Expired']);
+
+    $this->postJson("/api/v1/registration/invoices/{$invoice}/confirm", edahabSms())
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'payment.already_settled');
 });
 
 it('hides the simulate-payment endpoint unless local testing is enabled', function () {

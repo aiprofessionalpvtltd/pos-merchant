@@ -10,6 +10,7 @@ so most of this module is unauthenticated and keyed on the phone number.
 | POST | [`/registration/phone/check`](#post-registrationphonecheck) | — |
 | POST | [`/registration/invoices`](#post-registrationinvoices) | — |
 | GET | [`/registration/invoices/{invoice_id}`](#get-registrationinvoicesinvoice_id) | — |
+| POST | [`/registration/invoices/{invoice_id}/confirm`](#5c-post-apiv1registrationinvoicesinvoice_idconfirm--submit-the-edahab-sms) | — |
 | POST | [`/merchants`](#post-merchants) | — |
 | POST | [`/merchants/{id}/verification/complete`](#post-merchantsidverificationcomplete) | Bearer |
 
@@ -39,6 +40,7 @@ brand-new install to a signed-in shop. Full URL = `{BASE_URL}/api/v1` + path.
 | 3 | GET | `/api/v1/registration/quote` | Get the signup fee | — | `?purpose=registration` (or `verification`) | `200` | `422 validation.failed` |
 | 4 | POST | `/api/v1/registration/invoices` | Request the signup payment | — | `phone_number`, `wallet_number`, `rail` (`zaad`\|`edahab`), `purpose`, `quote_id`, `idempotency_key` | `202` | `409 registration.phone_taken`, `410 quote.expired`, `422 payment.wallet_invalid`, `502 payment.provider_unavailable` |
 | 5 | GET | `/api/v1/registration/invoices/{invoice_id}` | Check the payment status | — | — | `200` (`status`: `pending`, `paid`, `failed`, `expired`, `cancelled`) | `404 invoice.not_found`, `502 payment.provider_unavailable` |
+| 5c | POST | `/api/v1/registration/invoices/{invoice_id}/confirm` | Save the eDahab SMS (Code + Txn Id) and re-check status | — | `provider_transaction_id`, `confirmation_code`, `idempotency_key`, optional `message`, `amount` | `200` | `404 invoice.not_found`, `409 payment.already_settled`, `422 payment.rail_unavailable` |
 | 6 | POST | `/api/v1/merchants` | Create the merchant account | — | `invoice_id`, `first_name`, `last_name`, `dob` (`YYYY-MM-DD`), `phone_number`, `business_name`, `state` (code), `city`; optional `email`, `merchant_code`, `other_merchant_code` | `201` | `402 registration.invoice_unpaid`, `409 registration.invoice_consumed`, `409 registration.phone_taken`, `422 validation.failed` |
 | 7 | POST | `/api/v1/auth/pin` | Set the first PIN and sign in | — + `X-EXELO-Device-Id` | `phone_number`, `pin` (4 digits), `pin_confirmation` | `201` + token | `409 auth.pin_already_set`, `422 auth.pin_too_weak`, `422 validation.failed`, `400 request.device_id_missing` |
 | 8 | POST | `/api/v1/merchants/{id}/verification/complete` | Confirm payout wallets | Bearer | optional `invoice_id` | `200` | `401`, `402 registration.invoice_unpaid`, `403 auth.merchant_only`, `404 merchant.not_found`, `409 registration.invoice_consumed` |
@@ -359,7 +361,9 @@ spinner. The field is absent otherwise.
     "status": "paid",
     "paid_at": "2026-09-19T06:55:42Z",
     "amount": { "amount": 550, "currency": "SLSH", "display": "550 SLSH" },
-    "receipt_no": "EXL-RCP-00024"
+    "receipt_no": "EXL-RCP-00024",
+    "provider_transaction_id": "MP260930.1500.A34551",
+    "confirmation_code": "740852"
   }
 }
 ```
@@ -374,6 +378,46 @@ spinner. The field is absent otherwise.
 ```
 
 **Response `404`** — `{ "error": { "code": "invoice.not_found" } }`
+
+### 5c. POST `/api/v1/registration/invoices/{invoice_id}/confirm` — Submit the eDahab SMS
+
+**Purpose:** There is no fourth eDahab API. After the merchant pays on the
+handset, eDahab texts them `Code` and `Txn Id`. The app posts those here so we
+store them on the invoice, then we call `CheckInvoiceStatus`. Payment is only
+marked `paid` when eDahab says so.
+
+**Request**
+
+```json
+{
+  "provider_transaction_id": "MP260930.1500.A34551",
+  "confirmation_code": "740852",
+  "message": "550 Shilling you have sent to EXELO LTD(657496464).Code:740852 Txn Id:MP260930.1500.A34551.Your balance is: 392.2 Shilling.at :30-09-2026[-eDahab-Service- Shilling]",
+  "amount": 550,
+  "idempotency_key": "2c81f0a6-5b1d-4d0e-9d55-0c2a1f6e8a11"
+}
+```
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `provider_transaction_id` | string | yes | `Txn Id` from the SMS (`MP…`) |
+| `confirmation_code` | string | yes | `Code` from the SMS |
+| `message` | string | no | Full SMS text, for support |
+| `amount` | number | no | Amount in the SMS |
+| `idempotency_key` | string | yes | UUID, one per tap |
+
+**Response `200`**: same body as
+[`GET /registration/invoices/{invoice_id}`](#5-get-apiv1registrationinvoicesinvoice_id--check-the-payment-status).
+If eDahab is still `Pending`, `status` stays `pending` — keep polling GET, or
+confirm again with a **new** idempotency key after a few seconds.
+
+**Errors**
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `404` | `invoice.not_found` | No such signup/verification invoice |
+| `409` | `payment.already_settled` | Invoice already failed, expired or cancelled |
+| `422` | `payment.rail_unavailable` | Not an eDahab invoice |
 
 ### 5b. POST `/api/v1/registration/invoices/{invoice_id}/simulate-payment` — Simulate a payment (local testing only)
 

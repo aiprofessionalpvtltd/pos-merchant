@@ -21,15 +21,15 @@ use App\Http\Controllers\API\V1\DashboardController as V1DashboardController;
 use App\Http\Controllers\API\V1\EmployeeController as V1EmployeeController;
 use App\Http\Controllers\API\V1\FileController as V1FileController;
 use App\Http\Controllers\API\V1\InventoryController as V1InventoryController;
-use App\Http\Controllers\API\V1\MerchantController as V1MerchantController;
 use App\Http\Controllers\API\V1\MerchantAccountController;
-use App\Http\Controllers\API\V1\ShopController;
+use App\Http\Controllers\API\V1\MerchantController as V1MerchantController;
 use App\Http\Controllers\API\V1\OrderController as V1OrderController;
 use App\Http\Controllers\API\V1\PaymentChargeController;
 use App\Http\Controllers\API\V1\PaymentController as V1PaymentController;
 use App\Http\Controllers\API\V1\ProductController as V1ProductController;
 use App\Http\Controllers\API\V1\RegistrationController as V1RegistrationController;
 use App\Http\Controllers\API\V1\ShiftController;
+use App\Http\Controllers\API\V1\ShopController;
 use App\Http\Controllers\API\V1\SubscriptionController;
 use Illuminate\Support\Facades\Route;
 
@@ -42,6 +42,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('phone/check', [V1RegistrationController::class, 'checkPhone'])->name('phone.check');
         Route::post('invoices', [V1RegistrationController::class, 'issueInvoice'])->name('invoices.store');
         Route::get('invoices/{invoiceId}', [V1RegistrationController::class, 'invoiceStatus'])->name('invoices.show');
+        Route::post('invoices/{invoiceId}/confirm', [V1RegistrationController::class, 'confirmInvoice'])->name('invoices.confirm');
         Route::post('invoices/{invoiceId}/simulate-payment', [V1RegistrationController::class, 'simulatePayment'])->name('invoices.simulate');
     });
 
@@ -82,6 +83,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::get('methods', [V1PaymentController::class, 'methods'])->name('methods');
         Route::post('quote', [V1PaymentController::class, 'quote'])->middleware('pos.permission:pos')->name('quote');
         Route::post('charges', [V1PaymentController::class, 'createCharge'])->middleware('pos.permission:pos')->name('charges.store');
+        Route::post('charges/{chargeId}/confirm', [PaymentChargeController::class, 'confirm'])->middleware('pos.permission:pos')->name('charges.confirm');
     });
 
     Route::middleware(['auth:api', 'throttle:v1-orders'])->prefix('orders')->name('orders.')->group(function () {

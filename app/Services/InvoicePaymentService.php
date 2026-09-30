@@ -57,12 +57,79 @@ class InvoicePaymentService
         $invoice->update([
             'status' => 'Paid',
             'paid_at' => now(),
-            'e_transaction_id' => $providerTransactionId ?? $invoice->e_transaction_id,
+            'e_transaction_id' => $invoice->e_transaction_id ?: $providerTransactionId,
         ]);
 
         InvoicePaid::dispatch($invoice);
 
         return $invoice;
+    }
+
+    /**
+     * The app received the payer's eDahab SMS (Code + Txn Id). Store it, then
+     * ask eDahab whether the invoice is actually Paid — never settle on the SMS alone.
+     *
+     * @param  array{provider_transaction_id: string, confirmation_code?: ?string, message?: ?string, amount?: mixed}  $data
+     */
+    public function confirm(Invoice $invoice, array $data): Invoice
+    {
+        if ($invoice->rail !== 'edahab') {
+            throw new ApiException('payment.rail_unavailable', 'This payment does not take an eDahab confirmation', 422);
+        }
+
+        $txnId = $data['provider_transaction_id'];
+
+        if ($invoice->status !== 'Pending' && $invoice->status !== 'Paid') {
+            throw new ApiException('payment.already_settled', 'This payment is already finished', 409);
+        }
+
+        $confirmation = array_filter([
+            'code' => $data['confirmation_code'] ?? null,
+            'provider_transaction_id' => $txnId,
+            'message' => $data['message'] ?? null,
+            'amount' => isset($data['amount']) ? (float) $data['amount'] : null,
+            'received_at' => now()->toIso8601String(),
+        ], fn ($value) => $value !== null);
+
+        $invoice->update([
+            'meta' => array_merge($invoice->meta ?? [], ['edahab_confirmation' => $confirmation]),
+            'e_transaction_id' => $invoice->e_transaction_id ?: $txnId,
+        ]);
+
+        if ($invoice->status === 'Paid') {
+            return $invoice->fresh();
+        }
+
+        try {
+            return $this->refresh($invoice->fresh());
+        } catch (ApiException $e) {
+            if ($e->errorCode !== 'payment.provider_unavailable') {
+                throw $e;
+            }
+
+            return $invoice->fresh();
+        }
+    }
+
+    /**
+     * eDahab redirected the payer to ReturnUrl. Do not trust the query string:
+     * look the invoice up and ask eDahab whether it is Paid.
+     */
+    public function returnFromEdahab(array $query): Invoice
+    {
+        $providerInvoiceId = $query['invoiceId'] ?? $query['InvoiceId'] ?? $query['invoice_id'] ?? null;
+
+        if (! is_string($providerInvoiceId) || $providerInvoiceId === '') {
+            throw new ApiException('invoice.not_found', 'We could not find that payment', 404);
+        }
+
+        $invoice = Invoice::where('rail', 'edahab')->where('invoice_id', $providerInvoiceId)->first();
+
+        if (! $invoice) {
+            throw new ApiException('invoice.not_found', 'We could not find that payment', 404);
+        }
+
+        return $this->refresh($invoice);
     }
 
     /**
@@ -126,9 +193,14 @@ class InvoicePaymentService
                 'next_action' => $invoice->rail === 'cash' ? 'await_cash_confirmation' : 'await_customer_approval',
                 'poll_after' => config('exelo.registration.poll_after_seconds'),
                 'expires_at' => ApiResponse::iso($invoice->expires_at),
-            ] + ($invoice->isPromptDeclined() ? ['prompt' => 'declined'] : []);
+            ] + ($invoice->isPromptDeclined() ? ['prompt' => 'declined'] : [])
+            + ($invoice->rail === 'edahab' && $invoice->invoice_id
+                ? ['payment_url' => 'https://edahab.net/api/payment?invoiceId='.$invoice->invoice_id]
+                : []);
         } elseif ($status === 'paid') {
             $payload['paid_at'] = ApiResponse::iso($invoice->paid_at);
+            $payload['provider_transaction_id'] = $invoice->e_transaction_id;
+            $payload['confirmation_code'] = $invoice->meta['edahab_confirmation']['code'] ?? null;
 
             if ($isSale && $invoice->order_id) {
                 $order = Order::find($invoice->order_id);

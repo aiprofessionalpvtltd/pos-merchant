@@ -82,6 +82,8 @@ return [
             'base_url' => 'https://edahab.net/api/api',
             // IssueInvoice answers only once the customer has approved or declined the prompt.
             'timeout' => (int) env('EDAHAB_TIMEOUT', 90),
+            // Hosted-page redirect. Defaults to this app's /verifyPayment — not the old aiprofessionals host.
+            'return_url' => env('EDAHAB_RETURN_URL') ?: rtrim((string) env('APP_URL', 'http://localhost'), '/').'/verifyPayment',
         ],
         'waafi' => [
             'merchant_uid' => env('WAAFI_MERCHANT_UID'),

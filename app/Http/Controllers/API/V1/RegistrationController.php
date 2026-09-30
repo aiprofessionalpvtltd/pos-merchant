@@ -5,6 +5,7 @@ namespace App\Http\Controllers\API\V1;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\API\V1\CompleteAccountVerificationRequest;
 use App\Http\Requests\API\V1\CompleteVerificationRequest;
+use App\Http\Requests\API\V1\ConfirmPaymentRequest;
 use App\Http\Requests\API\V1\IssueInvoiceRequest;
 use App\Http\Requests\API\V1\PhoneNumberRequest;
 use App\Http\Requests\API\V1\QuoteRequest;
@@ -45,6 +46,13 @@ class RegistrationController extends Controller
     public function invoiceStatus(string $invoiceId): JsonResponse
     {
         $result = $this->registration->invoiceStatus($invoiceId);
+
+        return ApiResponse::success($result['data'], $result['message']);
+    }
+
+    public function confirmInvoice(ConfirmPaymentRequest $request, string $invoiceId): JsonResponse
+    {
+        $result = $this->registration->confirmInvoice($invoiceId, $request->validated());
 
         return ApiResponse::success($result['data'], $result['message']);
     }

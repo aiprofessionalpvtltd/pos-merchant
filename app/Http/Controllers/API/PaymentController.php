@@ -428,7 +428,7 @@ class PaymentController extends BaseController
 
         $bodyStr = json_encode($payload);
         $hashValue = $this->generateHash($bodyStr, $secret);
-        $url = "https://edahab.net/api/api/checkInvoiceStatus?hash=$hashValue";
+        $url = "https://edahab.net/api/api/CheckInvoiceStatus?hash=$hashValue";
 
         try {
             // Start database transaction

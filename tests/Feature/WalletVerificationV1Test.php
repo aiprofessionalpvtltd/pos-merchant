@@ -15,7 +15,7 @@ beforeEach(function () {
 
     Http::fake([
         'edahab.net/api/api/IssueInvoice*' => Http::response(fixture('edahab/check-invoice-pending.json')),
-        'edahab.net/api/api/checkInvoiceStatus*' => Http::response(['InvoiceStatus' => 'Paid', 'TransactionId' => 'MP260926.0900.A00001', 'StatusCode' => 0]),
+        'edahab.net/api/api/CheckInvoiceStatus*' => Http::response(['InvoiceStatus' => 'Paid', 'TransactionId' => 'MP260926.0900.A00001', 'StatusCode' => 0]),
         'api.waafipay.net/*' => Http::response(['errorCode' => '0', 'params' => ['state' => 'approved', 'referenceId' => '111111', 'transactionId' => '42750126']]),
     ]);
 });

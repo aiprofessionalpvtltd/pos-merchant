@@ -17,7 +17,7 @@ beforeEach(function () {
 
     Http::fake([
         'edahab.net/api/api/IssueInvoice*' => Http::response(['StatusDescription' => 'Success', 'InvoiceId' => 555001]),
-        'edahab.net/api/api/checkInvoiceStatus*' => fn () => Http::response(['InvoiceStatus' => Cache::get('test-edahab-status', 'Pending'), 'TransactionId' => 'TX-9']),
+        'edahab.net/api/api/CheckInvoiceStatus*' => fn () => Http::response(['InvoiceStatus' => Cache::get('test-edahab-status', 'Pending'), 'TransactionId' => 'TX-9']),
     ]);
 });
 
@@ -140,6 +140,51 @@ it('refuses a payment that is wrong for the ticket', function () {
     payCart($token, ['rail' => 'bitcoin'])->assertStatus(422)->assertJsonPath('error.code', 'validation.failed');
 
     expect(orders()->count())->toBe(0)->and(shelf($rice['id']))->toBe(24)->and(ticket($token)['is_empty'])->toBeFalse();
+});
+
+it('stores the eDahab SMS on a pending sale and completes it when the provider says paid', function () {
+    [, $token, $rice] = till();
+    fillTicket($token, $rice['id']);
+
+    $chargeId = payCart($token, ['rail' => 'edahab', 'customer' => ['wallet_number' => '+252651110009']])
+        ->assertStatus(202)
+        ->json('data.charge_id');
+
+    Cache::put('test-edahab-status', 'Pending');
+    $sms = [
+        'provider_transaction_id' => 'MP260930.1500.A34551',
+        'confirmation_code' => '740852',
+        'message' => '550 Shilling you have sent to EXELO LTD(657496464).Code:740852 Txn Id:MP260930.1500.A34551.Your balance is: 392.2 Shilling.at :30-09-2026[-eDahab-Service- Shilling]',
+        'amount' => 550,
+        'idempotency_key' => freshKey(),
+    ];
+
+    test()->withToken($token)->postJson('/api/v1/payments/charges/'.$chargeId.'/confirm', $sms)
+        ->assertOk()
+        ->assertJsonPath('data.status', 'pending');
+
+    Cache::put('test-edahab-status', 'Paid');
+    test()->withToken($token)->postJson('/api/v1/payments/charges/'.$chargeId.'/confirm', ['idempotency_key' => freshKey()] + $sms)
+        ->assertOk()
+        ->assertJsonPath('data.status', 'paid')
+        ->assertJsonPath('data.provider_transaction_id', 'MP260930.1500.A34551')
+        ->assertJsonPath('data.confirmation_code', '740852')
+        ->assertJsonPath('data.order.order_status', 'Complete');
+
+    expect(orders()->count())->toBe(1)->and(shelf($rice['id']))->toBe(22);
+});
+
+it('refuses to confirm a cash sale through the eDahab SMS endpoint', function () {
+    [, $token, $rice] = till();
+    fillTicket($token, $rice['id']);
+
+    $chargeId = payCart($token)->assertOk()->json('data.charge_id');
+
+    test()->withToken($token)->postJson('/api/v1/payments/charges/'.$chargeId.'/confirm', [
+        'provider_transaction_id' => 'MP260930.1500.A34551',
+        'confirmation_code' => '740852',
+        'idempotency_key' => freshKey(),
+    ])->assertStatus(422)->assertJsonPath('error.code', 'payment.rail_unavailable');
 });
 
 it('takes a wallet payment: the sale waits for the customer, then completes when they approve', function () {
