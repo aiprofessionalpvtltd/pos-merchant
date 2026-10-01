@@ -40,7 +40,7 @@ class RegistrationController extends Controller
     {
         $result = $this->registration->issueInvoice($request->validated());
 
-        return ApiResponse::success($result['data'], $result['message'], 202);
+        return ApiResponse::success($result['data'], $result['message'], $result['status']);
     }
 
     public function invoiceStatus(string $invoiceId): JsonResponse

@@ -20,7 +20,10 @@ use RuntimeException;
 
 class SubscriptionService
 {
-    public function __construct(private readonly WalletGateway $gateway) {}
+    public function __construct(
+        private readonly WalletGateway $gateway,
+        private readonly InvoicePaymentService $invoices,
+    ) {}
 
     /**
      * @return Collection<int, SubscriptionPlan>
@@ -392,6 +395,8 @@ class SubscriptionService
                 'rail' => $rail,
             ];
 
+            $issued = null;
+
             if ($rail === 'cash') {
                 $attributes += [
                     'invoice_id' => 'CASH-'.$publicId,
@@ -416,6 +421,24 @@ class SubscriptionService
             $invoice = Invoice::create($attributes);
 
             Cache::put($replayKey, $invoice->id, now()->addDay());
+
+            if (($issued['status'] ?? null) === 'Paid') {
+                $invoice = $this->invoices->markPaid($invoice, $issued['provider_transaction_id'] ?? null);
+
+                return [
+                    'status' => 200,
+                    'message' => 'Payment received. '.self::planName($target).' is active.',
+                    'data' => [
+                        'status' => 'paid',
+                        'charge_id' => $invoice->public_id,
+                        'rail' => $invoice->rail,
+                        'amount' => Money::format((int) $invoice->amount, $invoice->currency),
+                        'paid_at' => ApiResponse::iso($invoice->paid_at),
+                        'provider_transaction_id' => $invoice->e_transaction_id,
+                        'applies_on_payment' => false,
+                    ],
+                ];
+            }
 
             return $this->paymentPayload($invoice, $target, $isRenewal);
         });

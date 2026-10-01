@@ -74,7 +74,20 @@ it('keeps an eDahab invoice open when the customer declines the prompt', functio
     $issued = app(WalletGateway::class)->issue('edahab', '+252656486734', 510, 'SLSH');
 
     expect($issued['invoice_id'])->toBe('35917256c9d0459cacbe4852e6594e8e')
-        ->and($issued['prompt'])->toBe('declined');
+        ->and($issued['prompt'])->toBe('declined')
+        ->and($issued['status'])->toBe('Pending')
+        ->and($issued['provider_transaction_id'])->toBeNull();
+});
+
+it('treats a paid IssueInvoice answer as a confirmed payment', function () {
+    Http::fake(['edahab.net/api/api/IssueInvoice*' => Http::response(fixture('edahab/issue-invoice-paid.json'))]);
+
+    $issued = app(WalletGateway::class)->issue('edahab', '+252656486734', 500, 'SLSH');
+
+    expect($issued['invoice_id'])->toBe('c3c875bac02a414ab977b1383152b631')
+        ->and($issued['status'])->toBe('Paid')
+        ->and($issued['provider_transaction_id'])->toBe('MP261001.1706.A44107')
+        ->and($issued['prompt'])->toBeNull();
 });
 
 it('reports no prompt outcome when eDahab issues the invoice normally', function () {

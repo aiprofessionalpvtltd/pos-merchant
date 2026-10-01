@@ -15,7 +15,7 @@ interface WalletProvider
      * reports that the customer turned the prompt down; the payment stays pending.
      *
      * @param  string  $description  Shown to the customer where the provider supports it
-     * @return array{invoice_id: string, transaction_id: string, hash: string, prompt: ?string}
+     * @return array{invoice_id: string, transaction_id: string, hash: string, prompt: ?string, status?: string, provider_transaction_id?: ?string}
      */
     public function issue(string $walletE164, int $amount, string $currency, string $description): array;
 

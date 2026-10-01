@@ -20,7 +20,7 @@ class WalletGateway
 
     /**
      * @param  string  $description  What the customer is paying for, shown on the Zaad prompt
-     * @return array{invoice_id: string, transaction_id: string, hash: string, prompt: ?string}
+     * @return array{invoice_id: string, transaction_id: string, hash: string, prompt: ?string, status?: string, provider_transaction_id?: ?string}
      */
     public function issue(string $rail, string $walletE164, int $amount, string $currency, string $description = 'EXELO payment'): array
     {

@@ -150,7 +150,9 @@ Both are valid because each one hashes the exact text it sends.
 ## 1. `IssueInvoice` — bill a customer's wallet
 
 Sends a payment request to the customer's handset. The customer approves it on
-their phone (or on the hosted page). Nothing is paid until
+their phone (or on the hosted page). When this call itself returns
+`InvoiceStatus: "Paid"`, the payment is already confirmed and the invoice is
+stored as `Paid`. Otherwise nothing is paid until
 [`CheckInvoiceStatus`](#2-checkinvoicestatus--has-the-customer-paid) says `Paid`.
 
 ```
@@ -224,8 +226,9 @@ That means:
 - One `IssueInvoice` call lasts as long as the customer takes to answer.
   `API_TIMEOUT` (30 s) may cut it off. A timeout does **not** mean nothing
   happened, so check the invoice rather than issuing a new one.
-- An approved invoice may come back `Paid` straight away, so the charge could
-  settle without waiting for the first poll. Not captured yet.
+- An approved invoice comes back `Paid` straight away (`StatusCode 0`,
+  `StatusDescription: "Success"`). The invoice is stored as `Paid` from that
+  answer, with eDahab's `TransactionId`.
 
 Still unknown: whether a declined invoice **can** still be paid, and what it turns
 into later (`Expired`? `Cancelled`?). See
@@ -243,7 +246,7 @@ into later (`Expired`? `Cancelled`?). See
 
 | Outcome | How to detect | Map to |
 | --- | --- | --- |
-| Paid | `InvoiceStatus == "Paid"` | Stored `Pending`; the first poll (a few seconds later) finds it `Paid` and settles it. Settling straight from the issue answer is not built, as no approved `IssueInvoice` has been captured yet |
+| Paid | `InvoiceStatus == "Paid"` | Stored `Paid` at once, with eDahab's `TransactionId` on `invoices.e_transaction_id`. The create-invoice response is `200` with `status: paid`. No `CheckInvoiceStatus` call |
 | Prompt declined | `InvoiceId` present, `StatusCode == 7` | Stored `Pending` with `meta.provider_prompt = "declined"`; `202` as usual **plus `"prompt": "declined"`**, on this response and every poll while it stays pending. **Not** `Failed` |
 | Issued, awaiting the customer | `InvoiceId` present, anything else | Store `InvoiceId` on `invoices.invoice_id`, status `Pending`, return `202` |
 | Bad number / amount | `StatusDescription == "Validation Error"` | `422 payment.wallet_invalid` with `ValidationErrors[0].ErrorMessage` |
@@ -471,7 +474,7 @@ once the `ReturnUrl` query string is known. 8 is a quick check at any point.
 | Call | Situation | Status |
 | --- | --- | --- |
 | `IssueInvoice` | Customer declines | ✅ captured |
-| `IssueInvoice` | Customer **approves** (is it `Paid` straight away?) | to capture |
+| `IssueInvoice` | Customer **approves** | ✅ captured 2026-10-01: `InvoiceStatus: "Paid"`, `StatusCode: 0`, `StatusDescription: "Success"` |
 | `IssueInvoice` | Customer **does not answer** (how long does it wait?) | to capture |
 | `CheckInvoiceStatus` | Right after a decline | ✅ captured: `Pending` |
 | `CheckInvoiceStatus` | Paid | to capture |

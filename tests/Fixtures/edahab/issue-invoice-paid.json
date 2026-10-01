@@ -1,0 +1,9 @@
+{
+    "InvoiceStatus": "Paid",
+    "TransactionId": "MP261001.1706.A44107",
+    "InvoiceId": "c3c875bac02a414ab977b1383152b631",
+    "StatusCode": 0,
+    "RequestId": 1768809,
+    "StatusDescription": "Success",
+    "ValidationErrors": null
+}

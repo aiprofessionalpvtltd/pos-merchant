@@ -51,11 +51,16 @@ class EdahabProvider implements WalletProvider
             throw new ApiException('payment.provider_unavailable', 'The wallet provider is unavailable. Try again.', 502);
         }
 
+        // IssueInvoice waits for the customer. "Paid" means they already approved, so the caller can settle now.
+        $paid = strcasecmp((string) ($body['InvoiceStatus'] ?? ''), 'Paid') === 0;
+
         return [
             'invoice_id' => (string) $body['InvoiceId'],
             'transaction_id' => $transactionId,
             'hash' => $hash,
             'prompt' => (int) ($body['StatusCode'] ?? 0) === self::STATUS_USER_DECLINED ? 'declined' : null,
+            'status' => $paid ? 'Paid' : 'Pending',
+            'provider_transaction_id' => $paid ? ($body['TransactionId'] ?? null) : null,
         ];
     }
 

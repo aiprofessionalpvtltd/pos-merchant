@@ -37,7 +37,7 @@ brand-new install to a signed-in shop. Full URL = `{BASE_URL}/api/v1` + path.
 | 1 | GET | `/api/v1/geo/states` | Load the state dropdown | — | — | `200` | — |
 | 2 | POST | `/api/v1/registration/phone/check` | Number free? Open invoice? (enter number / reopen app) | — | `phone_number` | `200` | `422 validation.failed`, `502 payment.provider_unavailable` |
 | 3 | GET | `/api/v1/registration/quote` | Get the signup fee | — | `?purpose=registration` (or `verification`) | `200` | `422 validation.failed` |
-| 4 | POST | `/api/v1/registration/invoices` | Request the signup payment | — | `phone_number`, `wallet_number`, `rail` (`zaad`\|`edahab`), `purpose`, `quote_id`, `idempotency_key` | `202` | `409 registration.phone_taken`, `410 quote.expired`, `422 payment.wallet_invalid`, `502 payment.provider_unavailable` |
+| 4 | POST | `/api/v1/registration/invoices` | Request the signup payment | — | `phone_number`, `wallet_number`, `rail` (`zaad`\|`edahab`), `purpose`, `quote_id`, `idempotency_key` | `202` pending, or `200` when eDahab already returned `Paid` | `409 registration.phone_taken`, `410 quote.expired`, `422 payment.wallet_invalid`, `502 payment.provider_unavailable` |
 | 5 | GET | `/api/v1/registration/invoices/{invoice_id}` | Verify payment (EXELO calls eDahab `CheckInvoiceStatus`) | — | — | `200` (`status`: `pending`, `paid`, `failed`, `expired`, `cancelled`) | `404 invoice.not_found`, `502 payment.provider_unavailable` |
 | 6 | POST | `/api/v1/merchants` | Create the merchant account | — | `invoice_id`, `first_name`, `last_name`, `dob` (`YYYY-MM-DD`), `phone_number`, `business_name`, `state` (code), `city`; optional `email`, `merchant_code`, `other_merchant_code` | `201` | `402 registration.invoice_unpaid`, `409 registration.invoice_consumed`, `409 registration.phone_taken`, `422 validation.failed` |
 | 7 | POST | `/api/v1/auth/pin` | Set the first PIN and sign in | — + `X-EXELO-Device-Id` | `phone_number`, `pin` (4 digits), `pin_confirmation` | `201` + token | `409 auth.pin_already_set`, `422 auth.pin_too_weak`, `422 validation.failed`, `400 request.device_id_missing` |
@@ -330,6 +330,28 @@ from `base.usd` + `exelo_fee.usd` by a cent. The same fields come back for
     "next_action": "await_customer_approval",
     "poll_after": 3,
     "expires_at": "2026-09-19T07:05:42Z"
+  }
+}
+```
+
+**Response `200` — eDahab already confirmed the payment**
+
+`IssueInvoice` waits for the customer. When its answer is `InvoiceStatus: "Paid"`,
+the invoice is stored as paid and this call returns the same shape as a paid
+status check. The app can go straight to `POST /merchants` and does not need to poll.
+
+```json
+{
+  "success": true,
+  "message": "Payment received",
+  "data": {
+    "invoice_id": "inv_01M2W762W927DAYTDR5DSJYS7G",
+    "status": "paid",
+    "paid_at": "2026-10-01T12:06:00Z",
+    "amount": { "amount": 550, "currency": "SLSH", "display": "550 SLSH" },
+    "receipt_no": "EXL-RCP-00042",
+    "provider_transaction_id": "MP261001.1706.A44107",
+    "confirmation_code": null
   }
 }
 ```
@@ -1060,7 +1082,9 @@ and the app fetches a new one.
   `63`. A mismatch returns `422 payment.wallet_invalid`.
 
 `202` response: keep `data.invoice_id` and show "Approve the payment on your
-phone". `502 payment.provider_unavailable` means the wallet provider is down;
+phone". `200` with `data.status` `paid` means eDahab already confirmed the
+payment on `IssueInvoice`; skip polling and continue to create the account.
+`502 payment.provider_unavailable` means the wallet provider is down;
 retry with the same key.
 
 ### Step 5 — Wait for the payment

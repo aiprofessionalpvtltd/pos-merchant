@@ -132,7 +132,7 @@ class RegistrationService
             $existingId = Cache::get($idempotencyKey);
 
             if ($existingId && ($existing = Invoice::find($existingId))) {
-                return $this->pendingPayload($existing);
+                return $this->issuedResponse($existing);
             }
 
             $issued = $this->gateway->issue($rail, $wallet, $quote['amount'], $quote['currency'], 'EXELO '.$purpose);
@@ -157,7 +157,11 @@ class RegistrationService
 
             Cache::put($idempotencyKey, $invoice->id, now()->addDay());
 
-            return $this->pendingPayload($invoice, 'Approve the payment on your phone');
+            if (($issued['status'] ?? null) === 'Paid') {
+                $invoice = $this->payments->markPaid($invoice, $issued['provider_transaction_id'] ?? null);
+            }
+
+            return $this->issuedResponse($invoice, 'Approve the payment on your phone');
         });
     }
 
@@ -575,6 +579,18 @@ class RegistrationService
                 'error_reason' => $invoice->error_reason,
             ]],
         };
+    }
+
+    /**
+     * @return array{message: ?string, data: array<string, mixed>, status: int}
+     */
+    private function issuedResponse(Invoice $invoice, ?string $pendingMessage = null): array
+    {
+        if ($invoice->status === 'Paid') {
+            return $this->invoicePayload($invoice) + ['status' => 200];
+        }
+
+        return $this->pendingPayload($invoice, $pendingMessage) + ['status' => 202];
     }
 
     private function pendingPayload(Invoice $invoice, ?string $message = null): array

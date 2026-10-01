@@ -260,6 +260,12 @@ class ChargeService
             'expires_at' => now()->addSeconds(config('exelo.registration.invoice_ttl_seconds')),
         ]);
 
+        if (($issued['status'] ?? null) === 'Paid') {
+            $invoice = $this->invoices->markPaid($invoice, $issued['provider_transaction_id'] ?? null);
+
+            return ['data' => $this->payload($invoice->refresh(), $merchant), 'message' => 'Payment received', 'status' => 200];
+        }
+
         return ['data' => $this->payload($invoice, $merchant) + ['poll' => '/api/v1/payments/charges/'.$invoice->public_id], 'message' => 'Ask the customer to approve the payment', 'status' => 202];
     }
 

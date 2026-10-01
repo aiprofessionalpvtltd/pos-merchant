@@ -220,6 +220,56 @@ it('keeps a declined eDahab prompt pending and says it was declined', function (
         ->toBe(['IssueInvoice', 'CheckInvoiceStatus']);
 });
 
+it('marks the registration invoice paid when IssueInvoice already says Paid', function () {
+    Http::fake([
+        'edahab.net/api/api/IssueInvoice*' => Http::response(fixture('edahab/issue-invoice-paid.json')),
+        'edahab.net/api/api/CheckInvoiceStatus*' => Http::response(['InvoiceStatus' => 'Pending']),
+    ]);
+
+    $phone = '+252654990011';
+    $quote = $this->getJson('/api/v1/registration/quote')->json('data.quote_id');
+    $body = [
+        'phone_number' => $phone,
+        'wallet_number' => $phone,
+        'rail' => 'edahab',
+        'purpose' => 'registration',
+        'quote_id' => $quote,
+        'idempotency_key' => 'paid-at-issue',
+    ];
+
+    $invoiceId = $this->postJson('/api/v1/registration/invoices', $body)
+        ->assertOk()
+        ->assertJsonPath('message', 'Payment received')
+        ->assertJsonPath('data.status', 'paid')
+        ->assertJsonPath('data.provider_transaction_id', 'MP261001.1706.A44107')
+        ->assertJsonStructure(['data' => ['paid_at', 'receipt_no']])
+        ->json('data.invoice_id');
+
+    $invoice = Invoice::where('public_id', $invoiceId)->first();
+    expect($invoice->status)->toBe('Paid')
+        ->and($invoice->e_transaction_id)->toBe('MP261001.1706.A44107')
+        ->and($invoice->paid_at)->not->toBeNull()
+        ->and($invoice->apiLogs()->pluck('operation')->all())->toBe(['IssueInvoice']);
+
+    $this->postJson('/api/v1/registration/invoices', $body)
+        ->assertOk()
+        ->assertJsonPath('data.invoice_id', $invoiceId)
+        ->assertJsonPath('data.status', 'paid');
+
+    Http::assertSentCount(1);
+
+    $this->postJson('/api/v1/merchants', [
+        'invoice_id' => $invoiceId,
+        'first_name' => 'Kalid',
+        'last_name' => 'Ahmed',
+        'dob' => '1990-01-01',
+        'phone_number' => $phone,
+        'business_name' => 'Paid At Issue',
+        'state' => 'maroodi_jeex',
+        'city' => 'Hargeisa',
+    ])->assertCreated()->assertJsonPath('data.next_step', 'set_pin');
+});
+
 it('reports provider outages as 502', function () {
     Http::fake(['edahab.net/*' => Http::response('down', 503)]);
 
