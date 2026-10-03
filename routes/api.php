@@ -84,6 +84,7 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::post('quote', [V1PaymentController::class, 'quote'])->middleware('pos.permission:pos')->name('quote');
         Route::post('charges', [V1PaymentController::class, 'createCharge'])->middleware('pos.permission:pos')->name('charges.store');
         Route::post('charges/{chargeId}/confirm', [PaymentChargeController::class, 'confirm'])->middleware('pos.permission:pos')->name('charges.confirm');
+        Route::post('charges/{chargeId}/cancel', [PaymentChargeController::class, 'cancel'])->middleware('pos.permission:pos')->name('charges.cancel');
     });
 
     Route::middleware(['auth:api', 'throttle:v1-orders'])->prefix('orders')->name('orders.')->group(function () {

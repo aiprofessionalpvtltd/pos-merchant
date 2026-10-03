@@ -21,9 +21,12 @@ class PaymentChargeController extends Controller
 
     public function show(Request $request, string $chargeId): JsonResponse
     {
-        $invoice = $this->payments->refresh($this->ownedInvoice($request, $chargeId));
+        $invoice = $this->payments->rememberExpiry($this->payments->refresh($this->ownedInvoice($request, $chargeId)));
 
-        return ApiResponse::success($this->payments->chargePayload($invoice->refresh()));
+        return ApiResponse::success(
+            $this->payments->chargePayload($invoice),
+            $invoice->status === 'Expired' ? $invoice->error_reason : null,
+        );
     }
 
     /**
@@ -35,16 +38,30 @@ class PaymentChargeController extends Controller
         $body = $request->validated();
 
         $result = Idempotency::run("m{$invoice->merchant_id}:charge-confirm:{$invoice->id}", $body['idempotency_key'], $body, function () use ($invoice, $body) {
-            $invoice = $this->payments->confirm($invoice, $body);
+            $invoice = $this->payments->confirm($invoice, $body)->fresh();
 
             return [
                 'data' => $this->payments->chargePayload($invoice),
-                'message' => $invoice->status === 'Paid' ? 'Payment received' : null,
+                'message' => match ($invoice->status) {
+                    'Paid' => 'Payment received',
+                    'Expired' => $invoice->error_reason ?: InvoicePaymentService::EXPIRED_MESSAGE,
+                    default => null,
+                },
                 'status' => 200,
             ];
         });
 
         return ApiResponse::success($result['data'], $result['message'], $result['status']);
+    }
+
+    public function cancel(Request $request, string $chargeId): JsonResponse
+    {
+        $invoice = $this->payments->cancel($this->ownedInvoice($request, $chargeId));
+
+        return ApiResponse::success(
+            ['charge_id' => $invoice->public_id, 'status' => strtolower($invoice->status)],
+            'Payment cancelled',
+        );
     }
 
     private function ownedInvoice(Request $request, string $chargeId): Invoice

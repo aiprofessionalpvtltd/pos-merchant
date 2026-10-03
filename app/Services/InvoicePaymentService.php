@@ -15,6 +15,8 @@ use App\Support\Money;
  */
 class InvoicePaymentService
 {
+    public const EXPIRED_MESSAGE = 'This payment request expired. Try again.';
+
     public function __construct(private readonly WalletGateway $gateway) {}
 
     /**
@@ -44,12 +46,28 @@ class InvoicePaymentService
             return $invoice;
         }
 
+        $status = $result['status'] === 'Pending' ? 'Expired' : $result['status'];
+
         $invoice->update([
-            'status' => $result['status'] === 'Pending' ? 'Expired' : $result['status'],
-            'error_reason' => $result['reason'],
+            'status' => $status,
+            'error_reason' => $status === 'Expired'
+                ? ($result['reason'] ?: self::EXPIRED_MESSAGE)
+                : $result['reason'],
         ]);
 
         return $invoice;
+    }
+
+    /**
+     * An expired charge keeps a reason the shop can show: start the payment again.
+     */
+    public function rememberExpiry(Invoice $invoice): Invoice
+    {
+        if ($invoice->status === 'Expired' && ! $invoice->error_reason) {
+            $invoice->update(['error_reason' => self::EXPIRED_MESSAGE]);
+        }
+
+        return $invoice->fresh();
     }
 
     public function markPaid(Invoice $invoice, ?string $providerTransactionId = null): Invoice
@@ -78,6 +96,10 @@ class InvoicePaymentService
         }
 
         $txnId = $data['provider_transaction_id'];
+
+        if ($invoice->status === 'Expired') {
+            return $this->rememberExpiry($invoice);
+        }
 
         if ($invoice->status !== 'Pending' && $invoice->status !== 'Paid') {
             throw new ApiException('payment.already_settled', 'This payment is already finished', 409);
@@ -130,6 +152,37 @@ class InvoicePaymentService
         }
 
         return $this->refresh($invoice);
+    }
+
+    /**
+     * The shopkeeper abandoned a payment that is still waiting. eDahab is checked
+     * first so a payment that already came back Paid is settled instead of cancelled.
+     * Zaad is not asked: its status call would take the money.
+     */
+    public function cancel(Invoice $invoice): Invoice
+    {
+        if ($invoice->status === 'Cancelled') {
+            return $invoice;
+        }
+
+        if ($invoice->status !== 'Pending') {
+            throw new ApiException('payment.already_settled', 'This payment is already finished', 409);
+        }
+
+        if ($invoice->rail === 'edahab') {
+            $invoice = $this->refresh($invoice->fresh());
+
+            if ($invoice->status !== 'Pending') {
+                throw new ApiException('payment.already_settled', 'This payment is already finished', 409);
+            }
+        }
+
+        $invoice->update([
+            'status' => 'Cancelled',
+            'error_reason' => 'Cancelled by the shop',
+        ]);
+
+        return $invoice;
     }
 
     /**
@@ -208,7 +261,12 @@ class InvoicePaymentService
                 $payload['receipt'] = ['invoice_no' => 'INV-'.$order->id, 'url' => '/api/v1/orders/'.$order->id.'/receipt'];
             }
         } else {
-            $payload['failure'] = ['code' => $status, 'message' => $invoice->error_reason];
+            $payload['failure'] = [
+                'code' => $status,
+                'message' => $status === 'expired'
+                    ? ($invoice->error_reason ?: self::EXPIRED_MESSAGE)
+                    : $invoice->error_reason,
+            ];
         }
 
         return $payload;

@@ -23,8 +23,9 @@ shop, [switch the current shop](multiple-shop.md#4-post-shopsidselect--switch-sh
 > | `POST /payments/quote` | **Live** |
 > | `POST /payments/charges` | **Live** for `cash`, `zaad` and `edahab` (sales and held orders) |
 > | `GET /payments/charges/{charge_id}` | **Live** for every payment of the shop: sales (`chg_…`) and subscriptions (`inv_…`). This is **Verify** for eDahab. |
-> | `POST /payments/charges/{charge_id}/confirm` | **Do not use in the app.** The payer already has the eDahab SMS. Verify with GET. |
-> | `cancel`, `payouts`, `card/session`, webhooks | **Specified, not built yet.** The examples are the **contract to build against**, not captured output. |
+> | `POST /payments/charges/{charge_id}/confirm` | **Live** for eDahab. Sends the payer's SMS (code + transaction id). EXELO re-checks eDahab and updates the invoice. The SMS alone never marks it paid. |
+> | `POST /payments/charges/{charge_id}/cancel` | **Live.** Cancels a charge that is still `pending`. The cart stays. |
+> | `payouts`, `card/session`, webhooks | **Specified, not built yet.** The examples are the **contract to build against**, not captured output. |
 >
 > Sales are also taken through [`POST /cart/pay`](cart.md#post-cartpay) and
 > [`POST /orders/{id}/pay`](orders.md#5-post-apiv1ordersidpay--take-payment-for-a-pending-order), which use the same charge.
@@ -43,6 +44,7 @@ subscription upgrades and POS sales with only a `type` string to tell them apart
 | POST | [`/payments/quote`](#2-post-apiv1paymentsquote--price-a-payment-before-charging) | Bearer · `pos` |
 | POST | [`/payments/charges`](#3-post-apiv1paymentscharges--start-a-payment) | Bearer · `pos` |
 | GET | [`/payments/charges/{charge_id}`](#4-get-apiv1paymentschargescharge_id--check-a-payment) | Bearer |
+| POST | [`/payments/charges/{charge_id}/confirm`](#5-post-apiv1paymentschargescharge_idconfirm--submit-an-edahab-sms) | Bearer · `pos` |
 | POST | [`/payments/charges/{charge_id}/cancel`](#6-post-apiv1paymentschargescharge_idcancel--cancel-a-pending-payment) | Bearer · `pos` |
 | POST | [`/payments/payouts`](#7-post-apiv1paymentspayouts--send-money-to-a-phone-number) | Bearer · `pos` · PIN confirmation |
 | POST | [`/payments/card/session`](#8-post-apiv1paymentscardsession--start-a-card-payment) | Bearer · `pos` |
@@ -68,9 +70,10 @@ Full URL = `{BASE_URL}/api/v1` + path.
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | GET | `/api/v1/payments/methods` | Which wallets the shop is paid on and which rails it accepts | Bearer | — | `200` | `401` |
 | 2 | POST | `/api/v1/payments/quote` | What an amount costs the customer and yields the shop | Bearer, `pos` | `amount`, `rail`, `purpose` | `200` | `403 auth.permission_denied`, `422 payment.rail_unavailable` |
-| 3 | POST | `/api/v1/payments/charges` | Start a payment on any rail | Bearer, `pos` | `rail`, `purpose`, `amount`, `idempotency_key`, rail fields | `202` wallet / `200` cash | `402 payment.declined`, `409 payment.cart_changed`, `409 idempotency.key_reused`, `410 quote.expired`, `422 payment.rail_unavailable`, `502 payment.provider_unavailable` |
+| 3 | POST | `/api/v1/payments/charges` | Start a payment on any rail | Bearer, `pos` | `rail`, `purpose`, `amount`, `idempotency_key`, rail fields | `202` still waiting, or `200` when cash or when eDahab already returned `Paid` | `402 payment.declined`, `409 payment.cart_changed`, `409 idempotency.key_reused`, `410 quote.expired`, `422 payment.rail_unavailable`, `502 payment.provider_unavailable` |
 | 4 | GET | `/api/v1/payments/charges/{charge_id}` | Verify / poll a payment until it settles (EXELO calls eDahab `CheckInvoiceStatus`) | Bearer | — | `200` | `404 charge.not_found` |
-| 6 | POST | `/api/v1/payments/charges/{charge_id}/cancel` | Abandon a pending payment | Bearer, `pos` | — | `200` | `404 charge.not_found`, `409 payment.already_settled` |
+| 5 | POST | `/api/v1/payments/charges/{charge_id}/confirm` | Submit the payer's eDahab SMS. EXELO re-checks eDahab and updates the invoice | Bearer, `pos` | `provider_transaction_id`, `confirmation_code`, `idempotency_key`; optional `message`, `amount` | `200` (`pending` or `paid`) | `404 charge.not_found`, `409 payment.already_settled`, `422 payment.rail_unavailable`, `502 payment.provider_unavailable` |
+| 6 | POST | `/api/v1/payments/charges/{charge_id}/cancel` | Abandon a payment that is still waiting | Bearer, `pos` | — | `200` | `404 charge.not_found`, `409 payment.already_settled`, `502 payment.provider_unavailable` |
 | 7 | POST | `/api/v1/payments/payouts` | Send money to a phone number | Bearer, `pos`, PIN confirmation | `phone_number`, `amount`, `rail`, `idempotency_key` | `200` | `401 auth.confirmation_required`, `402 payment.declined`, `422 payment.wallet_invalid`, `502 payment.provider_unavailable` |
 | 8 | POST | `/api/v1/payments/card/session` | Get a client token to tokenise a card | Bearer, `pos` | — | `200` | `422 payment.rail_unavailable`, `502 payment.provider_unavailable` |
 | 9 | POST | `/api/v1/webhooks/payments/{provider}` | Provider callbacks (not called by the app) | Signature | provider event | `200` | `401 webhook.signature_invalid`, `404 not_found` |
@@ -103,7 +106,7 @@ How the money moves.
 | Rail | Flow | Settles | Notes |
 | --- | --- | --- | --- |
 | `zaad` | Server issues, customer approves on their phone, server commits | After the customer approves | The server owns the commit; the app only polls |
-| `edahab` | Push prompt to the customer's handset | After the customer approves | Customer approves on their phone |
+| `edahab` | Quote, then `IssueInvoice` to the customer's handset. The call waits for the customer | At once when `IssueInvoice` returns `InvoiceStatus: "Paid"`; otherwise when a later `CheckInvoiceStatus` says `Paid` | Same steps as [registration](registration.md#step-by-step-registering-a-merchant): quote, pay request, then paid. Billed in SLSH. See [Taking an eDahab payment](#step-by-step-taking-an-edahab-payment) |
 | `cash` | Recorded, not routed | Instantly | Cash taken over the counter |
 | `card` | Braintree | After the card is charged | Replaces the direct Cloud Function calls |
 | `nfc` | Tag read, then routed | After the tag is verified | See [NFC](nfc.md) |
@@ -147,7 +150,7 @@ pending ──► authorized ──► paid
 | `authorized` | Approved, not yet captured | Keep polling |
 | `paid` | Money received | Finish: show the receipt |
 | `failed` | Declined or errored; `failure` explains why | Show the reason, offer another rail |
-| `expired` | The customer did not approve in time | Offer to try again |
+| `expired` | The customer did not approve in time. `failure.message` is `This payment request expired. Try again.` | Offer to start the payment again. Do not confirm this charge |
 | `cancelled` | The shopkeeper cancelled | Return to the cart |
 | `refunded` | Paid, then returned | Show as refunded |
 
@@ -260,7 +263,15 @@ Replaces `POST /api/merchant/transaction/process`. Needs the `pos` permission.
 ```
 
 The example is a Zaad quote for `$37.74` on a Silver shop. The amounts differ on Gold
-(see below).
+(see below). An eDahab quote is the same call with `"rail": "edahab"`.
+
+**USD and SLSH.** `amount.currency` on the quote is `USD` or `SLSH`. The answer
+always carries both: `amount` in the currency you sent, and `amount_alt` in the
+other one, at `exchange_rate` (SLSH per 1 USD, the shop's rate). Show both on
+the payment screen. eDahab is billed in **SLSH** (whole shillings). The sale
+total you later send on `POST /payments/charges` stays **USD**, because the
+ticket is priced in dollars; the server converts that USD total into the SLSH
+figure eDahab receives.
 
 | Field | Meaning |
 | --- | --- |
@@ -363,12 +374,56 @@ required.** Needs the `pos` permission.
 }
 ```
 
+For eDahab the `amount` on this response is the **SLSH** sent to eDahab.
+`customer_charge` is the same total in **USD**. A pending eDahab charge also
+includes `payment_url` (`https://edahab.net/api/payment?invoiceId=…`) if the
+customer pays on the hosted page instead of the handset prompt.
+
 `next_action` tells the app what to do:
 
 | `next_action` | Client does |
 | --- | --- |
 | `await_customer_approval` | Show "Ask the customer to approve", poll `poll` every `poll_after` seconds |
 | `none` | Already final; read `status` |
+
+**Response `200` — eDahab already confirmed the payment**
+
+`IssueInvoice` waits for the customer (up to about 90 seconds; the app should
+allow at least 100). When eDahab answers `InvoiceStatus: "Paid"`, the charge is
+stored as paid immediately and this call returns `200`. The order is created and
+the cart is cleared in that same response. Do not poll.
+
+```json
+{
+  "success": true,
+  "message": "Payment received",
+  "data": {
+    "charge_id": "chg_01JBXT5P3R",
+    "shop": { "id": 42, "business_name": "Sahra Store" },
+    "status": "paid",
+    "rail": "edahab",
+    "purpose": "pos_sale",
+    "amount": { "amount": 301920, "currency": "SLSH", "display": "301,920 SLSH" },
+    "customer_charge": { "amount": 3774, "currency": "USD", "display": "$37.74" },
+    "customer": { "wallet_number": "+252659150226", "name": "Amina Yusuf" },
+    "paid_at": "2026-10-01T12:06:00Z",
+    "provider_transaction_id": "MP261001.1706.A44107",
+    "confirmation_code": null,
+    "order": { "id": 10246, "order_status": "Complete" },
+    "receipt": { "invoice_no": "INV-10246", "url": "/api/v1/orders/10246/receipt" }
+  }
+}
+```
+
+| Field | Meaning |
+| --- | --- |
+| `amount` | What eDahab billed, in SLSH |
+| `customer_charge` | The same payment in USD (the ticket total, plus the fee when the customer pays it) |
+| `provider_transaction_id` | eDahab's reference (`MP<yymmdd>.<hhmm>.<code>`), from `TransactionId` |
+| `order`, `receipt` | Present because a paid `pos_sale` creates the order at once |
+
+A retry with the same `idempotency_key` returns this same paid charge. Do not
+start a second payment.
 
 **`prompt: "declined"`** (eDahab only). If the customer turned the payment prompt
 down on their phone, a pending charge also carries `"prompt": "declined"`, on this
@@ -431,14 +486,14 @@ fail on its own and leave a paid sale with no order attached.
 
 ## 4. GET `/api/v1/payments/charges/{charge_id}` — Check a payment
 
-**Purpose:** Polls a payment until it settles. Works for **any** charge of the
-shop: a sale, a subscription, a registration or verification fee. Replaces
-`POST /api/merchant/invoice/status`.
+**Purpose:** The **Verify** button, and the poll while a charge is still
+`pending`. The app must **not** call eDahab. EXELO calls `CheckInvoiceStatus`
+with the invoice id stored when the charge was issued. Skip this call when
+`POST /payments/charges` already returned `200` with `status: paid`.
 
-> **Live today for subscription payments** (`charge_id` like
-> `inv_01M2WP34K5G80C669C3FG1WPMR`, see
-> [subscription.md](subscription.md#5-get-apiv1paymentschargescharge_id--check-a-subscription-payment)).
-> Sale charges (`chg_…`) arrive with the rest of this module.
+Works for **any** charge of the shop: a sale (`chg_…`), a subscription, a
+registration or a verification fee (`inv_…`). Replaces
+`POST /api/merchant/invoice/status`.
 
 **Response `200`: paid**
 
@@ -507,18 +562,74 @@ first final status ([Status lifecycle](#status-lifecycle)).
 | --- | --- | --- |
 | `404` | `charge.not_found` | No such payment for this shop |
 
-## 5. POST `/api/v1/payments/charges/{charge_id}/confirm` — unused by the app
+## 5. POST `/api/v1/payments/charges/{charge_id}/confirm` — Submit an eDahab SMS
 
-The payer already has the eDahab SMS. The app must **not** call this endpoint
-and must **not** call eDahab. Verify with
-[`GET /payments/charges/{charge_id}`](#4-get-apiv1paymentschargescharge_id--check-a-payment).
-The route may still exist on the server; do not wire it in the client.
+**Purpose:** The shopkeeper has the payer's eDahab SMS (the code and the
+transaction id). This stores that text, then asks eDahab `CheckInvoiceStatus`
+and updates the invoice. The SMS alone never marks the charge paid. Needs the
+`pos` permission. eDahab only; cash and Zaad return `422 payment.rail_unavailable`.
+
+The app still must **not** call `https://edahab.net`. Prefer
+[`GET /payments/charges/{charge_id}`](#4-get-apiv1paymentschargescharge_id--check-a-payment)
+when there is no SMS. If `POST /payments/charges` already returned `paid`, do
+not confirm.
+
+**Request**
+
+```json
+{
+  "provider_transaction_id": "MP261001.1706.A44107",
+  "confirmation_code": "740852",
+  "message": "500 Shilling you have sent… Code:740852 Txn Id:MP261001.1706.A44107",
+  "amount": 500,
+  "idempotency_key": "c1e8a4b2-7d55-4f1b-9a32-4e6f01d8b223"
+}
+```
+
+| Field | Type | Required | Notes |
+| --- | --- | --- | --- |
+| `provider_transaction_id` | string | yes | The `Txn Id` from the SMS (`MP<yymmdd>.<hhmm>.<code>`) |
+| `confirmation_code` | string | yes | The `Code` from the SMS |
+| `message` | string | no | The full SMS, kept on the invoice |
+| `amount` | number | no | The amount printed in the SMS |
+| `idempotency_key` | string | yes | Also accepted as the `Idempotency-Key` header |
+
+**Response `200`: eDahab says paid** — same charge shape as a paid
+[GET](#4-get-apiv1paymentschargescharge_id--check-a-payment), including `order`
+and `receipt`. `provider_transaction_id` and `confirmation_code` are filled from
+the SMS.
+
+**Response `200`: still waiting** — eDahab has not confirmed yet. `data.status`
+is `pending`. Keep polling GET. The SMS is stored for the receipt.
+
+**Response `200`: expired** — the charge already expired, or this check finds
+that it has. Same body as GET: `data.status` is `expired` and `failure.message`
+is `This payment request expired. Try again.` Start a new charge. Do not send
+the SMS again for this `charge_id`.
+
+**Errors**
+
+| Status | Code | Meaning |
+| --- | --- | --- |
+| `404` | `charge.not_found` | No such payment for this shop |
+| `409` | `payment.already_settled` | The charge already failed or was cancelled. An **expired** charge returns `200` with `status: expired` instead |
+| `422` | `payment.rail_unavailable` | Not an eDahab charge |
+| `502` | `payment.provider_unavailable` | eDahab could not be checked. The SMS is stored; retry GET or confirm |
 
 ## 6. POST `/api/v1/payments/charges/{charge_id}/cancel` — Cancel a pending payment
 
-**Purpose:** Abandons a pending payment: the shopkeeper backed out, or the customer
-walked away. The cart is left intact so the shopkeeper can retry on another rail.
-Needs the `pos` permission.
+**Purpose:** The shopkeeper backed out, or the customer walked away, while the
+charge is still `pending`. The cart is left intact so they can charge again on
+another rail. Needs the `pos` permission.
+
+For **eDahab**, EXELO calls `CheckInvoiceStatus` first. If that answer is
+`Paid`, the invoice is updated to paid and this call returns `409` — read the
+charge with GET and show the receipt. A charge that is still waiting is stored
+as `Cancelled`. For **Zaad**, the charge is cancelled locally and the hold is
+not committed.
+
+Cancelling an already-cancelled charge returns the same `200`. A paid, failed
+or expired charge returns `409 payment.already_settled`.
 
 **Request:** no body.
 
@@ -691,6 +802,84 @@ retrying.
 
 ---
 
+## Step by step: taking an eDahab payment
+
+The same three steps as [registration](registration.md#step-by-step-registering-a-merchant):
+quote the price, send the payment request, then treat a `Paid` answer as finished.
+The app never calls eDahab. Base URL is `/api/v1`.
+
+### Step 1 — Quote
+
+`POST /payments/quote`
+
+```json
+{
+  "amount": { "amount": 3774, "currency": "USD" },
+  "rail": "edahab",
+  "purpose": "pos_sale"
+}
+```
+
+`amount` is the ticket total. Send `USD` (cents) or `SLSH` (whole shillings);
+the answer includes the other currency as `amount_alt`.
+
+Show both, for example `$37.74` and `301,920 SLSH`, plus `fees` and who pays
+them (`fee_payer`). Keep `quote_id`. The quote lasts 15 minutes; after that
+step 2 returns `410 quote.expired` and the app quotes again.
+
+eDahab will be billed the SLSH total. On Gold the fee is added to what the
+customer pays; on Silver it is taken from the shop. Cash has no fee.
+
+### Step 2 — Send the payment to eDahab
+
+`POST /payments/charges`
+
+```json
+{
+  "rail": "edahab",
+  "purpose": "pos_sale",
+  "amount": { "amount": 3774, "currency": "USD" },
+  "quote_id": "qte_01JBXT2N9K",
+  "customer": { "wallet_number": "+252659150226", "name": "Amina Yusuf" },
+  "cart_id": 4471,
+  "idempotency_key": "7d4e1b90-5c22-4a63-b8f1-92e0a7c45d38"
+}
+```
+
+- `amount` here is the sale total in **USD**, and it must match the ticket.
+  The server converts it to SLSH and sends that to eDahab `IssueInvoice`.
+- `customer.wallet_number` must be an eDahab number (`65`, `66` or `62`). A Zaad
+  number returns `422 payment.wallet_invalid`.
+- Generate `idempotency_key` **once** when the shopkeeper taps Charge and reuse
+  it on every retry.
+- This request waits until the customer approves or declines on their phone.
+  Allow at least 100 seconds before treating it as a timeout. On a timeout,
+  retry with the **same** key.
+
+| Response | Meaning | Client does |
+| --- | --- | --- |
+| `200`, `data.status` `paid` | eDahab returned `InvoiceStatus: "Paid"`. The invoice is already `Paid`, the order exists, the cart is cleared | Show the receipt (`order`, `receipt`, `paid_at`, `provider_transaction_id`). Do not poll |
+| `202`, `data.status` `pending` | The prompt is still open | Keep `charge_id`. Show "Ask the customer to approve". Go to step 3 |
+| `202` with `prompt` `declined` | The customer turned the prompt down. The charge stays pending | Say the prompt was declined, and still poll. It is not a failure |
+| `502 payment.provider_unavailable` | eDahab did not accept the request | Nothing was charged. Retry with the same key, or take cash |
+
+`data.amount` on these responses is SLSH (what eDahab billed).
+`data.customer_charge` is USD.
+
+### Step 3 — Verify, only while it is still pending
+
+`GET /payments/charges/{charge_id}` every `poll_after` seconds (3). Stop while
+the app is in the background. Skip this step entirely when step 2 already
+returned `paid`.
+
+| `data.status` | Client does |
+| --- | --- |
+| `pending` | Keep polling |
+| `paid` | Show the receipt. The order is created on this response |
+| `failed`, `cancelled`, `expired` | Show `failure.message` if present. Offer another rail, with a **new** `idempotency_key` |
+
+A charge expires 10 minutes after it is issued.
+
 ## Step by step: taking a Zaad payment at the till
 
 ```
@@ -720,15 +909,249 @@ POST /payments/payouts  X-EXELO-Confirmation: <token>       → 200, status "sen
 
 | State | Client does |
 | --- | --- |
+| `200` with `status` `paid` on the charge itself | eDahab already confirmed. Show the receipt. Do not poll |
 | `202 pending` | Show the waiting screen and poll |
 | `paid` | Show the receipt, clear the local cart |
 | `failed` | Show `failure.message`, offer another rail |
 | `expired` | Offer to try again |
+| `409 payment.already_settled` on cancel | The charge finished while you were cancelling. GET it. If it is `paid`, show the receipt |
 | `409 payment.cart_changed` | Re-quote, then charge again |
 | `410 quote.expired` | Re-quote, then charge again |
 | `422 payment.rail_unavailable` | Remove that rail from the picker and refresh [`/payments/methods`](#1-get-apiv1paymentsmethods--which-payment-methods-the-shop-accepts) |
 | `502 payment.provider_unavailable` | Nothing was charged; offer cash or retry |
 | No network | Keep the cart locally; payment stays blocked until online |
+
+---
+
+## Error responses
+
+Every failure uses the same envelope. Show `message`. Branch on `error.code`.
+`meta.request_id` and `meta.server_time` are on every body and are left out of
+the examples below. See [errors.md](errors.md).
+
+A charge can also come back `200` with `data.status` `expired`, `failed` or
+`cancelled`. Those are not HTTP errors. Show `message`, or `data.failure.message`
+when `message` is absent.
+
+### `200` — the charge finished without being paid
+
+**Expired.** `GET /payments/charges/{charge_id}` and
+`POST /payments/charges/{charge_id}/confirm`.
+
+```json
+{
+  "success": true,
+  "message": "This payment request expired. Try again.",
+  "data": {
+    "charge_id": "chg_01M407BY0H27KZ1HRASEDS8KA8",
+    "status": "expired",
+    "rail": "edahab",
+    "failure": {
+      "code": "expired",
+      "message": "This payment request expired. Try again."
+    }
+  }
+}
+```
+
+**Failed.** The provider refused the payment. `failure.message` is the reason
+eDahab or Zaad returned.
+
+```json
+{
+  "success": true,
+  "data": {
+    "charge_id": "chg_01JBXT5P3R",
+    "status": "failed",
+    "failure": { "code": "failed", "message": "User declined" }
+  }
+}
+```
+
+**Cancelled** by the shop.
+
+```json
+{
+  "success": true,
+  "data": {
+    "charge_id": "chg_01JBXT5P3R",
+    "status": "cancelled",
+    "failure": { "code": "cancelled", "message": "Cancelled by the shop" }
+  }
+}
+```
+
+**Still pending, prompt declined.** Not a failure. Keep polling.
+
+```json
+{
+  "success": true,
+  "message": "Ask the customer to approve the payment",
+  "data": {
+    "status": "pending",
+    "prompt": "declined",
+    "next_action": "await_customer_approval"
+  }
+}
+```
+
+### `401` — sign in again
+
+```json
+{
+  "success": false,
+  "message": "Please sign in again",
+  "error": { "code": "auth.token_invalid" }
+}
+```
+
+### `403` — no permission
+
+```json
+{
+  "success": false,
+  "message": "You do not have access to this",
+  "error": { "code": "auth.permission_denied", "details": { "required_permission": "pos" } }
+}
+```
+
+### `404` — not found
+
+| `error.code` | `message` |
+| --- | --- |
+| `charge.not_found` | We could not find that payment |
+| `merchant.not_found` | We could not find that shop |
+| `cart.not_found` | We could not find that ticket |
+| `order.not_found` | We could not find that order |
+
+```json
+{
+  "success": false,
+  "message": "We could not find that payment",
+  "error": { "code": "charge.not_found" }
+}
+```
+
+### `409` — the payment cannot continue
+
+| `error.code` | `message` | Client does |
+| --- | --- | --- |
+| `payment.already_settled` | This payment is already finished | GET the charge. If it is `paid`, show the receipt |
+| `payment.charge_pending` | A payment for this sale is already waiting for the customer | Open `error.details.charge_id` instead of starting another |
+| `payment.cart_changed` | The ticket changed. Check the total and try again. | Re-quote. Or, when the amount does not match: `The amount does not match the sale total` |
+| `order.already_paid` | This order is already paid | Show the order |
+| `order.invalid_transition` | Only a pending order can be paid | Do not charge it |
+| `idempotency.key_reused` | That key was already used for a different request | Generate a new key only when the shopkeeper starts a new attempt |
+
+```json
+{
+  "success": false,
+  "message": "A payment for this sale is already waiting for the customer",
+  "error": { "code": "payment.charge_pending", "details": { "charge_id": "chg_01JBXT5P3R" } }
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "This payment is already finished",
+  "error": { "code": "payment.already_settled" }
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "The ticket changed. Check the total and try again.",
+  "error": { "code": "payment.cart_changed" }
+}
+```
+
+### `410` — quote expired
+
+```json
+{
+  "success": false,
+  "message": "That quote has expired. Request a new one.",
+  "error": { "code": "quote.expired" }
+}
+```
+
+### `422` — the form or the wallet was rejected
+
+| `error.code` | `message` |
+| --- | --- |
+| `validation.failed` | Please check the form. Field text is in `error.details` |
+| `payment.rail_unavailable` | That payment method is not available for this shop |
+| `payment.rail_unavailable` | This payment does not take an eDahab confirmation |
+| `payment.wallet_invalid` | That wallet number does not belong to Edahab (or Zaad) |
+| `payment.tender_too_low` | The cash given is less than the total |
+| `cart.empty` | There is nothing to pay for |
+
+```json
+{
+  "success": false,
+  "message": "Please check the form",
+  "error": {
+    "code": "validation.failed",
+    "field": "customer.wallet_number",
+    "details": { "customer.wallet_number": ["Enter the customer's wallet number"] }
+  }
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "That payment method is not available for this shop",
+  "error": {
+    "code": "payment.rail_unavailable",
+    "field": "rail",
+    "details": { "available_rails": ["cash"] }
+  }
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "That wallet number does not belong to Edahab",
+  "error": { "code": "payment.wallet_invalid", "field": "customer.wallet_number" }
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "The cash given is less than the total",
+  "error": {
+    "code": "payment.tender_too_low",
+    "field": "amount_tendered",
+    "details": { "due": { "amount": 3774, "currency": "USD", "display": "$37.74" } }
+  }
+}
+```
+
+```json
+{
+  "success": false,
+  "message": "This payment does not take an eDahab confirmation",
+  "error": { "code": "payment.rail_unavailable" }
+}
+```
+
+### `502` — eDahab or Zaad did not answer
+
+```json
+{
+  "success": false,
+  "message": "The wallet provider is unavailable. Try again.",
+  "error": { "code": "payment.provider_unavailable" }
+}
+```
+
+Nothing was marked paid. Retry the same `idempotency_key` for a charge that
+never started. If a charge id already exists, poll GET instead of issuing again.
 
 ---
 
@@ -748,6 +1171,10 @@ curl -X POST $BASE/payments/charges -H 'Accept: application/json' -H 'Content-Ty
   -d '{"rail":"cash","purpose":"pos_sale","amount":{"amount":3774,"currency":"USD"},"cart_id":4471,"idempotency_key":"7d4e1b90-5c22-4a63-b8f1-92e0a7c45d38"}'
 
 curl $BASE/payments/charges/chg_01JBXT5P3R -H 'Accept: application/json' -H "Authorization: Bearer $TOKEN"
+
+curl -X POST $BASE/payments/charges/chg_01JBXT5P3R/confirm -H 'Accept: application/json' -H 'Content-Type: application/json' \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"provider_transaction_id":"MP261001.1706.A44107","confirmation_code":"740852","idempotency_key":"c1e8a4b2-7d55-4f1b-9a32-4e6f01d8b223"}'
 
 curl -X POST $BASE/payments/charges/chg_01JBXT5P3R/cancel -H 'Accept: application/json' -H "Authorization: Bearer $TOKEN"
 
@@ -779,30 +1206,37 @@ card session and webhooks) are not. How the built part works, and what is open:
   `/orders/{id}/pay`, which call it) checks the rail against
   [`accepts`](#1-get-apiv1paymentsmethods--which-payment-methods-the-shop-accepts),
   checks that `amount` (USD) equals the sale total, and works out the fee. For
-  **cash** it records the charge as paid at once. For **Zaad and eDahab** it asks the
-  provider for a payment and returns `202`; the sale completes when a poll finds it
-  paid.
-- **On `paid`** (cash immediately, wallets on the poll that sees it) one
+  **cash** it records the charge as paid at once. For **eDahab** it calls
+  `IssueInvoice` and, when that answer is `InvoiceStatus: "Paid"`, stores the
+  invoice as `Paid` and returns `200` with the order — the same auto-settle as
+  [registration](registration.md#4-post-apiv1registrationinvoices--request-the-signup-payment).
+  If eDahab has not confirmed yet, it returns `202` and the sale completes when
+  a poll's `CheckInvoiceStatus` says `Paid`. **Zaad** stays `202` until the
+  customer approves and a poll commits it.
+- **Currency.** A quote accepts **USD or SLSH** and returns the other as
+  `amount_alt`. The charge request amount is **USD** (the ticket). A wallet is
+  billed in **SLSH** (`customer_charge` in cents × the shop rate ÷ 100, whole
+  shillings). Cash is recorded in USD. On the charge response, `amount.currency`
+  is `SLSH` for a wallet and `USD` for cash, and `customer_charge` is the USD figure.
+- **On `paid`** (cash immediately, eDahab as soon as `IssueInvoice` says `Paid`,
+  otherwise on the poll that sees it) one
   transaction creates the order (`pos_sale`) or settles it (`order_settlement`),
   takes the stock off the shelf and clears the ticket. It runs once however many
   times the charge is polled. The ticket is only cleared if it has not changed since
   the charge started, so a new sale started meanwhile is never wiped.
-- **Currency.** The order and its total are always USD. A **wallet** charge is billed
-  in **SLSH** at the shop's exchange rate (`customer_charge` in cents × rate ÷ 100,
-  in whole shillings), as registration and subscription payments already are; a
-  **cash** charge is recorded in USD. So `amount.currency` on a polled charge is
-  `SLSH` for wallets and `USD` for cash, and `customer_charge` (USD) is returned
-  when the charge is created.
 - **The fee** is the quote's: one 2.85% wallet fee, added to what the customer pays
   on Gold and taken from the shop otherwise; none on cash. Sending `quote_id` locks
   the quoted fee and must match the rail, purpose and amount (else `410
   quote.expired` or `422`).
 - **One open payment per sale.** While a wallet payment for the same ticket or order
   is waiting for the customer, another returns `409 payment.charge_pending` with the
-  waiting `charge_id`. An expired one no longer blocks.
-- **Known gap: cancelling a wallet payment** is not built. Until the providers
-  offer a cancel call, a shopkeeper who abandons a waiting payment must let it
-  expire (10 minutes) rather than start a second one.
+  waiting `charge_id`. An expired or cancelled one no longer blocks.
+- **Confirm** (`POST /payments/charges/{id}/confirm`) stores an eDahab SMS, then
+  runs the same `CheckInvoiceStatus` check as GET. Paid only when eDahab says so.
+- **Cancel** (`POST /payments/charges/{id}/cancel`) is only for a `pending` charge.
+  eDahab is checked first, so a payment that just came back `Paid` is settled and
+  the cancel is refused. Zaad is not asked, because that status call would take
+  the money. The cart is not cleared.
 - **Built code:** `PaymentService` (methods, quote, fee), `ChargeService` (charges,
   order creation on paid), `V1\PaymentController`, `FinalizeSaleOnPaid` (the
   `InvoicePaid` listener), and the `payments` settings in `config/exelo.php`

@@ -1,6 +1,7 @@
 <?php
 
 use App\Models\InventoryHistory;
+use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Models\MerchantSubscription;
 use App\Models\Order;
@@ -172,6 +173,80 @@ it('stores the eDahab SMS on a pending sale and completes it when the provider s
         ->assertJsonPath('data.order.order_status', 'Complete');
 
     expect(orders()->count())->toBe(1)->and(shelf($rice['id']))->toBe(22);
+});
+
+it('cancels a waiting eDahab charge and leaves the ticket', function () {
+    [, $token, $rice] = till();
+    fillTicket($token, $rice['id']);
+
+    $chargeId = payCart($token, ['rail' => 'edahab', 'customer' => ['wallet_number' => '+252651110009']])
+        ->assertStatus(202)
+        ->json('data.charge_id');
+
+    Cache::put('test-edahab-status', 'Pending');
+
+    test()->withToken($token)->postJson('/api/v1/payments/charges/'.$chargeId.'/cancel')
+        ->assertOk()
+        ->assertJsonPath('message', 'Payment cancelled')
+        ->assertJsonPath('data.charge_id', $chargeId)
+        ->assertJsonPath('data.status', 'cancelled');
+
+    test()->withToken($token)->postJson('/api/v1/payments/charges/'.$chargeId.'/cancel')
+        ->assertOk()
+        ->assertJsonPath('data.status', 'cancelled');
+
+    expect(orders()->count())->toBe(0)->and(shelf($rice['id']))->toBe(24)->and(ticket($token)['is_empty'])->toBeFalse();
+
+    payCart($token, ['rail' => 'cash', 'idempotency_key' => freshKey()])->assertOk()->assertJsonPath('data.status', 'paid');
+});
+
+it('does not cancel an eDahab charge that the provider has already marked paid', function () {
+    [, $token, $rice] = till();
+    fillTicket($token, $rice['id']);
+
+    $chargeId = payCart($token, ['rail' => 'edahab', 'customer' => ['wallet_number' => '+252651110009']])
+        ->assertStatus(202)
+        ->json('data.charge_id');
+
+    Cache::put('test-edahab-status', 'Paid');
+
+    test()->withToken($token)->postJson('/api/v1/payments/charges/'.$chargeId.'/cancel')
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'payment.already_settled');
+
+    expect(orders()->count())->toBe(1)->and(shelf($rice['id']))->toBe(22);
+});
+
+it('tells the shop an expired eDahab charge must be started again, including on confirm', function () {
+    [, $token, $rice] = till();
+    fillTicket($token, $rice['id']);
+
+    $chargeId = payCart($token, ['rail' => 'edahab', 'customer' => ['wallet_number' => '+252651110009', 'name' => 'Salman Test']])
+        ->assertStatus(202)
+        ->json('data.charge_id');
+
+    Invoice::where('public_id', $chargeId)->update(['status' => 'Expired', 'error_reason' => null]);
+
+    $message = 'This payment request expired. Try again.';
+
+    test()->withToken($token)->getJson('/api/v1/payments/charges/'.$chargeId)
+        ->assertOk()
+        ->assertJsonPath('message', $message)
+        ->assertJsonPath('data.status', 'expired')
+        ->assertJsonPath('data.failure.code', 'expired')
+        ->assertJsonPath('data.failure.message', $message);
+
+    test()->withToken($token)->postJson('/api/v1/payments/charges/'.$chargeId.'/confirm', [
+        'provider_transaction_id' => 'MP261001.1706.A44107',
+        'confirmation_code' => '740852',
+        'idempotency_key' => freshKey(),
+    ])->assertOk()
+        ->assertJsonPath('message', $message)
+        ->assertJsonPath('data.status', 'expired')
+        ->assertJsonPath('data.failure.message', $message);
+
+    expect(Invoice::where('public_id', $chargeId)->value('error_reason'))->toBe($message)
+        ->and(orders()->count())->toBe(0);
 });
 
 it('refuses to confirm a cash sale through the eDahab SMS endpoint', function () {
