@@ -85,30 +85,50 @@ class PaymentService
         $currency = strtoupper($input['amount']['currency']);
         $amount = (int) $input['amount']['amount'];
         $rate = $merchant->effectiveExchangeRate();
+        // Charges are always the sale total in USD cents. An SLSH figure is snapped to
+        // the nearest cent first, then converted back, so the quote shows the shillings
+        // eDahab will actually be asked for (564 SLSH at 10,500 is 5 cents, billed as 525).
+        $saleCents = $currency === 'USD' ? $amount : (int) round($amount / $rate * 100);
 
-        $fee = $this->fee($merchant, $rail, $amount);
-        $customerCharge = $amount + ($fee['payer'] === 'customer' ? $fee['amount'] : 0);
-        $merchantReceives = $amount - ($fee['payer'] === 'merchant' ? $fee['amount'] : 0);
+        if ($saleCents < 1) {
+            throw new ApiException('validation.failed', 'Please check the form', 422, ['amount.amount' => ['That amount is less than one cent']], 'amount.amount');
+        }
+
+        $fee = $this->fee($merchant, $rail, $saleCents);
+        $customerCents = $saleCents + ($fee['payer'] === 'customer' ? $fee['amount'] : 0);
+        $merchantCents = $saleCents - ($fee['payer'] === 'merchant' ? $fee['amount'] : 0);
+        $inAskedCurrency = fn (int $cents): array => $currency === 'USD'
+            ? Money::usd($cents)
+            : Money::of((int) round($cents * $rate / 100), config('exelo.alt_currency'));
 
         $quote = [
             'quote_id' => 'qte_'.Str::upper(Str::ulid()->toBase32()),
             'shop' => $this->shopSummary($merchant),
             'amount' => Money::of($amount, $currency),
-            'customer_charge' => Money::of($customerCharge, $currency),
-            'merchant_receives' => Money::of($merchantReceives, $currency),
+            'customer_charge' => $inAskedCurrency($customerCents),
+            'merchant_receives' => $inAskedCurrency($merchantCents),
             'fees' => [
-                'platform' => Money::of($fee['amount'], $currency),
-                'rail' => Money::of(0, $currency),
+                'platform' => $inAskedCurrency($fee['amount']),
+                'rail' => $inAskedCurrency(0),
             ],
             'fee_payer' => $fee['amount'] > 0 ? $fee['payer'] : null,
             'amount_alt' => $this->alternate($amount, $currency, $rate),
+            'charge_amount' => Money::usd($saleCents),
             'exchange_rate' => $rate,
             'expires_at' => ApiResponse::iso(now()->addSeconds(config('exelo.payments.quote_ttl_seconds'))),
         ];
 
         Cache::put(
             'payment-quote:'.$quote['quote_id'],
-            ['merchant_id' => $merchant->id, 'rail' => $rail, 'purpose' => $input['purpose'], 'quote' => $quote],
+            [
+                'merchant_id' => $merchant->id,
+                'rail' => $rail,
+                'purpose' => $input['purpose'],
+                'sale_cents' => $saleCents,
+                'fee_cents' => $fee['amount'],
+                'fee_payer' => $fee['payer'],
+                'quote' => $quote,
+            ],
             config('exelo.payments.quote_ttl_seconds'),
         );
 

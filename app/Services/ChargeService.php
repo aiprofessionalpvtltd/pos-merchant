@@ -194,11 +194,13 @@ class ChargeService
                 throw new ApiException('quote.expired', 'That quote has expired. Request a new one.', 410);
             }
 
-            if ($stored['merchant_id'] !== $merchant->id || $stored['rail'] !== $rail || $stored['purpose'] !== $data['purpose'] || $stored['quote']['amount']['amount'] !== $totalCents) {
-                throw new ApiException('validation.failed', 'Please check the form', 422, ['quote_id' => ['This quote is for a different payment']], 'quote_id');
+            $saleCents = $stored['sale_cents'] ?? (($stored['quote']['amount']['currency'] ?? null) === 'USD' ? $stored['quote']['amount']['amount'] : null);
+
+            if ($stored['merchant_id'] !== $merchant->id || $stored['rail'] !== $rail || $stored['purpose'] !== $data['purpose'] || $saleCents !== $totalCents) {
+                throw new ApiException('validation.failed', 'Please check the form', 422, ['quote_id' => ['This quote is for a different payment. Send charge_amount from the quote, in USD.']], 'quote_id');
             }
 
-            return ['amount' => $stored['quote']['fees']['platform']['amount'], 'payer' => $stored['quote']['fee_payer'] ?? 'merchant'];
+            return ['amount' => (int) ($stored['fee_cents'] ?? $stored['quote']['fees']['platform']['amount']), 'payer' => $stored['fee_payer'] ?? $stored['quote']['fee_payer'] ?? 'merchant'];
         }
 
         return $this->payments->fee($merchant, $rail, $totalCents);

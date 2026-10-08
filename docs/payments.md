@@ -268,16 +268,24 @@ The example is a Zaad quote for `$37.74` on a Silver shop. The amounts differ on
 **USD and SLSH.** `amount.currency` on the quote is `USD` or `SLSH`. The answer
 always carries both: `amount` in the currency you sent, and `amount_alt` in the
 other one, at `exchange_rate` (SLSH per 1 USD, the shop's rate). Show both on
-the payment screen. eDahab is billed in **SLSH** (whole shillings). The sale
-total you later send on `POST /payments/charges` stays **USD**, because the
-ticket is priced in dollars; the server converts that USD total into the SLSH
-figure eDahab receives.
+the payment screen. eDahab is billed in **SLSH** (whole shillings).
+
+`POST /payments/charges` accepts **USD only**. `charge_amount` is that USD
+figure: post it as `amount`, with `cart_id` for a sale. Do not post the SLSH
+`customer_charge`. An SLSH body is `422 validation.failed` with
+`error.field: amount.currency` and the message under `error.details`.
+
+An SLSH amount is snapped to the nearest USD cent before the fee is worked out,
+then converted back. The shillings in `customer_charge` are what eDahab will be
+asked for, which can be lower than the shillings you sent. 564 SLSH at a rate
+of 10,500 is 5 cents (`charge_amount`) and is billed as **525 SLSH**.
 
 | Field | Meaning |
 | --- | --- |
 | `shop` | The shop this quote is for — the token's current shop, as on [`GET /payments/methods`](#1-get-apiv1paymentsmethods--which-payment-methods-the-shop-accepts) |
 | `amount` | What was asked for |
-| `customer_charge` | What the customer is billed |
+| `charge_amount` | The sale total in **USD cents**. This is the `amount` to send on [`POST /payments/charges`](#3-post-apiv1paymentscharges--start-a-payment) |
+| `customer_charge` | What the customer is billed, in the currency you sent. For SLSH this is the snapped bill, not always the figure you typed |
 | `merchant_receives` | What lands in the shop |
 | `fees.platform` | The EXELO sales fee: the **Sales fee (%)** from Admin → Payment Fees, applied to `amount` and rounded to the nearest unit. Empty uses the default **2.85%** (`EXELO_WALLET_FEE_RATE`). Cash quotes are `0` |
 | `fees.rail` | Always `0` for now; kept so a separate provider fee can be added without changing the response |
@@ -343,7 +351,7 @@ required.** Needs the `pos` permission.
 | --- | --- | --- | --- |
 | `rail` | enum | yes | `zaad` \| `edahab` \| `cash` \| `card` \| `nfc` |
 | `purpose` | enum | yes | `pos_sale` or `order_settlement`. The other purposes are created by their own modules. |
-| `amount` | Money | yes | The sale total in **USD** (`currency` is `USD`); must equal the ticket or order total, or `409 payment.cart_changed`. Must also match `quote_id` if given |
+| `amount` | Money | yes | The sale total in **USD** (`currency` must be `USD`). Use `charge_amount` from the quote. Must equal the ticket or order total, or `409 payment.cart_changed`. SLSH is rejected: `422 validation.failed`, `error.field` is `amount.currency`, and `error.details` names every invalid field |
 | `quote_id` | string | no | Locks the quoted fees |
 | `customer.wallet_number` | string | On wallet rails | The number to bill; must belong to the rail |
 | `customer.name` | string | no | Recorded on the receipt |

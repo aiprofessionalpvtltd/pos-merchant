@@ -169,8 +169,18 @@ class InvoicePaymentService
             throw new ApiException('payment.already_settled', 'This payment is already finished', 409);
         }
 
+        $reason = 'Cancelled by the shop';
+
         if ($invoice->rail === 'edahab') {
-            $invoice = $this->refresh($invoice->fresh());
+            try {
+                $invoice = $this->refresh($invoice->fresh());
+            } catch (ApiException $e) {
+                if ($e->errorCode !== 'payment.provider_unavailable') {
+                    throw $e;
+                }
+
+                $reason = 'Cancelled by the shop. eDahab could not be checked.';
+            }
 
             if ($invoice->status !== 'Pending') {
                 throw new ApiException('payment.already_settled', 'This payment is already finished', 409);
@@ -179,7 +189,7 @@ class InvoicePaymentService
 
         $invoice->update([
             'status' => 'Cancelled',
-            'error_reason' => 'Cancelled by the shop',
+            'error_reason' => $reason,
         ]);
 
         return $invoice;

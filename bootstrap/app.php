@@ -5,8 +5,8 @@ use Illuminate\Auth\AuthenticationException;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
-use Illuminate\Http\Request;
 use Illuminate\Http\Exceptions\ThrottleRequestsException;
+use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\NotFoundHttpException;
 
@@ -40,7 +40,9 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $exceptions->render(function (ValidationException $e, Request $request) use ($isV1) {
             if ($isV1($request)) {
-                return ApiResponse::error('validation.failed', 'Please check the form', 422, $e->errors());
+                $details = $e->errors();
+
+                return ApiResponse::error('validation.failed', 'Please check the form', 422, $details, array_key_first($details));
             }
         });
 

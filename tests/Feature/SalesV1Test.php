@@ -203,6 +203,27 @@ it('cancels a waiting eDahab charge and leaves the ticket', function () {
     payCart($token, ['rail' => 'cash', 'idempotency_key' => freshKey()])->assertOk()->assertJsonPath('data.status', 'paid');
 });
 
+it('cancels a waiting eDahab charge when the provider cannot be reached', function () {
+    [, $token, $rice] = till();
+    fillTicket($token, $rice['id']);
+
+    $chargeId = payCart($token, ['rail' => 'edahab', 'customer' => ['wallet_number' => '+252651110009']])
+        ->assertStatus(202)
+        ->json('data.charge_id');
+
+    Http::fake([
+        'edahab.net/api/api/CheckInvoiceStatus*' => Http::response('down', 500),
+    ]);
+
+    test()->withToken($token)->postJson('/api/v1/payments/charges/'.$chargeId.'/cancel')
+        ->assertOk()
+        ->assertJsonPath('data.status', 'cancelled');
+
+    expect(ticket($token)['is_empty'])->toBeFalse();
+
+    payCart($token, ['rail' => 'cash'])->assertOk()->assertJsonPath('data.status', 'paid');
+});
+
 it('does not cancel an eDahab charge that the provider has already marked paid', function () {
     [, $token, $rice] = till();
     fillTicket($token, $rice['id']);
@@ -622,7 +643,8 @@ it('starts a charge directly for a ticket, locking a quote and refusing a change
     $charge(['cart_version' => $cart['version'] - 1])->assertStatus(409)->assertJsonPath('error.code', 'payment.cart_changed');
     $charge(['cart_id' => 999999])->assertStatus(404)->assertJsonPath('error.code', 'cart.not_found');
     $charge(['quote_id' => 'qte_GONE'])->assertStatus(410)->assertJsonPath('error.code', 'quote.expired');
-    $charge(['amount' => ['amount' => 3885, 'currency' => 'SLSH']])->assertStatus(422);
+    $slsh = $charge(['amount' => ['amount' => 3885, 'currency' => 'SLSH']])->assertStatus(422)->assertJsonPath('error.field', 'amount.currency');
+    expect($slsh->json('error.details'))->toHaveKey('amount.currency');
     $charge(['cart_id' => null])->assertStatus(422);
 
     $quote = test()->withToken($token)->postJson('/api/v1/payments/quote', ['amount' => ['amount' => 3885, 'currency' => 'USD'], 'rail' => 'edahab', 'purpose' => 'pos_sale'])->json('data.quote_id');

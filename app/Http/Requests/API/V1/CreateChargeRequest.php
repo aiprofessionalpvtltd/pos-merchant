@@ -30,4 +30,12 @@ class CreateChargeRequest extends FormRequest
             'idempotency_key' => ['required', 'string', 'max:64'],
         ];
     }
+
+    public function messages(): array
+    {
+        return [
+            'amount.currency.in' => 'The charge amount must be in USD. Post charge_amount from the quote, not the SLSH total.',
+            'cart_id.required_if' => 'The cart is required for a sale.',
+        ];
+    }
 }

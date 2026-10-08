@@ -119,6 +119,22 @@ it('quotes the EXELO sales fee percent saved in payment settings', function () {
         ->assertJsonPath('data.merchant_receives.amount', 3585);
 });
 
+it('snaps an SLSH quote to the USD cents a charge must send', function () {
+    $owner = makeMerchant('2580');
+    $owner->merchant->update(['exchange_rate' => 10500]);
+
+    // 564 SLSH at 10,500 is 5 cents, and those 5 cents bill as 525 SLSH.
+    test()->withToken(ownerToken())->postJson('/api/v1/payments/quote', quoteBody(['amount' => ['amount' => 564, 'currency' => 'SLSH']]))
+        ->assertOk()
+        ->assertJsonPath('data.amount.amount', 564)
+        ->assertJsonPath('data.amount.currency', 'SLSH')
+        ->assertJsonPath('data.charge_amount.amount', 5)
+        ->assertJsonPath('data.charge_amount.currency', 'USD')
+        ->assertJsonPath('data.customer_charge.amount', 525)
+        ->assertJsonPath('data.customer_charge.currency', 'SLSH')
+        ->assertJsonPath('data.amount_alt.amount', 5);
+});
+
 it('quotes an SLSH amount and shows its dollar value', function () {
     $owner = makeMerchant('2580');
     $owner->merchant->update(['exchange_rate' => 8000]);
@@ -127,7 +143,9 @@ it('quotes an SLSH amount and shows its dollar value', function () {
         ->assertOk()
         ->assertJsonPath('data.amount.display', '80,000 SLSH')
         ->assertJsonPath('data.amount_alt.amount', 1000)
-        ->assertJsonPath('data.amount_alt.display', '$10.00');
+        ->assertJsonPath('data.amount_alt.display', '$10.00')
+        ->assertJsonPath('data.charge_amount.amount', 1000)
+        ->assertJsonPath('data.charge_amount.currency', 'USD');
 });
 
 it('remembers the quote so a charge can lock it', function () {
