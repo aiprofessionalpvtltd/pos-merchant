@@ -5,11 +5,15 @@ use App\Models\CartItem;
 use App\Models\Merchant;
 use Database\Seeders\PlanCatalogueSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
 
 uses(DatabaseTransactions::class);
 
-beforeEach(fn () => (new PlanCatalogueSeeder)->run());
+beforeEach(function () {
+    (new PlanCatalogueSeeder)->run();
+    Cache::forget('settings:payment-fees');
+});
 
 function tillWithStock(): array
 {
@@ -41,6 +45,11 @@ it('returns an empty ticket rather than a 404', function () {
         ->assertJsonPath('data.totals.fee_alt.amount', 0)
         ->assertJsonPath('data.totals.fee_alt.currency', 'SLSH')
         ->assertJsonPath('data.totals.fee_percent', 2.85)
+        ->assertJsonPath('data.totals.gst.amount', 0)
+        ->assertJsonPath('data.totals.gst.currency', 'USD')
+        ->assertJsonPath('data.totals.gst_alt.amount', 0)
+        ->assertJsonPath('data.totals.gst_alt.currency', 'SLSH')
+        ->assertJsonPath('data.totals.gst_percent', 2.5)
         ->assertJsonPath('data.item_count', 0);
 
     expect(Cart::count())->toBeGreaterThanOrEqual(1);
@@ -70,6 +79,12 @@ it('adds lines and prices the ticket with VAT', function () {
         ->assertJsonPath('data.totals.fee_alt.amount', 10000)
         ->assertJsonPath('data.totals.fee_alt.currency', 'SLSH')
         ->assertJsonPath('data.totals.fee_percent', 2.85)
+        ->assertJsonPath('data.totals.gst.amount', 110)
+        ->assertJsonPath('data.totals.gst.currency', 'USD')
+        ->assertJsonPath('data.totals.gst.display', '$1.10')
+        ->assertJsonPath('data.totals.gst_alt.amount', 8800)
+        ->assertJsonPath('data.totals.gst_alt.currency', 'SLSH')
+        ->assertJsonPath('data.totals.gst_percent', 2.5)
         ->assertJsonPath('data.totals.total.amount', 4385)
         ->assertJsonPath('data.totals.total.display', '$43.85')
         ->assertJsonPath('data.totals.total_alt.amount', 350800)

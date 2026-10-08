@@ -114,6 +114,9 @@ scan. It carries a `version` that goes up by one on every change. Send it back a
 | `fee`        | EXELO sales fee percent of `total`, in USD. The percent is **Sales fee (%)** on Admin → Payment Fees, default 2.85%. Not stored on the cart row |
 | `fee_alt`    | The same fee in SLSH, at the shop's exchange rate |
 | `fee_percent`| The percent that was applied, so the register can show "2.85%" |
+| `gst`        | GST percent of `total`, in USD. The percent is **GST (%)** on Admin → Payment Fees, default 2.5%. Separate from each line's product VAT |
+| `gst_alt`    | The same GST in SLSH, at the shop's exchange rate |
+| `gst_percent`| The GST percent that was applied |
 | `total`      | `subtotal + vat`                                                                                                                                                                                         |
 | `total_alt`  | `total` in SLSH at the shop's exchange rate                                                                                                                                                              |
 
@@ -185,6 +188,9 @@ client called the first to learn whether a cart existed, then the second to get 
       "fee":         { "amount": 0, "currency": "USD", "display": "$0.00" },
       "fee_alt":     { "amount": 0, "currency": "SLSH", "display": "0 SLSH" },
       "fee_percent": 2.85,
+      "gst":         { "amount": 0, "currency": "USD", "display": "$0.00" },
+      "gst_alt":     { "amount": 0, "currency": "SLSH", "display": "0 SLSH" },
+      "gst_percent": 2.5,
       "total":     { "amount": 0, "currency": "USD", "display": "$0.00" },
       "total_alt": { "amount": 0, "currency": "SLSH", "display": "0 SLSH" },
       "vat_rate": 0.05,
@@ -240,6 +246,9 @@ on first use.
     "fee":         { "amount": 167, "currency": "USD", "display": "$1.67" },
     "fee_alt":     { "amount": 13360, "currency": "SLSH", "display": "13,360 SLSH" },
     "fee_percent": 2.85,
+    "gst":         { "amount": 146, "currency": "USD", "display": "$1.46" },
+    "gst_alt":     { "amount": 11680, "currency": "SLSH", "display": "11,680 SLSH" },
+    "gst_percent": 2.5,
     "total":     { "amount": 5854, "currency": "USD", "display": "$58.54" },
     "total_alt": { "amount": 468320, "currency": "SLSH", "display": "468,320 SLSH" },
     "vat_rate": 0.05,

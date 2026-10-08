@@ -25,6 +25,7 @@ class PaymentSettingController extends Controller
             'title' => 'Payment Fees',
             'fees' => $this->settings->all(),
             'salesFee' => $this->settings->salesFee(),
+            'gst' => $this->settings->gst(),
             'currency' => config('exelo.alt_currency'),
         ]);
     }

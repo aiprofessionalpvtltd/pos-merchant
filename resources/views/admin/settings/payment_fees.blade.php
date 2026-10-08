@@ -21,7 +21,7 @@
                 <div class="card-body">
                     <p class="text-muted">
                         What a new merchant pays to sign up, what a merchant pays to verify their payout wallets,
-                        and the EXELO percent taken when a checkout sale is paid.
+                        the EXELO percent taken when a checkout sale is paid, and the GST percent shown on the cart.
                         Signup and verification amounts are in whole {{ $currency }}. The customer pays the base price plus the EXELO fee;
                         the app shows both separately. A change applies to new quotes and new sales straight away; payments already
                         requested keep the amount they were quoted.
@@ -84,6 +84,29 @@
                                    id="sales_fee_percent" name="fees[sales][percent]"
                                    value="{{ old('fees.sales.percent', number_format($salesFee['percent'], 2, '.', '')) }}">
                             @error('fees.sales.percent')
+                                <span class="text-danger">{{ $message }}</span>
+                            @enderror
+                        </div>
+                    </div>
+
+                    <h5 class="mt-4 mb-2">
+                        GST
+                        @if($gst['is_default'])
+                            <span class="badge bg-secondary">Using the default</span>
+                        @endif
+                    </h5>
+                    <p class="text-muted mb-2">
+                        Percent of the cart total (subtotal plus VAT). The cart shows this amount in USD and in SLSH.
+                        Product VAT on each line is separate from this tax.
+                    </p>
+
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label class="col-form-label" for="gst_percent">GST (%)<span class="text-danger">*</span></label>
+                            <input type="number" min="0" max="100" step="0.01" required class="form-control"
+                                   id="gst_percent" name="fees[gst][percent]"
+                                   value="{{ old('fees.gst.percent', number_format($gst['percent'], 2, '.', '')) }}">
+                            @error('fees.gst.percent')
                                 <span class="text-danger">{{ $message }}</span>
                             @enderror
                         </div>

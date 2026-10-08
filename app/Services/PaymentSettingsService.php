@@ -11,6 +11,7 @@ use Illuminate\Support\Facades\Log;
  * Fees an admin sets in the settings table.
  * Registration and verification fall back to config('exelo.registration.fees').
  * The sales fee is a percent of the sale total and falls back to the wallet fee rate (2.85%).
+ * GST is a percent of the cart total and falls back to 2.5%.
  */
 class PaymentSettingsService
 {
@@ -74,6 +75,29 @@ class PaymentSettingsService
     }
 
     /**
+     * GST, as a percent of the cart total (2.5 means 2.5%).
+     *
+     * @return array{percent: float, is_default: bool}
+     */
+    public function gst(): array
+    {
+        $stored = $this->stored()['gst_percent'] ?? null;
+
+        return [
+            'percent' => $stored === null ? $this->defaultGstPercent() : (float) $stored,
+            'is_default' => $stored === null,
+        ];
+    }
+
+    /**
+     * GST as a rate (2.5% is 0.025), applied to the cart total.
+     */
+    public function gstRate(): float
+    {
+        return $this->gst()['percent'] / 100;
+    }
+
+    /**
      * @param  array<string, array<string, int|float|string>>  $fees
      */
     public function update(array $fees, int $adminId): void
@@ -84,7 +108,11 @@ class PaymentSettingsService
             throw new ApiException('settings.missing', 'The settings record is missing. Run: php artisan db:seed --class=SettingSeeder', 409);
         }
 
-        $before = ['fees' => $this->all(), 'sales_fee_percent' => $this->salesFee()['percent']];
+        $before = [
+            'fees' => $this->all(),
+            'sales_fee_percent' => $this->salesFee()['percent'],
+            'gst_percent' => $this->gst()['percent'],
+        ];
 
         $setting->update([
             'registration_fee' => $fees['registration']['base'],
@@ -92,13 +120,18 @@ class PaymentSettingsService
             'verification_fee' => $fees['verification']['base'],
             'verification_fee_charge' => $fees['verification']['fee'],
             'sales_fee_percent' => round((float) $fees['sales']['percent'], 2),
+            'gst_percent' => round((float) $fees['gst']['percent'], 2),
         ]);
 
         Cache::forget(self::CACHE_KEY);
 
         Log::info('Payment fees changed by admin', [
             'before' => $before,
-            'after' => ['fees' => $this->all(), 'sales_fee_percent' => $this->salesFee()['percent']],
+            'after' => [
+                'fees' => $this->all(),
+                'sales_fee_percent' => $this->salesFee()['percent'],
+                'gst_percent' => $this->gst()['percent'],
+            ],
             'changed_by' => $adminId,
         ]);
     }
@@ -108,7 +141,12 @@ class PaymentSettingsService
      */
     private function stored(): array
     {
-        return Cache::rememberForever(self::CACHE_KEY, fn () => Setting::query()->first()?->only([...$this->columns(), 'sales_fee_percent']) ?? []);
+        return Cache::rememberForever(self::CACHE_KEY, fn () => Setting::query()->first()?->only([...$this->columns(), 'sales_fee_percent', 'gst_percent']) ?? []);
+    }
+
+    private function defaultGstPercent(): float
+    {
+        return round((float) config('exelo.payments.gst_percent'), 2);
     }
 
     private function defaultSalesFeePercent(): float

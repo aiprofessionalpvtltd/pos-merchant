@@ -236,6 +236,7 @@ class CartService
 
         $total = $subtotal + $vat;
         $feeCents = (int) round($total * $this->paymentSettings->salesFeeRate());
+        $gstCents = (int) round($total * $this->paymentSettings->gstRate());
 
         return [
             'cart_id' => $cart->id,
@@ -249,6 +250,9 @@ class CartService
                 'fee' => Money::usd($feeCents),
                 'fee_alt' => $this->alt($feeCents, $rate),
                 'fee_percent' => $this->paymentSettings->salesFee()['percent'],
+                'gst' => Money::usd($gstCents),
+                'gst_alt' => $this->alt($gstCents, $rate),
+                'gst_percent' => $this->paymentSettings->gst()['percent'],
                 'total' => Money::usd($total),
                 'total_alt' => $this->alt($total, $rate),
                 'vat_rate' => $merchant->vat_rate,
