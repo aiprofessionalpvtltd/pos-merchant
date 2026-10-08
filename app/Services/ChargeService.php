@@ -48,9 +48,12 @@ class ChargeService
                 ? $this->saleFromCart($actor, $merchant, $data)
                 : $this->saleFromOrder($merchant, $data);
 
-            $this->assertAmount($sale['total_cents'], $data['amount']);
+            $this->assertAmount($merchant, $data, $sale['total_cents']);
             $fee = $this->fee($merchant, $data, $rail, $sale['total_cents']);
-            $chargeCents = $sale['total_cents'] + ($fee['payer'] === 'customer' ? $fee['amount'] : 0);
+            $chargeCents = $sale['total_cents'] + ($fee['payer'] === 'customer' && $fee['unit'] === 'USD' ? $fee['amount'] : 0);
+            $billedShillings = $fee['unit'] === 'SLSH'
+                ? (int) $data['amount']['amount'] + ($fee['payer'] === 'customer' ? $fee['amount'] : 0)
+                : null;
 
             $this->assertNoOpenCharge($sale);
 
@@ -67,9 +70,10 @@ class ChargeService
                 'cart_type' => $sale['cart_type'],
                 'order_id' => $sale['order_id'],
                 'total_cents' => $sale['total_cents'],
-                'fee_cents' => $fee['amount'],
+                'fee_cents' => $fee['unit'] === 'USD' ? $fee['amount'] : (int) round($fee['amount'] / $rate * 100),
                 'fee_payer' => $fee['payer'],
                 'customer_charge_cents' => $chargeCents,
+                'billed_shillings' => $billedShillings,
                 'tendered' => $tendered,
                 'rate' => $rate,
             ];
@@ -175,18 +179,54 @@ class ChargeService
         ];
     }
 
-    private function assertAmount(int $totalCents, array $amount): void
+    private function assertAmount(Merchant $merchant, array $data, int $totalCents): void
     {
-        if ($amount['currency'] !== 'USD' || (int) $amount['amount'] !== $totalCents) {
-            throw new ApiException('payment.cart_changed', 'The amount does not match the sale total', 409, ['current_total' => Money::usd($totalCents)]);
+        $currency = strtoupper($data['amount']['currency']);
+        $given = (int) $data['amount']['amount'];
+
+        if ($currency === 'USD') {
+            if ($given !== $totalCents) {
+                throw new ApiException('payment.cart_changed', 'The amount does not match the sale total', 409, ['current_total' => Money::usd($totalCents)]);
+            }
+
+            return;
         }
+
+        $rate = $merchant->effectiveExchangeRate();
+        $cartShillings = (int) round($totalCents * $rate / 100);
+
+        if ($given === $cartShillings || $this->quotedShillings($merchant, $data) === $given) {
+            return;
+        }
+
+        throw new ApiException('payment.cart_changed', 'The amount does not match the sale total', 409, ['current_total' => Money::of($cartShillings, 'SLSH')]);
     }
 
     /**
-     * @return array{amount: int, payer: string}
+     * The shilling sale total locked by a quote, when this charge is using that quote.
+     */
+    private function quotedShillings(Merchant $merchant, array $data): ?int
+    {
+        if (empty($data['quote_id'])) {
+            return null;
+        }
+
+        $stored = Cache::get('payment-quote:'.$data['quote_id']);
+
+        if (! $stored || $stored['merchant_id'] !== $merchant->id || $stored['rail'] !== $data['rail'] || $stored['purpose'] !== $data['purpose']) {
+            return null;
+        }
+
+        return isset($stored['sale_slsh']) ? (int) $stored['sale_slsh'] : null;
+    }
+
+    /**
+     * @return array{amount: int, payer: string, unit: 'USD'|'SLSH'}
      */
     private function fee(Merchant $merchant, array $data, string $rail, int $totalCents): array
     {
+        $currency = strtoupper($data['amount']['currency'] ?? 'USD');
+
         if (isset($data['quote_id'])) {
             $stored = Cache::get('payment-quote:'.$data['quote_id']);
 
@@ -195,15 +235,30 @@ class ChargeService
             }
 
             $saleCents = $stored['sale_cents'] ?? (($stored['quote']['amount']['currency'] ?? null) === 'USD' ? $stored['quote']['amount']['amount'] : null);
+            $saleShillings = $stored['sale_slsh'] ?? null;
+            $matchesSale = $currency === 'SLSH'
+                ? $saleShillings === (int) $data['amount']['amount']
+                : $saleCents === $totalCents;
 
-            if ($stored['merchant_id'] !== $merchant->id || $stored['rail'] !== $rail || $stored['purpose'] !== $data['purpose'] || $saleCents !== $totalCents) {
-                throw new ApiException('validation.failed', 'Please check the form', 422, ['quote_id' => ['This quote is for a different payment. Send charge_amount from the quote, in USD.']], 'quote_id');
+            if ($stored['merchant_id'] !== $merchant->id || $stored['rail'] !== $rail || $stored['purpose'] !== $data['purpose'] || ! $matchesSale) {
+                throw new ApiException('validation.failed', 'Please check the form', 422, ['quote_id' => ['This quote is for a different payment']], 'quote_id');
             }
 
-            return ['amount' => (int) ($stored['fee_cents'] ?? $stored['quote']['fees']['platform']['amount']), 'payer' => $stored['fee_payer'] ?? $stored['quote']['fee_payer'] ?? 'merchant'];
+            if ($currency === 'SLSH') {
+                return ['amount' => (int) ($stored['fee_slsh'] ?? 0), 'payer' => $stored['fee_payer'] ?? 'merchant', 'unit' => 'SLSH'];
+            }
+
+            return ['amount' => (int) ($stored['fee_cents'] ?? $stored['quote']['fees']['platform']['amount']), 'payer' => $stored['fee_payer'] ?? $stored['quote']['fee_payer'] ?? 'merchant', 'unit' => 'USD'];
         }
 
-        return $this->payments->fee($merchant, $rail, $totalCents);
+        if ($currency === 'SLSH') {
+            $shillings = (int) round($totalCents * $merchant->effectiveExchangeRate() / 100);
+            $fee = $this->payments->fee($merchant, $rail, $shillings);
+
+            return $fee + ['unit' => 'SLSH'];
+        }
+
+        return $this->payments->fee($merchant, $rail, $totalCents) + ['unit' => 'USD'];
     }
 
     private function assertNoOpenCharge(array $sale): void
@@ -253,7 +308,7 @@ class ChargeService
             throw new ApiException('payment.wallet_invalid', 'That wallet number does not belong to '.ucfirst($rail), 422, [], 'customer.wallet_number');
         }
 
-        $shillings = (int) round($chargeCents * $merchant->effectiveExchangeRate() / 100);
+        $shillings = $meta['billed_shillings'] ?? (int) round($chargeCents * $merchant->effectiveExchangeRate() / 100);
         $issued = $this->gateway->issue($rail, $wallet, $shillings, config('exelo.alt_currency'), 'EXELO sale');
 
         $invoice = $this->record($actor, $merchant, $data, $sale, $meta + Invoice::issuedMeta($issued), [

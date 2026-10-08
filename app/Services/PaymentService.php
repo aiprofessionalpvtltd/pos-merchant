@@ -85,31 +85,31 @@ class PaymentService
         $currency = strtoupper($input['amount']['currency']);
         $amount = (int) $input['amount']['amount'];
         $rate = $merchant->effectiveExchangeRate();
-        // Charges are always the sale total in USD cents. An SLSH figure is snapped to
-        // the nearest cent first, then converted back, so the quote shows the shillings
-        // eDahab will actually be asked for (564 SLSH at 10,500 is 5 cents, billed as 525).
         $saleCents = $currency === 'USD' ? $amount : (int) round($amount / $rate * 100);
+        $saleSlsh = $currency === 'SLSH' ? $amount : (int) round($amount * $rate / 100);
 
-        if ($saleCents < 1) {
+        if ($currency === 'USD' && $saleCents < 1) {
             throw new ApiException('validation.failed', 'Please check the form', 422, ['amount.amount' => ['That amount is less than one cent']], 'amount.amount');
         }
 
-        $fee = $this->fee($merchant, $rail, $saleCents);
-        $customerCents = $saleCents + ($fee['payer'] === 'customer' ? $fee['amount'] : 0);
-        $merchantCents = $saleCents - ($fee['payer'] === 'merchant' ? $fee['amount'] : 0);
-        $inAskedCurrency = fn (int $cents): array => $currency === 'USD'
-            ? Money::usd($cents)
-            : Money::of((int) round($cents * $rate / 100), config('exelo.alt_currency'));
+        // Fee is worked out in the currency the till quoted, so an SLSH quote stays in whole
+        // shillings. Charging those shillings bills them as sent; charging USD uses the cents.
+        $feeBasis = $currency === 'SLSH' ? $saleSlsh : $saleCents;
+        $fee = $this->fee($merchant, $rail, $feeBasis);
+        $customerPaysFee = $fee['payer'] === 'customer';
+        $customerUnits = $feeBasis + ($customerPaysFee ? $fee['amount'] : 0);
+        $merchantUnits = $feeBasis - ($customerPaysFee ? 0 : $fee['amount']);
+        $money = fn (int $units): array => Money::of($units, $currency);
 
         $quote = [
             'quote_id' => 'qte_'.Str::upper(Str::ulid()->toBase32()),
             'shop' => $this->shopSummary($merchant),
-            'amount' => Money::of($amount, $currency),
-            'customer_charge' => $inAskedCurrency($customerCents),
-            'merchant_receives' => $inAskedCurrency($merchantCents),
+            'amount' => $money($amount),
+            'customer_charge' => $money($customerUnits),
+            'merchant_receives' => $money($merchantUnits),
             'fees' => [
-                'platform' => $inAskedCurrency($fee['amount']),
-                'rail' => $inAskedCurrency(0),
+                'platform' => $money($fee['amount']),
+                'rail' => $money(0),
             ],
             'fee_payer' => $fee['amount'] > 0 ? $fee['payer'] : null,
             'amount_alt' => $this->alternate($amount, $currency, $rate),
@@ -125,7 +125,9 @@ class PaymentService
                 'rail' => $rail,
                 'purpose' => $input['purpose'],
                 'sale_cents' => $saleCents,
-                'fee_cents' => $fee['amount'],
+                'sale_slsh' => $saleSlsh,
+                'fee_cents' => $currency === 'USD' ? $fee['amount'] : (int) round($fee['amount'] / $rate * 100),
+                'fee_slsh' => $currency === 'SLSH' ? $fee['amount'] : (int) round($fee['amount'] * $rate / 100),
                 'fee_payer' => $fee['payer'],
                 'quote' => $quote,
             ],

@@ -270,22 +270,19 @@ always carries both: `amount` in the currency you sent, and `amount_alt` in the
 other one, at `exchange_rate` (SLSH per 1 USD, the shop's rate). Show both on
 the payment screen. eDahab is billed in **SLSH** (whole shillings).
 
-`POST /payments/charges` accepts **USD only**. `charge_amount` is that USD
-figure: post it as `amount`, with `cart_id` for a sale. Do not post the SLSH
-`customer_charge`. An SLSH body is `422 validation.failed` with
-`error.field: amount.currency` and the message under `error.details`.
+`POST /payments/charges` accepts **USD or SLSH**. Send either one.
 
-An SLSH amount is snapped to the nearest USD cent before the fee is worked out,
-then converted back. The shillings in `customer_charge` are what eDahab will be
-asked for, which can be lower than the shillings you sent. 564 SLSH at a rate
-of 10,500 is 5 cents (`charge_amount`) and is billed as **525 SLSH**.
+- **USD** — `charge_amount` from the quote, or the ticket total in cents. eDahab and Zaad are then billed the shilling value of those cents.
+- **SLSH** — the whole shillings to collect. eDahab and Zaad are billed that figure, not a cent round-trip. 564 SLSH is invoiced as **564 SLSH**. `charge_amount` is still there if the customer pays in dollars instead.
+
+A shilling charge must equal the ticket's SLSH total, or the SLSH amount on `quote_id`. `cart_id` is still required for a sale.
 
 | Field | Meaning |
 | --- | --- |
 | `shop` | The shop this quote is for — the token's current shop, as on [`GET /payments/methods`](#1-get-apiv1paymentsmethods--which-payment-methods-the-shop-accepts) |
 | `amount` | What was asked for |
-| `charge_amount` | The sale total in **USD cents**. This is the `amount` to send on [`POST /payments/charges`](#3-post-apiv1paymentscharges--start-a-payment) |
-| `customer_charge` | What the customer is billed, in the currency you sent. For SLSH this is the snapped bill, not always the figure you typed |
+| `charge_amount` | The same sale in **USD cents**, if the customer pays in dollars |
+| `customer_charge` | What the customer is billed, in the currency you sent. An SLSH quote stays in whole shillings |
 | `merchant_receives` | What lands in the shop |
 | `fees.platform` | The EXELO sales fee: the **Sales fee (%)** from Admin → Payment Fees, applied to `amount` and rounded to the nearest unit. Empty uses the default **2.85%** (`EXELO_WALLET_FEE_RATE`). Cash quotes are `0` |
 | `fees.rail` | Always `0` for now; kept so a separate provider fee can be added without changing the response |
@@ -351,7 +348,7 @@ required.** Needs the `pos` permission.
 | --- | --- | --- | --- |
 | `rail` | enum | yes | `zaad` \| `edahab` \| `cash` \| `card` \| `nfc` |
 | `purpose` | enum | yes | `pos_sale` or `order_settlement`. The other purposes are created by their own modules. |
-| `amount` | Money | yes | The sale total in **USD** (`currency` must be `USD`). Use `charge_amount` from the quote. Must equal the ticket or order total, or `409 payment.cart_changed`. SLSH is rejected: `422 validation.failed`, `error.field` is `amount.currency`, and `error.details` names every invalid field |
+| `amount` | Money | yes | The sale total in **USD or SLSH**. USD must equal the ticket total in cents. SLSH must equal the ticket's shilling total, or the shilling amount on `quote_id`. Otherwise `409 payment.cart_changed` with `error.details.current_total` in the currency you sent. `cart_id` is required for a sale |
 | `quote_id` | string | no | Locks the quoted fees |
 | `customer.wallet_number` | string | On wallet rails | The number to bill; must belong to the rail |
 | `customer.name` | string | no | Recorded on the receipt |
@@ -837,7 +834,7 @@ Show both, for example `$37.74` and `301,920 SLSH`, plus `fees` and who pays
 them (`fee_payer`). Keep `quote_id`. The quote lasts 15 minutes; after that
 step 2 returns `410 quote.expired` and the app quotes again.
 
-eDahab will be billed the SLSH total. On Gold the fee is added to what the
+eDahab is billed in whole shillings. On Gold the fee is added to what the
 customer pays; on Silver it is taken from the shop. Cash has no fee.
 
 ### Step 2 — Send the payment to eDahab
@@ -856,8 +853,10 @@ customer pays; on Silver it is taken from the shop. Cash has no fee.
 }
 ```
 
-- `amount` here is the sale total in **USD**, and it must match the ticket.
-  The server converts it to SLSH and sends that to eDahab `IssueInvoice`.
+- `amount` is the sale total in **USD or SLSH**, and it must match the ticket
+  (or the SLSH amount on `quote_id`). USD is converted to shillings for
+  `IssueInvoice`. SLSH is sent as the whole shillings you posted, with no
+  cent round-trip.
 - `customer.wallet_number` must be an eDahab number (`65`, `66` or `62`). A Zaad
   number returns `422 payment.wallet_invalid`.
 - Generate `idempotency_key` **once** when the shopkeeper taps Charge and reuse
@@ -1215,7 +1214,7 @@ card session and webhooks) are not. How the built part works, and what is open:
 - **What a charge does.** `POST /payments/charges` (or `/cart/pay`,
   `/orders/{id}/pay`, which call it) checks the rail against
   [`accepts`](#1-get-apiv1paymentsmethods--which-payment-methods-the-shop-accepts),
-  checks that `amount` (USD) equals the sale total, and works out the fee. For
+  checks that `amount` (USD or SLSH) equals the sale total, and works out the fee. For
   **cash** it records the charge as paid at once. For **eDahab** it calls
   `IssueInvoice` and, when that answer is `InvoiceStatus: "Paid"`, stores the
   invoice as `Paid` and returns `200` with the order — the same auto-settle as
@@ -1223,11 +1222,13 @@ card session and webhooks) are not. How the built part works, and what is open:
   If eDahab has not confirmed yet, it returns `202` and the sale completes when
   a poll's `CheckInvoiceStatus` says `Paid`. **Zaad** stays `202` until the
   customer approves and a poll commits it.
-- **Currency.** A quote accepts **USD or SLSH** and returns the other as
-  `amount_alt`. The charge request amount is **USD** (the ticket). A wallet is
-  billed in **SLSH** (`customer_charge` in cents × the shop rate ÷ 100, whole
-  shillings). Cash is recorded in USD. On the charge response, `amount.currency`
-  is `SLSH` for a wallet and `USD` for cash, and `customer_charge` is the USD figure.
+- **Currency.** A quote and a charge both accept **USD or SLSH**. The quote
+  returns the other as `amount_alt`, and `customer_charge` stays in the currency
+  you sent (an SLSH quote is not snapped to cents). A USD wallet charge is billed
+  in SLSH (`cents × the shop rate ÷ 100`). An SLSH wallet charge is billed as the
+  whole shillings you sent. Cash is recorded in USD. On the charge response,
+  `amount.currency` is `SLSH` for a wallet and `USD` for cash, and
+  `customer_charge` is the USD figure.
 - **On `paid`** (cash immediately, eDahab as soon as `IssueInvoice` says `Paid`,
   otherwise on the poll that sees it) one
   transaction creates the order (`pos_sale`) or settles it (`order_settlement`),

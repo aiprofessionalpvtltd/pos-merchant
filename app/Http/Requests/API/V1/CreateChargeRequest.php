@@ -18,7 +18,7 @@ class CreateChargeRequest extends FormRequest
             'purpose' => ['required', 'in:pos_sale,order_settlement'],
             'amount' => ['required', 'array'],
             'amount.amount' => ['required', 'integer', 'min:1', 'max:100000000'],
-            'amount.currency' => ['required', 'in:USD'],
+            'amount.currency' => ['required', 'in:USD,SLSH'],
             'quote_id' => ['sometimes', 'nullable', 'string', 'max:64'],
             'customer' => ['sometimes', 'array'],
             'customer.wallet_number' => ['sometimes', 'nullable', 'string', 'max:20'],
@@ -34,7 +34,7 @@ class CreateChargeRequest extends FormRequest
     public function messages(): array
     {
         return [
-            'amount.currency.in' => 'The charge amount must be in USD. Post charge_amount from the quote, not the SLSH total.',
+            'amount.currency.in' => 'The charge amount must be USD or SLSH.',
             'cart_id.required_if' => 'The cart is required for a sale.',
         ];
     }

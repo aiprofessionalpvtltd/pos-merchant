@@ -119,19 +119,19 @@ it('quotes the EXELO sales fee percent saved in payment settings', function () {
         ->assertJsonPath('data.merchant_receives.amount', 3585);
 });
 
-it('snaps an SLSH quote to the USD cents a charge must send', function () {
+it('keeps an SLSH quote in whole shillings and still offers the USD equivalent', function () {
     $owner = makeMerchant('2580');
     $owner->merchant->update(['exchange_rate' => 10500]);
 
-    // 564 SLSH at 10,500 is 5 cents, and those 5 cents bill as 525 SLSH.
+    // 564 SLSH stays 564. charge_amount is the optional USD cent figure (5 cents).
     test()->withToken(ownerToken())->postJson('/api/v1/payments/quote', quoteBody(['amount' => ['amount' => 564, 'currency' => 'SLSH']]))
         ->assertOk()
         ->assertJsonPath('data.amount.amount', 564)
         ->assertJsonPath('data.amount.currency', 'SLSH')
+        ->assertJsonPath('data.customer_charge.amount', 564)
+        ->assertJsonPath('data.customer_charge.currency', 'SLSH')
         ->assertJsonPath('data.charge_amount.amount', 5)
         ->assertJsonPath('data.charge_amount.currency', 'USD')
-        ->assertJsonPath('data.customer_charge.amount', 525)
-        ->assertJsonPath('data.customer_charge.currency', 'SLSH')
         ->assertJsonPath('data.amount_alt.amount', 5);
 });
 

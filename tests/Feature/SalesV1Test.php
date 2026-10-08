@@ -631,6 +631,26 @@ it('produces a receipt for an order', function () {
     test()->withToken($token)->getJson('/api/v1/orders/999999/receipt')->assertStatus(404);
 });
 
+it('bills the shillings sent on an eDahab charge without snapping them to cents', function () {
+    [$owner, $token, $rice] = till();
+    $owner->merchant->update(['exchange_rate' => 10500]);
+    app('auth')->forgetGuards();
+    fillTicket($token, $rice['id']);
+    $cart = ticket($token);
+
+    $quoteId = test()->withToken($token)->postJson('/api/v1/payments/quote', [
+        'amount' => ['amount' => 564, 'currency' => 'SLSH'], 'rail' => 'edahab', 'purpose' => 'pos_sale',
+    ])->assertOk()->assertJsonPath('data.customer_charge.amount', 564)->json('data.quote_id');
+
+    test()->withToken($token)->postJson('/api/v1/payments/charges', [
+        'rail' => 'edahab', 'purpose' => 'pos_sale', 'amount' => ['amount' => 564, 'currency' => 'SLSH'],
+        'quote_id' => $quoteId, 'cart_id' => $cart['cart_id'], 'customer' => ['wallet_number' => '+252651110009'],
+        'idempotency_key' => freshKey(),
+    ])->assertStatus(202)->assertJsonPath('data.amount.amount', 564)->assertJsonPath('data.amount.currency', 'SLSH');
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'IssueInvoice') && json_decode($request->body(), true)['Amount'] === 564);
+});
+
 it('starts a charge directly for a ticket, locking a quote and refusing a changed total', function () {
     [, $token, $rice] = till();
     fillTicket($token, $rice['id']);
@@ -643,8 +663,11 @@ it('starts a charge directly for a ticket, locking a quote and refusing a change
     $charge(['cart_version' => $cart['version'] - 1])->assertStatus(409)->assertJsonPath('error.code', 'payment.cart_changed');
     $charge(['cart_id' => 999999])->assertStatus(404)->assertJsonPath('error.code', 'cart.not_found');
     $charge(['quote_id' => 'qte_GONE'])->assertStatus(410)->assertJsonPath('error.code', 'quote.expired');
-    $slsh = $charge(['amount' => ['amount' => 3885, 'currency' => 'SLSH']])->assertStatus(422)->assertJsonPath('error.field', 'amount.currency');
-    expect($slsh->json('error.details'))->toHaveKey('amount.currency');
+    $charge(['amount' => ['amount' => 3885, 'currency' => 'SLSH']])
+        ->assertStatus(409)
+        ->assertJsonPath('error.code', 'payment.cart_changed')
+        ->assertJsonPath('error.details.current_total.amount', 310800)
+        ->assertJsonPath('error.details.current_total.currency', 'SLSH');
     $charge(['cart_id' => null])->assertStatus(422);
 
     $quote = test()->withToken($token)->postJson('/api/v1/payments/quote', ['amount' => ['amount' => 3885, 'currency' => 'USD'], 'rail' => 'edahab', 'purpose' => 'pos_sale'])->json('data.quote_id');
