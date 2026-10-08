@@ -734,8 +734,9 @@ curl $BASE/orders/549/receipt -H 'Accept: application/json' -H "Authorization: B
   `null` (fixed while writing this doc: `createFromLines()` was leaving it
   unset until the next read).
 - **Totals.** `subtotal` is the sum of the lines, `vat` is each line's VAT,
-  and `total` is `subtotal + vat`. `fee` is the platform fee taken on a wallet
-  payment (`0` for cash), kept for reporting; whether the customer or the shop
+  and `total` is `subtotal + vat`. `fee` is the EXELO sales fee taken when the
+  sale was paid on a wallet (the **Sales fee (%)** from Admin → Payment Fees,
+  default 2.85%; `0` for cash), kept for reporting; whether the customer or the shop
   paid it is on the [charge](payments.md), not the order. `totals.vat_rate` is
   `vat ÷ subtotal`, so it can show a little rounding noise (e.g. `0.0503`
   instead of `0.05`) on a multi-line order where each line's VAT was rounded

@@ -20,6 +20,7 @@ class UpdatePaymentSettingsRequest extends FormRequest
             'fees.registration.fee' => $amount,
             'fees.verification.base' => $amount,
             'fees.verification.fee' => $amount,
+            'fees.sales.percent' => ['required', 'numeric', 'min:0', 'max:100', 'decimal:0,2'],
         ];
     }
 
@@ -30,6 +31,7 @@ class UpdatePaymentSettingsRequest extends FormRequest
             'fees.registration.fee' => 'registration EXELO fee',
             'fees.verification.base' => 'verification base price',
             'fees.verification.fee' => 'verification EXELO fee',
+            'fees.sales.percent' => 'EXELO sales fee',
         ];
     }
 

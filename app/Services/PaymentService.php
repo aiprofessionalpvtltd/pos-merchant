@@ -16,6 +16,7 @@ class PaymentService
     public function __construct(
         private readonly MerchantProfileService $profiles,
         private readonly SubscriptionService $subscriptions,
+        private readonly PaymentSettingsService $paymentSettings,
     ) {}
 
     public function methods(Merchant $merchant): array
@@ -115,7 +116,8 @@ class PaymentService
     }
 
     /**
-     * Cash carries no fee. Wallet rails carry one combined rate, paid by the customer on Gold and by the shop otherwise.
+     * Cash carries no fee. Wallet rails carry the EXELO sales fee percent from payment settings,
+     * paid by the customer on Gold and by the shop otherwise.
      *
      * @return array{amount: int, payer: 'customer'|'merchant'}
      */
@@ -127,7 +129,7 @@ class PaymentService
             return ['amount' => 0, 'payer' => $payer];
         }
 
-        return ['amount' => (int) round($amount * config('exelo.payments.wallet_fee_rate')), 'payer' => $payer];
+        return ['amount' => (int) round($amount * $this->paymentSettings->salesFeeRate()), 'payer' => $payer];
     }
 
     private function alternate(int $amount, string $currency, int $rate): array

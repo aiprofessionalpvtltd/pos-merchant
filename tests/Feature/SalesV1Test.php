@@ -6,15 +6,18 @@ use App\Models\Merchant;
 use App\Models\MerchantSubscription;
 use App\Models\Order;
 use App\Models\ProductInventory;
+use App\Models\Setting;
 use Database\Seeders\PlanCatalogueSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 
 uses(DatabaseTransactions::class);
 
 beforeEach(function () {
     (new PlanCatalogueSeeder)->run();
+    Cache::forget('settings:payment-fees');
 
     Http::fake([
         'edahab.net/api/api/IssueInvoice*' => Http::response(['StatusDescription' => 'Success', 'InvoiceId' => 555001]),
@@ -332,6 +335,30 @@ it('passes the wallet fee to the customer on Gold', function () {
         ->assertJsonPath('data.status', 'paid')->assertJsonPath('data.amount.amount', 319680);
 
     expect((float) orders()->first()->exelo_amount)->toBe(1.11)->and((float) orders()->first()->total_price)->toBe(38.85);
+});
+
+it('applies the saved EXELO sales fee when a checkout sale is paid', function () {
+    [$owner, $token, $rice] = till();
+    MerchantSubscription::where('merchant_id', $owner->merchant->id)->update(['subscription_plan_id' => 1]);
+
+    if (! Setting::query()->exists()) {
+        DB::table('settings')->insert(['company_name' => 'EXELO', 'company_email' => 'sales-fee@example.test', 'company_website' => 'sales-fee.example.test']);
+    }
+
+    Setting::query()->update(['sales_fee_percent' => 5]);
+    Cache::forget('settings:payment-fees');
+    app('auth')->forgetGuards();
+    fillTicket($token, $rice['id']);
+
+    $chargeId = payCart($token, ['rail' => 'edahab', 'customer' => ['wallet_number' => '+252651110009']])->assertStatus(202)->json('data.charge_id');
+
+    Cache::put('test-edahab-status', 'Paid');
+    app('auth')->forgetGuards();
+    test()->withToken($token)->getJson('/api/v1/payments/charges/'.$chargeId)
+        ->assertJsonPath('data.status', 'paid')->assertJsonPath('data.amount.amount', 326320);
+
+    // $38.85 sale at 5% is $1.94, added to the customer charge on Gold.
+    expect((float) orders()->first()->exelo_amount)->toBe(1.94)->and((float) orders()->first()->total_price)->toBe(38.85);
 });
 
 it('holds a ticket as a pending order without touching stock', function () {

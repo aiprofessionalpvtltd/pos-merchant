@@ -13,6 +13,7 @@ use App\Models\OrderItem;
 use App\Models\Product;
 use App\Models\ProductInventory;
 use App\Models\Transaction;
+use App\Services\PaymentSettingsService;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -1379,6 +1380,7 @@ class OrderController extends BaseController
             $cartType = $request->cart_type;
             $orderID = $request->order_id;
             $phoneNumber = $authUser->merchant->phone_number;
+            $salesFeeRate = app(PaymentSettingsService::class)->salesFeeRate();
 
             // Check if cart exists and is not empty
             if ($cartType != null && $orderID == null) {
@@ -1415,7 +1417,7 @@ class OrderController extends BaseController
                     $exeloCharge = env('EXELO_CHARGE', 0.02); // Set a default value for Exelo charge
                     $exeloAmount = $totalPrice * $exeloCharge;
 
-                    $exeloFee = $totalPrice * 0.0285; // Exelo fee for merchants: 2.85%
+                    $exeloFee = $totalPrice * $salesFeeRate;
                     $amountSentToMerchant = $totalPrice - $exeloFee;
 
                     //                dd($totalPrice,$exeloAmount , $amountSentToMerchant);
@@ -1484,7 +1486,7 @@ class OrderController extends BaseController
                 $order->order_status = 'Paid';
                 $order->save();
 
-                $exeloFee = $order->sub_total * 0.0285; // Exelo fee for merchants: 2.85%
+                $exeloFee = $order->sub_total * $salesFeeRate;
                 $amountSentToMerchant = $order->sub_total - $exeloFee;
 
                 // Save the transaction details

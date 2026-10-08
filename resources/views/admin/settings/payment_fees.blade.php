@@ -20,9 +20,10 @@
 
                 <div class="card-body">
                     <p class="text-muted">
-                        What a new merchant pays to sign up, and what a merchant pays to verify their payout wallets.
-                        Amounts are in whole {{ $currency }}. The customer pays the base price plus the EXELO fee;
-                        the app shows both separately. A change applies to new quotes straight away; payments already
+                        What a new merchant pays to sign up, what a merchant pays to verify their payout wallets,
+                        and the EXELO percent taken when a checkout sale is paid.
+                        Signup and verification amounts are in whole {{ $currency }}. The customer pays the base price plus the EXELO fee;
+                        the app shows both separately. A change applies to new quotes and new sales straight away; payments already
                         requested keep the amount they were quoted.
                     </p>
 
@@ -63,6 +64,30 @@
                             </div>
                         </div>
                     @endforeach
+
+                    <h5 class="mt-4 mb-2">
+                        EXELO sales fee
+                        @if($salesFee['is_default'])
+                            <span class="badge bg-secondary">Using the default</span>
+                        @endif
+                    </h5>
+                    <p class="text-muted mb-2">
+                        Percent of the sale total, applied when checkout completes a payment.
+                        On wallet payments, Gold shops add it to what the customer pays; other plans deduct it from what the shop receives.
+                        Cash sales are not charged this fee.
+                    </p>
+
+                    <div class="row">
+                        <div class="col-md-3">
+                            <label class="col-form-label" for="sales_fee_percent">Sales fee (%)<span class="text-danger">*</span></label>
+                            <input type="number" min="0" max="100" step="0.01" required class="form-control"
+                                   id="sales_fee_percent" name="fees[sales][percent]"
+                                   value="{{ old('fees.sales.percent', number_format($salesFee['percent'], 2, '.', '')) }}">
+                            @error('fees.sales.percent')
+                                <span class="text-danger">{{ $message }}</span>
+                            @enderror
+                        </div>
+                    </div>
 
                     @can('edit-setting')
                         <div class="mt-4">

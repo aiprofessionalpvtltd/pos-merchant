@@ -23,7 +23,8 @@ return [
     ],
 
     'payments' => [
-        // One combined fee on wallet payments. Gold shops pass it to the customer, other plans absorb it.
+        // Default EXELO sales fee when settings.sales_fee_percent is empty. The payment-fees screen overrides this.
+        // Gold shops pass it to the customer, other plans absorb it. 0.0285 is 2.85%.
         'wallet_fee_rate' => (float) env('EXELO_WALLET_FEE_RATE', 0.0285),
         'quote_ttl_seconds' => 900,
         'card' => ['enabled' => (bool) env('EXELO_CARD_ENABLED', false), 'environment' => env('BRAINTREE_ENVIRONMENT', 'sandbox')],

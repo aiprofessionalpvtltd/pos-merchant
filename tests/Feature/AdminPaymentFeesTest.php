@@ -16,7 +16,7 @@ beforeEach(function () {
         DB::table('settings')->insert(['company_name' => 'EXELO', 'company_email' => 'fees-test@example.test', 'company_website' => 'fees-test.example.test']);
     }
 
-    Setting::query()->update(['registration_fee' => null, 'registration_fee_charge' => null, 'verification_fee' => null, 'verification_fee_charge' => null]);
+    Setting::query()->update(['registration_fee' => null, 'registration_fee_charge' => null, 'verification_fee' => null, 'verification_fee_charge' => null, 'sales_fee_percent' => null]);
     Cache::forget('settings:payment-fees');
 
     config(['exelo.registration.fees' => [
@@ -36,11 +36,12 @@ function feesAdmin(array $permissions = ['view-setting', 'edit-setting']): User
     return $admin;
 }
 
-function feesBody(int $regBase, int $regFee, int $verBase, int $verFee): array
+function feesBody(int $regBase, int $regFee, int $verBase, int $verFee, float $salesPercent = 2.85): array
 {
     return ['fees' => [
         'registration' => ['base' => $regBase, 'fee' => $regFee],
         'verification' => ['base' => $verBase, 'fee' => $verFee],
+        'sales' => ['percent' => $salesPercent],
     ]];
 }
 
@@ -107,8 +108,21 @@ it('shows the fee page with the current values and total', function () {
         ->assertOk()
         ->assertSee('Base price')
         ->assertSee('EXELO fee')
+        ->assertSee('EXELO sales fee')
+        ->assertSee('Sales fee')
+        ->assertSee('2.85')
         ->assertSee('550 SLSH')
         ->assertSee('Using the default');
+});
+
+it('saves the EXELO sales fee percent', function () {
+    test()->actingAs(feesAdmin(), 'web')
+        ->put(route('admin.settings.payment-fees.update'), feesBody(1000, 150, 700, 70, 3.5))
+        ->assertRedirect(route('admin.settings.payment-fees.edit'))
+        ->assertSessionHas('success');
+
+    expect((float) Setting::query()->value('sales_fee_percent'))->toBe(3.5)
+        ->and(app(App\Services\PaymentSettingsService::class)->salesFee()['percent'])->toBe(3.5);
 });
 
 it('validates every fee', function () {
@@ -127,6 +141,7 @@ it('accepts amounts typed with thousands separators', function () {
         ->put(route('admin.settings.payment-fees.update'), ['fees' => [
             'registration' => ['base' => '92,000', 'fee' => '1 000'],
             'verification' => ['base' => '700', 'fee' => '70'],
+            'sales' => ['percent' => '2.85'],
         ]])
         ->assertSessionHasNoErrors();
 

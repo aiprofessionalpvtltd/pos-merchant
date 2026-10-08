@@ -11,18 +11,22 @@ legacy API keyed the cart to the merchant alone.
 > enforced or built yet: the `cart.has_held_lines` guard (the server cannot see lines
 > that exist only on the device) and the `card` and `nfc` payment rails.
 
-| Method | Path | Auth |
-| --- | --- | --- |
-| GET | `/cart` | Bearer · `pos` |
-| POST | `/cart/items` | Bearer · `pos` |
-| PATCH | `/cart/items/{product_id}` | Bearer · `pos` |
+
+| Method | Path                       | Auth           |
+| ------ | -------------------------- | -------------- |
+| GET    | `/cart`                    | Bearer · `pos` |
+| POST   | `/cart/items`              | Bearer · `pos` |
+| PATCH  | `/cart/items/{product_id}` | Bearer · `pos` |
 | DELETE | `/cart/items/{product_id}` | Bearer · `pos` |
-| DELETE | `/cart` | Bearer · `pos` |
-| POST | `/cart/sync` | Bearer · `pos` |
-| POST | `/cart/pay` | Bearer · `pos` |
-| POST | `/cart/hold` | Bearer · `pos` |
+| DELETE | `/cart`                    | Bearer · `pos` |
+| POST   | `/cart/sync`               | Bearer · `pos` |
+| POST   | `/cart/pay`                | Bearer · `pos` |
+| POST   | `/cart/hold`               | Bearer · `pos` |
+
 
 ---
+
+
 
 ## Complete endpoint list
 
@@ -30,32 +34,38 @@ Full URL = `{BASE_URL}/api/v1` + path. Every cart endpoint needs the `pos` permi
 
 **Headers**
 
-| Header | Sent on | Value |
-| --- | --- | --- |
-| `Accept` | Every request | `application/json` |
-| `Content-Type` | Requests with a body | `application/json` |
-| `Authorization` | Every request | `Bearer <token>` from [`POST /auth/pin/login`](auth.md#post-authpinlogin). The token carries the device, which is what separates one till's ticket from another's. |
-| `If-Match` | `PATCH /cart/items/{product_id}` (optional) | The cart `version` you last read |
 
-| # | Method | Full path | Purpose | Body / query | Success | Errors |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | GET | `/api/v1/cart` | The current ticket with totals | `type` | `200` | `403`, `422` |
-| 2 | POST | `/api/v1/cart/items` | Add a line, or add to one already there | `product_id`, `quantity`, `type`, `unit_price`, `idempotency_key` | `200` | `404 product.not_found`, `409 product.out_of_stock`, `409 idempotency.key_reused`, `422 cart.quantity_invalid` |
-| 3 | PATCH | `/api/v1/cart/items/{product_id}` | Change quantity or price | `quantity`, `unit_price`, `type` | `200` | `404 cart.line_not_found`, `409 cart.version_conflict`, `409 product.out_of_stock`, `422 cart.quantity_invalid` |
-| 4 | DELETE | `/api/v1/cart/items/{product_id}` | Remove a line | `type` | `200` | `404 cart.line_not_found` |
-| 5 | DELETE | `/api/v1/cart` | Cancel the sale (clear the ticket) | `type` | `200` | — |
-| 6 | POST | `/api/v1/cart/sync` | Reconcile a ticket held offline | `client_ticket_id`, `lines[]`, `strategy`, `idempotency_key` | `200` | `409 idempotency.key_reused`, `422` |
-| 7 | POST | `/api/v1/cart/pay` | Complete the sale | `cart_version`, `rail`, `amount_tendered`, `customer`, `idempotency_key` | `200` paid / `202` waiting | `409`, `422`, `502` (see [endpoint 7](#7-post-apiv1cartpay--complete-the-sale)) |
-| 8 | POST | `/api/v1/cart/hold` | Park the ticket as a pending order | `customer`, `note`, `idempotency_key` | `201` | `422 cart.empty`, `422 validation.failed` |
+| Header          | Sent on                                     | Value                                                                                                                                                              |
+| --------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `Accept`        | Every request                               | `application/json`                                                                                                                                                 |
+| `Content-Type`  | Requests with a body                        | `application/json`                                                                                                                                                 |
+| `Authorization` | Every request                               | `Bearer <token>` from `[POST /auth/pin/login](auth.md#post-authpinlogin)`. The token carries the device, which is what separates one till's ticket from another's. |
+| `If-Match`      | `PATCH /cart/items/{product_id}` (optional) | The cart `version` you last read                                                                                                                                   |
+
+
+
+| #   | Method | Full path                         | Purpose                                 | Body / query                                                             | Success                    | Errors                                                                                                          |
+| --- | ------ | --------------------------------- | --------------------------------------- | ------------------------------------------------------------------------ | -------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| 1   | GET    | `/api/v1/cart`                    | The current ticket with totals          | `type`                                                                   | `200`                      | `403`, `422`                                                                                                    |
+| 2   | POST   | `/api/v1/cart/items`              | Add a line, or add to one already there | `product_id`, `quantity`, `type`, `unit_price`, `idempotency_key`        | `200`                      | `404 product.not_found`, `409 product.out_of_stock`, `409 idempotency.key_reused`, `422 cart.quantity_invalid`  |
+| 3   | PATCH  | `/api/v1/cart/items/{product_id}` | Change quantity or price                | `quantity`, `unit_price`, `type`                                         | `200`                      | `404 cart.line_not_found`, `409 cart.version_conflict`, `409 product.out_of_stock`, `422 cart.quantity_invalid` |
+| 4   | DELETE | `/api/v1/cart/items/{product_id}` | Remove a line                           | `type`                                                                   | `200`                      | `404 cart.line_not_found`                                                                                       |
+| 5   | DELETE | `/api/v1/cart`                    | Cancel the sale (clear the ticket)      | `type`                                                                   | `200`                      | —                                                                                                               |
+| 6   | POST   | `/api/v1/cart/sync`               | Reconcile a ticket held offline         | `client_ticket_id`, `lines[]`, `strategy`, `idempotency_key`             | `200`                      | `409 idempotency.key_reused`, `422`                                                                             |
+| 7   | POST   | `/api/v1/cart/pay`                | Complete the sale                       | `cart_version`, `rail`, `amount_tendered`, `customer`, `idempotency_key` | `200` paid / `202` waiting | `409`, `422`, `502` (see [endpoint 7](#7-post-apiv1cartpay--complete-the-sale))                                 |
+| 8   | POST   | `/api/v1/cart/hold`               | Park the ticket as a pending order      | `customer`, `note`, `idempotency_key`                                    | `201`                      | `422 cart.empty`, `422 validation.failed`                                                                       |
+
 
 **Status codes shared by every endpoint**
 
-| Status | Code | Meaning |
-| --- | --- | --- |
-| `401` | `auth.token_invalid` | Missing, revoked or expired token: clear the session |
-| `403` | `auth.permission_denied` | The user lacks the `pos` permission (`error.details.required_permission`) |
-| `422` | `validation.failed` | Per-field messages in `error.details` |
-| `429` | `rate_limited` | Slow down; honour `Retry-After` |
+
+| Status | Code                     | Meaning                                                                   |
+| ------ | ------------------------ | ------------------------------------------------------------------------- |
+| `401`  | `auth.token_invalid`     | Missing, revoked or expired token: clear the session                      |
+| `403`  | `auth.permission_denied` | The user lacks the `pos` permission (`error.details.required_permission`) |
+| `422`  | `validation.failed`      | Per-field messages in `error.details`                                     |
+| `429`  | `rate_limited`           | Slow down; honour `Retry-After`                                           |
+
 
 **Response envelope.** Every response carries `success`, `message`, `data` (or
 `error`) and `meta.request_id` / `meta.server_time`. Branch on `error.code`, never
@@ -63,16 +73,22 @@ on `message`. See [errors.md](errors.md).
 
 ---
 
+
+
 ## Concepts
+
+
 
 ### One ticket per till
 
 A ticket belongs to one shop, one signed-in user, one device and one `type`:
 
-| `type` | Sells from |
-| --- | --- |
-| `shop` (default) | The shelf (`in_shop` stock) |
-| `stock` | The back room (`in_stock` stock) |
+
+| `type`           | Sells from                       |
+| ---------------- | -------------------------------- |
+| `shop` (default) | The shelf (`in_shop` stock)      |
+| `stock`          | The back room (`in_stock` stock) |
+
 
 Two tills in the same shop never share a ticket, and the same user signed in on two
 devices gets two. The device comes from the login (`X-EXELO-Device-Id`). Tickets made
@@ -88,15 +104,17 @@ scan. It carries a `version` that goes up by one on every change. Send it back a
 
 ### How the totals are worked out
 
-| Field | How |
-| --- | --- |
-| `unit_price` | The catalogue price **before VAT**, unless the shopkeeper overrode it |
-| `line_total` | `unit_price` × `quantity` |
-| `subtotal` | Sum of the `line_total`s |
-| `vat` | Each line's total × its product's VAT rate, rounded per line, summed |
-| `fee` | Always `0` in the cart: the wallet fee depends on the rail, so it comes from [`POST /payments/quote`](payments.md#2-post-apiv1paymentsquote--price-a-payment-before-charging) |
-| `total` | `subtotal + vat` |
-| `total_alt` | `total` in SLSH at the shop's exchange rate |
+
+| Field        | How                                                                                                                                                                                                      |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `unit_price` | The catalogue price **before VAT**, unless the shopkeeper overrode it                                                                                                                                    |
+| `line_total` | `unit_price` × `quantity`                                                                                                                                                                                |
+| `subtotal`   | Sum of the `line_total`s                                                                                                                                                                                 |
+| `vat`        | Each line's total × its product's VAT rate, rounded per line, summed                                                                                                                                     |
+| `fee`        | Always `0` in the cart. The EXELO sales fee depends on the rail, so it comes back as `fees.platform` on `[POST /payments/quote](payments.md#2-post-apiv1paymentsquote--price-a-payment-before-charging)` |
+| `total`      | `subtotal + vat`                                                                                                                                                                                         |
+| `total_alt`  | `total` in SLSH at the shop's exchange rate                                                                                                                                                              |
+
 
 Worked example from [endpoint 3](#3-patch-apiv1cartitemsproduct_id--change-a-line):
 3 × $18.00 + 1 × $1.75 = **$55.75**; VAT is $2.70 + $0.09 = **$2.79** (each line
@@ -132,6 +150,8 @@ shop's rate.
 
 ---
 
+
+
 ## 1. GET `/api/v1/cart` — Get the ticket
 
 **Purpose:** The current ticket with priced lines and totals. Replaces both
@@ -140,11 +160,13 @@ client called the first to learn whether a cart existed, then the second to get 
 
 **Query**
 
-| Param | Type | Default | Notes |
-| --- | --- | --- | --- |
-| `type` | enum | `shop` | `shop` \| `stock` |
 
-**Response `200`: an empty ticket**
+| Param  | Type | Default | Notes            |
+| ------ | ---- | ------- | ---------------- |
+| `type` | enum | `shop`  | `shop` | `stock` |
+
+
+**Response** `200`**: an empty ticket**
 
 ```json
 {
@@ -223,14 +245,16 @@ on first use.
 }
 ```
 
-| Field | Meaning |
-| --- | --- |
-| `cart_id` | Send as `cart_id` to [`POST /payments/charges`](payments.md#3-post-apiv1paymentscharges--start-a-payment) |
-| `version` | Goes up by one on every change |
-| `items[].available_quantity` | Stock left at the ticket's location, for the "only N left" hint |
-| `items[].held` | Always `false`: held lines exist only on the device until synced |
-| `totals.vat_rate` | The shop's default rate; each line uses its own product's rate |
-| `item_count`, `unit_count` | Number of lines, and total units across them |
+
+| Field                        | Meaning                                                                                                   |
+| ---------------------------- | --------------------------------------------------------------------------------------------------------- |
+| `cart_id`                    | Send as `cart_id` to `[POST /payments/charges](payments.md#3-post-apiv1paymentscharges--start-a-payment)` |
+| `version`                    | Goes up by one on every change                                                                            |
+| `items[].available_quantity` | Stock left at the ticket's location, for the "only N left" hint                                           |
+| `items[].held`               | Always `false`: held lines exist only on the device until synced                                          |
+| `totals.vat_rate`            | The shop's default rate; each line uses its own product's rate                                            |
+| `item_count`, `unit_count`   | Number of lines, and total units across them                                                              |
+
 
 The legacy response returned `subtotal`, `vat`, `exelo_amount`, `total`,
 `total_in_sls` and `subtotal_in_sls` as loose sibling strings that the client parsed
@@ -238,15 +262,19 @@ with `double.tryParse`.
 
 **Errors**
 
-| Status | Code | Meaning |
-| --- | --- | --- |
-| `403` | `auth.permission_denied` | No `pos` permission |
-| `422` | `validation.failed` | An unknown `type` |
+
+| Status | Code                     | Meaning             |
+| ------ | ------------------------ | ------------------- |
+| `403`  | `auth.permission_denied` | No `pos` permission |
+| `422`  | `validation.failed`      | An unknown `type`   |
+
+
+
 
 ## 2. POST `/api/v1/cart/items` — Add an item
 
 **Purpose:** Adds a line, or increases the quantity of one already on the ticket.
-**Idempotent: `idempotency_key` is required.** Replaces `POST /api/cart/add`.
+**Idempotent:** `idempotency_key` **is required.** Replaces `POST /api/cart/add`.
 
 **Request**
 
@@ -260,15 +288,17 @@ with `double.tryParse`.
 }
 ```
 
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `product_id` | int | yes | A product of this shop |
-| `quantity` | int | no | Default `1`. Must be at least `1`. |
-| `type` | enum | no | `shop` (default) \| `stock` |
-| `unit_price` | Money | no | Overrides the catalogue price for this line (haggling, damaged goods). On a line already on the ticket it replaces the price. |
-| `idempotency_key` | string | yes | Generated when the shopkeeper scans or taps |
 
-**Response `200`:** the whole ticket, as in [endpoint 1](#1-get-apiv1cart--get-the-ticket),
+| Field             | Type   | Required | Notes                                                                                                                         |
+| ----------------- | ------ | -------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `product_id`      | int    | yes      | A product of this shop                                                                                                        |
+| `quantity`        | int    | no       | Default `1`. Must be at least `1`.                                                                                            |
+| `type`            | enum   | no       | `shop` (default) | `stock`                                                                                                    |
+| `unit_price`      | Money  | no       | Overrides the catalogue price for this line (haggling, damaged goods). On a line already on the ticket it replaces the price. |
+| `idempotency_key` | string | yes      | Generated when the shopkeeper scans or taps                                                                                   |
+
+
+**Response** `200`**:** the whole ticket, as in [endpoint 1](#1-get-apiv1cart--get-the-ticket),
 with the line added and `version` one higher. Adding a product that is already on the
 ticket raises that line's `quantity`; there is one line per product.
 
@@ -277,13 +307,15 @@ ticket raises that line's `quantity`; there is one line per product.
 
 **Errors**
 
-| Status | Code | Meaning |
-| --- | --- | --- |
-| `404` | `product.not_found` | Not a product of this shop, or deleted since the device last synced |
-| `409` | `product.out_of_stock` | Not enough in stock (`error.details.available`, `error.details.requested`) |
-| `409` | `idempotency.key_reused` | Same key, different request |
-| `422` | `cart.quantity_invalid` | Zero or negative (`error.field: quantity`) |
-| `422` | `validation.failed` | `product_id` or `idempotency_key` missing |
+
+| Status | Code                     | Meaning                                                                    |
+| ------ | ------------------------ | -------------------------------------------------------------------------- |
+| `404`  | `product.not_found`      | Not a product of this shop, or deleted since the device last synced        |
+| `409`  | `product.out_of_stock`   | Not enough in stock (`error.details.available`, `error.details.requested`) |
+| `409`  | `idempotency.key_reused` | Same key, different request                                                |
+| `422`  | `cart.quantity_invalid`  | Zero or negative (`error.field: quantity`)                                 |
+| `422`  | `validation.failed`      | `product_id` or `idempotency_key` missing                                  |
+
 
 ```json
 {
@@ -320,6 +352,8 @@ The example is adding 5 tea to a line that already has 1, with 3 in stock.
 }
 ```
 
+
+
 ## 3. PATCH `/api/v1/cart/items/{product_id}` — Change a line
 
 **Purpose:** Changes the quantity or the price of a line already on the ticket.
@@ -334,24 +368,28 @@ the last write wins.
 { "quantity": 3, "unit_price": { "amount": 1800, "currency": "USD" } }
 ```
 
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `quantity` | int | no | At least `1`. To remove a line use [DELETE](#4-delete-apiv1cartitemsproduct_id--remove-a-line). |
-| `unit_price` | Money | no | Manual price override |
-| `type` | enum | no | `shop` (default) \| `stock` |
 
-**Response `200`:** the whole ticket. The ticket object in
+| Field        | Type  | Required | Notes                                                                                           |
+| ------------ | ----- | -------- | ----------------------------------------------------------------------------------------------- |
+| `quantity`   | int   | no       | At least `1`. To remove a line use [DELETE](#4-delete-apiv1cartitemsproduct_id--remove-a-line). |
+| `unit_price` | Money | no       | Manual price override                                                                           |
+| `type`       | enum  | no       | `shop` (default) | `stock`                                                                      |
+
+
+**Response** `200`**:** the whole ticket. The ticket object in
 [endpoint 1](#1-get-apiv1cart--get-the-ticket) is exactly this response: rice raised
 to 3 at an overridden $18.00, tea unchanged, `version` 4.
 
 **Errors**
 
-| Status | Code | Meaning |
-| --- | --- | --- |
-| `404` | `cart.line_not_found` | That product is not on the ticket |
-| `409` | `cart.version_conflict` | `If-Match` is stale; the current ticket is in `error.details.current` |
-| `409` | `product.out_of_stock` | Raising the quantity past what is in stock |
-| `422` | `cart.quantity_invalid` | `0` or a negative number |
+
+| Status | Code                    | Meaning                                                               |
+| ------ | ----------------------- | --------------------------------------------------------------------- |
+| `404`  | `cart.line_not_found`   | That product is not on the ticket                                     |
+| `409`  | `cart.version_conflict` | `If-Match` is stale; the current ticket is in `error.details.current` |
+| `409`  | `product.out_of_stock`  | Raising the quantity past what is in stock                            |
+| `422`  | `cart.quantity_invalid` | `0` or a negative number                                              |
+
 
 ```json
 {
@@ -372,21 +410,25 @@ to 3 at an overridden $18.00, tea unchanged, `version` 4.
 }
 ```
 
+
+
 ## 4. DELETE `/api/v1/cart/items/{product_id}` — Remove a line
 
 **Purpose:** Removes a line. Replaces `DELETE /api/cart/delete-cart-items`, which sent
 its parameters in a **body on a DELETE**, awkward for proxies and some HTTP clients.
 v1 puts the id in the path.
 
-**Query:** `type` (`shop` default \| `stock`).
+**Query:** `type` (`shop` default  `stock`).
 
-**Response `200`:** the whole ticket without that line (`version` one higher).
+**Response** `200`**:** the whole ticket without that line (`version` one higher).
 
 **Errors**
 
-| Status | Code | Meaning |
-| --- | --- | --- |
-| `404` | `cart.line_not_found` | Already removed, or never on the ticket |
+
+| Status | Code                  | Meaning                                 |
+| ------ | --------------------- | --------------------------------------- |
+| `404`  | `cart.line_not_found` | Already removed, or never on the ticket |
+
 
 ```json
 {
@@ -396,14 +438,16 @@ v1 puts the id in the path.
 }
 ```
 
+
+
 ## 5. DELETE `/api/v1/cart` — Cancel the sale
 
 **Purpose:** Clears the ticket. Used by the "cancel sale" action. Clearing an already
 empty ticket is fine and returns `200` again.
 
-**Query:** `type` (`shop` default \| `stock`).
+**Query:** `type` (`shop` default  `stock`).
 
-**Response `200`**
+**Response** `200`
 
 ```json
 {
@@ -422,6 +466,8 @@ empty ticket is fine and returns `200` again.
   }
 }
 ```
+
+
 
 ## 6. POST `/api/v1/cart/sync` — Reconcile an offline ticket
 
@@ -453,19 +499,21 @@ One call, one transaction, per-line results.
 }
 ```
 
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `type` | enum | no | `shop` (default) \| `stock` |
-| `client_ticket_id` | string | yes | Stable local id for this held ticket |
-| `idempotency_key` | string | yes | One key for the whole reconcile |
-| `strategy` | enum | no | `merge` (default) adds to the server ticket; `replace` clears it first |
-| `lines` | array | yes | 1 to 200 lines |
-| `lines[].client_line_id` | string | yes | Lets the client match results back to its rows; unique in the request |
-| `lines[].product_id` | int | yes | |
-| `lines[].quantity` | int | yes | |
-| `lines[].unit_price` | Money | no | Preserves a price override made offline |
 
-**Response `200`**
+| Field                    | Type   | Required | Notes                                                                  |
+| ------------------------ | ------ | -------- | ---------------------------------------------------------------------- |
+| `type`                   | enum   | no       | `shop` (default) | `stock`                                             |
+| `client_ticket_id`       | string | yes      | Stable local id for this held ticket                                   |
+| `idempotency_key`        | string | yes      | One key for the whole reconcile                                        |
+| `strategy`               | enum   | no       | `merge` (default) adds to the server ticket; `replace` clears it first |
+| `lines`                  | array  | yes      | 1 to 200 lines                                                         |
+| `lines[].client_line_id` | string | yes      | Lets the client match results back to its rows; unique in the request  |
+| `lines[].product_id`     | int    | yes      |                                                                        |
+| `lines[].quantity`       | int    | yes      |                                                                        |
+| `lines[].unit_price`     | Money  | no       | Preserves a price override made offline                                |
+
+
+**Response** `200`
 
 ```json
 {
@@ -484,12 +532,14 @@ One call, one transaction, per-line results.
 }
 ```
 
-| `status` | Meaning | Client action |
-| --- | --- | --- |
-| `applied` | Added in full | Delete the local held line |
-| `adjusted` | Added, but trimmed to what is in stock (`reason.code: product.partial_stock`) | Delete the local line and show what changed |
-| `duplicate` | The same `idempotency_key` was already applied | Delete the local line |
-| `rejected` | Not added (`reason.code` is `product.not_found`, `product.out_of_stock` or `cart.quantity_invalid`) | Keep the line flagged and tell the shopkeeper why |
+
+| `status`    | Meaning                                                                                             | Client action                                     |
+| ----------- | --------------------------------------------------------------------------------------------------- | ------------------------------------------------- |
+| `applied`   | Added in full                                                                                       | Delete the local held line                        |
+| `adjusted`  | Added, but trimmed to what is in stock (`reason.code: product.partial_stock`)                       | Delete the local line and show what changed       |
+| `duplicate` | The same `idempotency_key` was already applied                                                      | Delete the local line                             |
+| `rejected`  | Not added (`reason.code` is `product.not_found`, `product.out_of_stock` or `cart.quantity_invalid`) | Keep the line flagged and tell the shopkeeper why |
+
 
 `quantity` on a result is how many units **this line added**, not the line total on the
 ticket. Every line is judged on its own, so one bad line never fails the batch.
@@ -503,14 +553,18 @@ returns. Not before every payment, and not after every scan.
 
 **Errors**
 
-| Status | Code | Meaning |
-| --- | --- | --- |
-| `409` | `idempotency.key_reused` | Same key, different lines |
-| `422` | `validation.failed` | No lines, more than 200, a repeated `client_line_id`, an unknown `strategy` |
+
+| Status | Code                     | Meaning                                                                     |
+| ------ | ------------------------ | --------------------------------------------------------------------------- |
+| `409`  | `idempotency.key_reused` | Same key, different lines                                                   |
+| `422`  | `validation.failed`      | No lines, more than 200, a repeated `client_line_id`, an unknown `strategy` |
+
+
+
 
 ## 7. POST `/api/v1/cart/pay` — Complete the sale
 
-**Purpose:** Completes the sale. **Idempotent: `idempotency_key` is required.**
+**Purpose:** Completes the sale. **Idempotent:** `idempotency_key` **is required.**
 Replaces `POST /api/cart/transactionByCash` and `POST /api/cart/placeOrder`.
 
 One call takes the payment and, once it is paid, creates the order, takes the stock
@@ -539,19 +593,21 @@ Paying with shillings in hand instead: send `amount_tendered` in `SLSH`, and
 }
 ```
 
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `type` | enum | no | `shop` (default) \| `stock` |
-| `cart_version` | int | yes | The ticket `version` the shopkeeper confirmed; `409` if it moved |
-| `rail` | enum | yes | `cash`, `zaad` or `edahab`. `card` and `nfc` are not built yet. |
-| `amount_tendered` | Money | no | Cash only, **`USD` or `SLSH`**: the cash handed over, in whichever currency the customer actually paid with. When sent, `change_due` is returned in that same currency. |
-| `customer.name` | string | no | On the receipt |
-| `customer.mobile_number` | string | no | |
-| `customer.wallet_number` | string | wallet rails | The number to bill; must belong to the rail (`63…` is Zaad, `65…` `66…` `62…` is eDahab) |
-| `quote_id` | string | no | From [`POST /payments/quote`](payments.md#2-post-apiv1paymentsquote--price-a-payment-before-charging), to lock the quoted fee |
-| `idempotency_key` | string | yes | UUID, generated when the shopkeeper taps Pay |
 
-**Response `200`: cash, settled**
+| Field                    | Type   | Required     | Notes                                                                                                                                                                   |
+| ------------------------ | ------ | ------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `type`                   | enum   | no           | `shop` (default) | `stock`                                                                                                                                              |
+| `cart_version`           | int    | yes          | The ticket `version` the shopkeeper confirmed; `409` if it moved                                                                                                        |
+| `rail`                   | enum   | yes          | `cash`, `zaad` or `edahab`. `card` and `nfc` are not built yet.                                                                                                         |
+| `amount_tendered`        | Money  | no           | Cash only, `USD` **or** `SLSH`: the cash handed over, in whichever currency the customer actually paid with. When sent, `change_due` is returned in that same currency. |
+| `customer.name`          | string | no           | On the receipt                                                                                                                                                          |
+| `customer.mobile_number` | string | no           |                                                                                                                                                                         |
+| `customer.wallet_number` | string | wallet rails | The number to bill; must belong to the rail (`63…` is Zaad, `65…` `66…` `62…` is eDahab)                                                                                |
+| `quote_id`               | string | no           | From `[POST /payments/quote](payments.md#2-post-apiv1paymentsquote--price-a-payment-before-charging)`, to lock the quoted fee                                           |
+| `idempotency_key`        | string | yes          | UUID, generated when the shopkeeper taps Pay                                                                                                                            |
+
+
+**Response** `200`**: cash, settled**
 
 ```json
 {
@@ -580,10 +636,10 @@ order.
 
 The embedded `order` shows `total` in the currency the customer actually paid
 (`paid_currency`) with `total_alt` in the other one, same as
-[`GET /orders/{id}`](orders.md#implementation-notes) — `USD` for cash, as
+`[GET /orders/{id}](orders.md#implementation-notes)` — `USD` for cash, as
 here; `SLSH` for a wallet sale, frozen at the amount charged.
 
-**Response `202`: wallet rail, awaiting approval**
+**Response** `202`**: wallet rail, awaiting approval**
 
 ```json
 {
@@ -599,24 +655,28 @@ here; `SLSH` for a wallet sale, frozen at the amount charged.
 ```
 
 The ticket and the stock are **not** touched until the charge reaches `paid`. The
-client polls [`GET /payments/charges/{charge_id}`](payments.md#4-get-apiv1paymentschargescharge_id--check-a-payment)
+client polls `[GET /payments/charges/{charge_id}](payments.md#4-get-apiv1paymentschargescharge_id--check-a-payment)`
 every `poll_after` seconds; when it reports `paid` it carries the order and receipt,
 and the ticket is already cleared. A wallet is billed in **SLSH** at the shop's
-exchange rate (plus the wallet fee on Gold).
+exchange rate (plus the EXELO sales fee on Gold). That percent is the **Sales fee (%)**
+on Admin → Payment Fees, default 2.85%, and it is the `fees.platform` amount from
+`[POST /payments/quote](payments.md#2-post-apiv1paymentsquote--price-a-payment-before-charging)`.
 
 **Errors**
 
-| Status | Code | Meaning |
-| --- | --- | --- |
-| `409` | `cart.version_conflict` | The ticket changed: re-read and re-confirm the total (`error.details.current`) |
-| `409` | `payment.charge_pending` | A payment for this ticket is already waiting for the customer (`error.details.charge_id`) |
-| `409` | `idempotency.key_reused` | Same key, different request |
-| `422` | `cart.empty` | Nothing to pay for |
-| `422` | `payment.tender_too_low` | Cash given is less than the total (`error.details.due`, `error.field: amount_tendered`) |
-| `422` | `payment.rail_unavailable` | The shop cannot take that rail (`error.details.available_rails`) |
-| `422` | `payment.wallet_invalid` | The customer number is missing or does not belong to that rail (`error.field: customer.wallet_number`) |
-| `422` | `validation.failed` | Missing or malformed fields, for example an unknown `rail` |
-| `502` | `payment.provider_unavailable` | The wallet provider is down; nothing was charged |
+
+| Status | Code                           | Meaning                                                                                                |
+| ------ | ------------------------------ | ------------------------------------------------------------------------------------------------------ |
+| `409`  | `cart.version_conflict`        | The ticket changed: re-read and re-confirm the total (`error.details.current`)                         |
+| `409`  | `payment.charge_pending`       | A payment for this ticket is already waiting for the customer (`error.details.charge_id`)              |
+| `409`  | `idempotency.key_reused`       | Same key, different request                                                                            |
+| `422`  | `cart.empty`                   | Nothing to pay for                                                                                     |
+| `422`  | `payment.tender_too_low`       | Cash given is less than the total (`error.details.due`, `error.field: amount_tendered`)                |
+| `422`  | `payment.rail_unavailable`     | The shop cannot take that rail (`error.details.available_rails`)                                       |
+| `422`  | `payment.wallet_invalid`       | The customer number is missing or does not belong to that rail (`error.field: customer.wallet_number`) |
+| `422`  | `validation.failed`            | Missing or malformed fields, for example an unknown `rail`                                             |
+| `502`  | `payment.provider_unavailable` | The wallet provider is down; nothing was charged                                                       |
+
 
 ```json
 {
@@ -669,7 +729,7 @@ held. Payments are also refused offline; see
 ## 8. POST `/api/v1/cart/hold` — Hold the ticket as a pending order
 
 **Purpose:** Parks the ticket as a pending order with customer details, and clears
-it. Replaces `POST /api/cart/placePendingOrder`. **Idempotent: `idempotency_key` is
+it. Replaces `POST /api/cart/placePendingOrder`. **Idempotent:** `idempotency_key` **is
 required.**
 
 **Request**
@@ -683,19 +743,21 @@ required.**
 }
 ```
 
-| Field | Type | Required | Notes |
-| --- | --- | --- | --- |
-| `type` | enum | no | `shop` (default) \| `stock` |
-| `customer.name` | string | yes | |
-| `customer.mobile_number` | string | yes | |
-| `note` | string | no | Up to 255 characters |
-| `signature_file_id` | string | no | From [`POST /files`](files.md#1-post-apiv1files--upload-a-file), `purpose: signature` |
-| `idempotency_key` | string | yes | UUID, one per attempt |
 
-**Response `201`**
+| Field                    | Type   | Required | Notes                                                                                 |
+| ------------------------ | ------ | -------- | ------------------------------------------------------------------------------------- |
+| `type`                   | enum   | no       | `shop` (default) | `stock`                                                            |
+| `customer.name`          | string | yes      |                                                                                       |
+| `customer.mobile_number` | string | yes      |                                                                                       |
+| `note`                   | string | no       | Up to 255 characters                                                                  |
+| `signature_file_id`      | string | no       | From `[POST /files](files.md#1-post-apiv1files--upload-a-file)`, `purpose: signature` |
+| `idempotency_key`        | string | yes      | UUID, one per attempt                                                                 |
+
+
+**Response** `201`
 
 ```json
-{
+{, 
   "success": true,
   "message": "Order held for Amina Yusuf",
   "data": {
@@ -716,24 +778,26 @@ required.**
 
 Holding does **not** take stock off the shelf: it leaves when the order is paid or
 completed. The held order is settled later through
-[`POST /orders/{id}/pay`](orders.md).
+`[POST /orders/{id}/pay](orders.md)`.
 
 ### Signatures
 
 The legacy endpoint accepted the signature inline as a base64 data URL in the JSON
 body, which makes the request large and slow, and a failure loses the order along
 with the image. In v1 the signature is uploaded separately to
-[`POST /files`](files.md#1-post-apiv1files--upload-a-file) (retryable on its own)
+`[POST /files](files.md#1-post-apiv1files--upload-a-file)` (retryable on its own)
 and only its id sent here. Sending no `signature_file_id` saves the order without
 one; sending one that was not uploaded with `purpose: signature` returns
 `422 validation.failed` on `signature_file_id`.
 
 **Errors**
 
-| Status | Code | Meaning |
-| --- | --- | --- |
-| `422` | `cart.empty` | There is nothing to hold |
-| `422` | `validation.failed` | The customer name or mobile number is missing |
+
+| Status | Code                | Meaning                                       |
+| ------ | ------------------- | --------------------------------------------- |
+| `422`  | `cart.empty`        | There is nothing to hold                      |
+| `422`  | `validation.failed` | The customer name or mobile number is missing |
+
 
 ```json
 {
@@ -751,6 +815,8 @@ one; sending one that was not uploaded with `purpose: signature` returns
 ```
 
 ---
+
+
 
 ## Step by step: a sale at the till
 
@@ -776,6 +842,8 @@ Or hold it for later:
 POST   /cart/hold { customer, idempotency_key }       → 201, pending order, ticket cleared
 ```
 
+
+
 ## Step by step: working offline
 
 ```
@@ -788,19 +856,23 @@ POST /cart/sync { client_ticket_id, lines, idempotency_key }
 GET  /cart                                → confirm the ticket before paying
 ```
 
-| State | Client does |
-| --- | --- |
-| `409 product.out_of_stock` | Show "only N left" from `error.details.available` and let the shopkeeper decide |
-| `409 cart.version_conflict` | Re-read the ticket from `error.details.current`, re-confirm the total, pay again |
-| `409 payment.charge_pending` | Go back to polling `error.details.charge_id` instead of starting a second payment |
-| `422 payment.tender_too_low` | Ask for more cash; the ticket is untouched |
-| `422 payment.rail_unavailable` | Remove that rail from the picker |
-| `422 cart.empty` | Nothing to pay: return to scanning |
-| `202` on pay | Show the waiting screen and poll; do not clear the local ticket yet |
-| `403 auth.permission_denied` | The user has no `pos` permission: hide the register |
-| No network | Keep scanning into local held lines; payment is blocked until online |
+
+| State                          | Client does                                                                       |
+| ------------------------------ | --------------------------------------------------------------------------------- |
+| `409 product.out_of_stock`     | Show "only N left" from `error.details.available` and let the shopkeeper decide   |
+| `409 cart.version_conflict`    | Re-read the ticket from `error.details.current`, re-confirm the total, pay again  |
+| `409 payment.charge_pending`   | Go back to polling `error.details.charge_id` instead of starting a second payment |
+| `422 payment.tender_too_low`   | Ask for more cash; the ticket is untouched                                        |
+| `422 payment.rail_unavailable` | Remove that rail from the picker                                                  |
+| `422 cart.empty`               | Nothing to pay: return to scanning                                                |
+| `202` on pay                   | Show the waiting screen and poll; do not clear the local ticket yet               |
+| `403 auth.permission_denied`   | The user has no `pos` permission: hide the register                               |
+| No network                     | Keep scanning into local held lines; payment is blocked until online              |
+
 
 ---
+
+
 
 ## Postman / curl quick start
 
@@ -840,26 +912,29 @@ stays `pending` until the provider reports it paid.
 
 ---
 
+
+
 ## Implementation notes
 
 - **Storage.** Tickets use the existing `carts` and `cart_items` tables. A migration
-  adds `carts.device_id` and `carts.version`. There is one line per product, and a
-  line's price is stored in USD.
+adds `carts.device_id` and `carts.version`. There is one line per product, and a
+line's price is stored in USD.
 - **The device** is read from the token name (`device:<id>`) set at login. A token
-  without a device falls back to a shared `default` ticket.
+without a device falls back to a shared `default` ticket.
 - **Products on tickets.** A product cannot be deleted while it is on a ticket
-  (`409 product.in_active_cart`, see [inventory.md](inventory.md)).
+(`409 product.in_active_cart`, see [inventory.md](inventory.md)).
 - **Stock is reserved by nothing.** A ticket does not hold stock; the stock rule is
-  checked when a line is added or raised, and stock leaves the shelf only when the
-  sale is paid (or the held order is paid or completed). If two tills sell the last
-  unit, the second paid sale takes the shelf to `0` rather than failing, because the
-  money is already taken.
+checked when a line is added or raised, and stock leaves the shelf only when the
+sale is paid (or the held order is paid or completed). If two tills sell the last
+unit, the second paid sale takes the shelf to `0` rather than failing, because the
+money is already taken.
 - **Payments** are made through [payments.md](payments.md): `/cart/pay` builds a
-  charge for the ticket total and follows the same rules (fee, currency, one open
-  payment per sale).
+charge for the ticket total and follows the same rules (fee, currency, one open
+payment per sale).
 - **After a wallet payment** the ticket is cleared only if it has not changed since
-  the payment started, so a new sale begun in the meantime is never wiped.
+the payment started, so a new sale begun in the meantime is never wiped.
 - **Validation messages** are the standard Laravel wording under `error.details`,
-  keyed by field. Branch on `error.code`, not the text.
+keyed by field. Branch on `error.code`, not the text.
 - **Not built yet:** `cart.has_held_lines`, the `card` and `nfc` rails.
-- **Legacy routes** (`/api/cart/*`) keep working alongside.
+- **Legacy routes** (`/api/cart/`*) keep working alongside.
+

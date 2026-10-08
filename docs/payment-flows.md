@@ -184,7 +184,7 @@ A sale at the till: the register's ticket (cart), or a held order paid later.
 | --- | --- |
 | Endpoints | [`POST /cart/pay`](cart.md#post-cartpay) (the ticket), [`POST /orders/{id}/pay`](orders.md#5-post-apiv1ordersidpay--take-payment-for-a-pending-order) (a held order), or directly [`POST /payments/charges`](payments.md#3-post-apiv1paymentscharges--start-a-payment); then poll `GET /payments/charges/{chg_…}` |
 | Auth | Bearer + `pos` permission. Idempotency key required |
-| Amount | The ticket or order total in USD. The 2.85 % wallet fee is added for the customer on **Gold**, taken from the shop on **Silver**; no fee on cash |
+| Amount | The ticket or order total in USD. The EXELO sales fee (Admin → Payment Fees, default 2.85%) is added for the customer on **Gold**, taken from the shop on **Silver**; no fee on cash |
 | Gateways | **eDahab, Zaad** (only if that wallet is `verified` for the shop), **cash** (always) |
 | Invoice | `type = Sale`, `purpose = pos_sale` or `order_settlement`, id `chg_…` |
 | Wallet billing | Charged in **SLSH** at the shop's exchange rate (`customer_charge` cents × rate ÷ 100) |

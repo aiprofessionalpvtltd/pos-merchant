@@ -7,6 +7,7 @@ use App\Http\Resources\TransactionResource;
 use App\Models\Invoice;
 use App\Models\Merchant;
 use App\Models\Transaction;
+use App\Services\PaymentSettingsService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Support\Facades\DB;
@@ -199,6 +200,7 @@ class PaymentController extends BaseController
         }
 
         $transactionAmount = $request->transaction_amount;
+        $salesFeeRate = app(PaymentSettingsService::class)->salesFeeRate();
 
         // Determine the authenticated user
         $authUser = auth()->user();
@@ -208,18 +210,18 @@ class PaymentController extends BaseController
             $subscriptionPlanId = $authUser->merchant->currentSubscription->subscription_plan_id;
 
             if ($subscriptionPlanId == 1) { // Gold Plan
-                // Exelo fee for customers: 2.85%, merchants: 0%
-                $customerFee = $transactionAmount * 0.0285;
+                // Exelo fee for customers: sales fee percent, merchants: 0%
+                $customerFee = $transactionAmount * $salesFeeRate;
                 $exeloFee = 0; // Merchant fee
             } elseif ($subscriptionPlanId == 2) { // Silver Plan
-                // Exelo fee for merchants: 2.85%, customers: 0%
+                // Exelo fee for merchants: sales fee percent, customers: 0%
                 $customerFee = 0; // Customer fee
-                $exeloFee = $transactionAmount * 0.0285;
+                $exeloFee = $transactionAmount * $salesFeeRate;
             }
         } else {
             // Default to Silver Plan
             $customerFee = 0; // Customer fee
-            $exeloFee = $transactionAmount * 0.0285; // Exelo fee for merchants: 2.85%
+            $exeloFee = $transactionAmount * $salesFeeRate;
         }
 
         // Calculate the total amounts

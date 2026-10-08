@@ -16,6 +16,7 @@ class Setting extends Model
         'registration_fee_charge',
         'verification_fee',
         'verification_fee_charge',
+        'sales_fee_percent',
     ];
 
     protected $casts = [
@@ -23,6 +24,7 @@ class Setting extends Model
         'registration_fee_charge' => 'integer',
         'verification_fee' => 'integer',
         'verification_fee_charge' => 'integer',
+        'sales_fee_percent' => 'decimal:2',
     ];
 
     public static function getSetting()

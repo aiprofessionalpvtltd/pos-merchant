@@ -1,14 +1,19 @@
 <?php
 
 use App\Models\MerchantSubscription;
+use App\Models\Setting;
 use App\Models\User;
 use Database\Seeders\PlanCatalogueSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 uses(DatabaseTransactions::class);
 
-beforeEach(fn () => (new PlanCatalogueSeeder)->run());
+beforeEach(function () {
+    (new PlanCatalogueSeeder)->run();
+    Cache::forget('settings:payment-fees');
+});
 
 function quoteBody(array $overrides = []): array
 {
@@ -92,6 +97,26 @@ it('makes the shop absorb the wallet fee on Silver and the customer on Gold', fu
         ->assertJsonPath('data.fee_payer', 'customer')
         ->assertJsonPath('data.customer_charge.amount', 3882)
         ->assertJsonPath('data.merchant_receives.amount', 3774);
+});
+
+it('quotes the EXELO sales fee percent saved in payment settings', function () {
+    $owner = makeMerchant('2580');
+    $owner->merchant->update(['zaad_number' => '+252632220001']);
+
+    if (! Setting::query()->exists()) {
+        DB::table('settings')->insert(['company_name' => 'EXELO', 'company_email' => 'fees-quote@example.test', 'company_website' => 'fees-quote.example.test']);
+    }
+
+    Setting::query()->update(['sales_fee_percent' => 5]);
+    Cache::forget('settings:payment-fees');
+
+    // 3774 * 5% = 188.7, rounded to 189. Silver shops absorb it.
+    test()->withToken(ownerToken())->postJson('/api/v1/payments/quote', quoteBody(['rail' => 'zaad']))
+        ->assertOk()
+        ->assertJsonPath('data.fees.platform.amount', 189)
+        ->assertJsonPath('data.fee_payer', 'merchant')
+        ->assertJsonPath('data.customer_charge.amount', 3774)
+        ->assertJsonPath('data.merchant_receives.amount', 3585);
 });
 
 it('quotes an SLSH amount and shows its dollar value', function () {

@@ -279,11 +279,13 @@ figure eDahab receives.
 | `amount` | What was asked for |
 | `customer_charge` | What the customer is billed |
 | `merchant_receives` | What lands in the shop |
-| `fees.platform` | The one combined wallet fee: **2.85%** of `amount`, rounded to the nearest unit (`EXELO_WALLET_FEE_RATE`) |
+| `fees.platform` | The EXELO sales fee: the **Sales fee (%)** from Admin → Payment Fees, applied to `amount` and rounded to the nearest unit. Empty uses the default **2.85%** (`EXELO_WALLET_FEE_RATE`). Cash quotes are `0` |
 | `fees.rail` | Always `0` for now; kept so a separate provider fee can be added without changing the response |
 | `fee_payer` | `customer` on Gold, `merchant` on Silver; `null` when there is no fee |
 | `amount_alt`, `exchange_rate` | The equivalent in the other currency, at the shop's own rate from [`GET /merchant/settings`](merchant.md#5-get-apiv1merchantsettings--get-the-shop-preferences). A USD amount shows SLSH; an SLSH amount shows USD. |
 | `expires_at` | Quotes last 15 minutes and are kept server-side under `quote_id` |
+
+The percent is read when the quote is built and again when checkout completes the sale (`POST /payments/charges`, `POST /cart/pay`, `POST /orders/{id}/pay`). A later change to Payment Fees does not rewrite a quote already issued. Sending `quote_id` on the charge keeps the fee from that response.
 
 **Who pays the fee** follows the shop's plan, the same rule as the legacy
 `transaction/process`:
@@ -1224,9 +1226,15 @@ card session and webhooks) are not. How the built part works, and what is open:
   takes the stock off the shelf and clears the ticket. It runs once however many
   times the charge is polled. The ticket is only cleared if it has not changed since
   the charge started, so a new sale started meanwhile is never wiped.
-- **The fee** is the quote's: one 2.85% wallet fee, added to what the customer pays
-  on Gold and taken from the shop otherwise; none on cash. Sending `quote_id` locks
-  the quoted fee and must match the rail, purpose and amount (else `410
+- **The fee** is the EXELO sales fee percent from Admin → Payment Fees
+  (`settings.sales_fee_percent`). Empty uses `EXELO_WALLET_FEE_RATE` (`0.0285`,
+  which is 2.85%). On a wallet rail it is that percent of the sale total, added
+  to what the customer pays on Gold and taken from the shop otherwise. Cash has
+  no fee. The same percent is what `fees.platform` in the quote response is
+  calculated from, and what is stored on the order as `exelo_amount` when the
+  sale is paid. Legacy `POST /api/merchant/transaction/process` and
+  `POST /api/cart/transactionByCash` use it too. Sending `quote_id` locks the
+  quoted fee and must match the rail, purpose and amount (else `410
   quote.expired` or `422`).
 - **One open payment per sale.** While a wallet payment for the same ticket or order
   is waiting for the customer, another returns `409 payment.charge_pending` with the
@@ -1239,8 +1247,9 @@ card session and webhooks) are not. How the built part works, and what is open:
   the money. The cart is not cleared.
 - **Built code:** `PaymentService` (methods, quote, fee), `ChargeService` (charges,
   order creation on paid), `V1\PaymentController`, `FinalizeSaleOnPaid` (the
-  `InvoicePaid` listener), and the `payments` settings in `config/exelo.php`
-  (`wallet_fee_rate`, card and NFC switches).
+  `InvoicePaid` listener), `PaymentSettingsService` (the sales fee percent), and
+  the `payments` settings in `config/exelo.php` (`wallet_fee_rate` is only the
+  default when Payment Fees has no percent, plus the card and NFC switches).
 - **Card and NFC are off** until their modules exist. Even if switched on they are
   refused by charges (`422 payment.rail_unavailable`) for now.
 - **Idempotency** uses the same cache-lock approach as `subscription/change`, with

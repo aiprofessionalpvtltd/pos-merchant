@@ -24,6 +24,7 @@ class PaymentSettingController extends Controller
         return view('admin.settings.payment_fees', [
             'title' => 'Payment Fees',
             'fees' => $this->settings->all(),
+            'salesFee' => $this->settings->salesFee(),
             'currency' => config('exelo.alt_currency'),
         ]);
     }
