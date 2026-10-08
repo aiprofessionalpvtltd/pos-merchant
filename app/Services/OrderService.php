@@ -188,6 +188,12 @@ class OrderService
             $updates['exchange_rate'] = (int) round(((float) $invoice->amount) / (float) $order->total_price);
         }
 
+        // A held order is written with no fee. The charge knows the platform fee, so copy it
+        // onto the order when the sale is paid. A cart sale already has the same amount.
+        if ($invoice && $invoice->platform_fee !== null) {
+            $updates['exelo_amount'] = round((float) $invoice->platform_fee, 2);
+        }
+
         $order->forceFill($updates)->save();
 
         $this->deductStock($order, $actor);

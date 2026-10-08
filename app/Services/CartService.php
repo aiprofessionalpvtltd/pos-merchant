@@ -17,7 +17,10 @@ use Illuminate\Support\Str;
 
 class CartService
 {
-    public function __construct(private readonly StockService $stock) {}
+    public function __construct(
+        private readonly StockService $stock,
+        private readonly PaymentSettingsService $paymentSettings,
+    ) {}
 
     /**
      * The till's ticket: one per shop, user, device and type. Created on first use.
@@ -232,6 +235,7 @@ class CartService
         }
 
         $total = $subtotal + $vat;
+        $feeCents = (int) round($total * $this->paymentSettings->salesFeeRate());
 
         return [
             'cart_id' => $cart->id,
@@ -242,7 +246,9 @@ class CartService
             'totals' => [
                 'subtotal' => Money::usd($subtotal),
                 'vat' => Money::usd($vat),
-                'fee' => Money::usd(0),
+                'fee' => Money::usd($feeCents),
+                'fee_alt' => $this->alt($feeCents, $rate),
+                'fee_percent' => $this->paymentSettings->salesFee()['percent'],
                 'total' => Money::usd($total),
                 'total_alt' => $this->alt($total, $rate),
                 'vat_rate' => $merchant->vat_rate,

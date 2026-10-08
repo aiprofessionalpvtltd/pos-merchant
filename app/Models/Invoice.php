@@ -51,12 +51,14 @@ class Invoice extends Model
         'cart_id',
         'cart_version',
         'meta',
+        'platform_fee',
         'order_id',
         'user_id',
     ];
 
     protected $casts = [
         'meta' => 'array',
+        'platform_fee' => 'decimal:2',
         'expires_at' => 'datetime',
         'paid_at' => 'datetime',
         'consumed_at' => 'datetime',

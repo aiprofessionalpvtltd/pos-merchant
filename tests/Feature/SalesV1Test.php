@@ -334,7 +334,9 @@ it('passes the wallet fee to the customer on Gold', function () {
     test()->withToken($token)->getJson('/api/v1/payments/charges/'.$chargeId)
         ->assertJsonPath('data.status', 'paid')->assertJsonPath('data.amount.amount', 319680);
 
-    expect((float) orders()->first()->exelo_amount)->toBe(1.11)->and((float) orders()->first()->total_price)->toBe(38.85);
+    expect((float) orders()->first()->exelo_amount)->toBe(1.11)
+        ->and((float) orders()->first()->total_price)->toBe(38.85)
+        ->and((float) Invoice::where('public_id', $chargeId)->value('platform_fee'))->toBe(1.11);
 });
 
 it('applies the saved EXELO sales fee when a checkout sale is paid', function () {
@@ -358,7 +360,9 @@ it('applies the saved EXELO sales fee when a checkout sale is paid', function ()
         ->assertJsonPath('data.status', 'paid')->assertJsonPath('data.amount.amount', 326320);
 
     // $38.85 sale at 5% is $1.94, added to the customer charge on Gold.
-    expect((float) orders()->first()->exelo_amount)->toBe(1.94)->and((float) orders()->first()->total_price)->toBe(38.85);
+    expect((float) orders()->first()->exelo_amount)->toBe(1.94)
+        ->and((float) orders()->first()->total_price)->toBe(38.85)
+        ->and((float) Invoice::where('public_id', $chargeId)->value('platform_fee'))->toBe(1.94);
 });
 
 it('holds a ticket as a pending order without touching stock', function () {
@@ -483,7 +487,13 @@ it('settles a held order through a wallet once the customer approves', function 
     test()->withToken($token)->getJson('/api/v1/payments/charges/'.$pending->json('data.charge_id'))
         ->assertJsonPath('data.status', 'paid')->assertJsonPath('data.purpose', 'order_settlement')->assertJsonPath('data.order.id', $id);
 
-    expect(Order::find($id)->paid_at)->not->toBeNull()->and(Order::find($id)->payment_method)->toBe('edahab')->and(shelf($rice['id']))->toBe(22);
+    $order = Order::find($id);
+
+    expect($order->paid_at)->not->toBeNull()
+        ->and($order->payment_method)->toBe('edahab')
+        ->and((float) $order->exelo_amount)->toBe(1.11)
+        ->and((float) Invoice::where('public_id', $pending->json('data.charge_id'))->value('platform_fee'))->toBe(1.11)
+        ->and(shelf($rice['id']))->toBe(22);
 });
 
 it('freezes the amount actually charged when a held order is paid on a wallet after the rate has moved', function () {

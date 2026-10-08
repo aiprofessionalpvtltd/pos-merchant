@@ -241,6 +241,12 @@ class InvoicePaymentService
             'created_at' => ApiResponse::iso($invoice->created_at),
         ];
 
+        if ($isSale) {
+            $payload['fees'] = [
+                'platform' => Money::usd(Money::toMinor((float) ($invoice->platform_fee ?? 0), 'USD')),
+            ];
+        }
+
         if ($status === 'pending') {
             $payload += [
                 'next_action' => $invoice->rail === 'cash' ? 'await_cash_confirmation' : 'await_customer_approval',

@@ -36,6 +36,11 @@ it('returns an empty ticket rather than a 404', function () {
         ->assertJsonPath('data.type', 'shop')
         ->assertJsonPath('data.version', 1)
         ->assertJsonPath('data.totals.total.amount', 0)
+        ->assertJsonPath('data.totals.fee.amount', 0)
+        ->assertJsonPath('data.totals.fee.currency', 'USD')
+        ->assertJsonPath('data.totals.fee_alt.amount', 0)
+        ->assertJsonPath('data.totals.fee_alt.currency', 'SLSH')
+        ->assertJsonPath('data.totals.fee_percent', 2.85)
         ->assertJsonPath('data.item_count', 0);
 
     expect(Cart::count())->toBeGreaterThanOrEqual(1);
@@ -59,7 +64,12 @@ it('adds lines and prices the ticket with VAT', function () {
         ->assertJsonPath('data.items.0.held', false)
         ->assertJsonPath('data.totals.subtotal.amount', 4200)
         ->assertJsonPath('data.totals.vat.amount', 185)
-        ->assertJsonPath('data.totals.fee.amount', 0)
+        ->assertJsonPath('data.totals.fee.amount', 125)
+        ->assertJsonPath('data.totals.fee.currency', 'USD')
+        ->assertJsonPath('data.totals.fee.display', '$1.25')
+        ->assertJsonPath('data.totals.fee_alt.amount', 10000)
+        ->assertJsonPath('data.totals.fee_alt.currency', 'SLSH')
+        ->assertJsonPath('data.totals.fee_percent', 2.85)
         ->assertJsonPath('data.totals.total.amount', 4385)
         ->assertJsonPath('data.totals.total.display', '$43.85')
         ->assertJsonPath('data.totals.total_alt.amount', 350800)

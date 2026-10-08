@@ -287,6 +287,7 @@ class ChargeService
             'cart_id' => $sale['cart_id'],
             'cart_version' => $sale['cart_version'],
             'first_name' => $data['customer']['name'] ?? null,
+            'platform_fee' => array_key_exists('fee_cents', $meta) ? round($meta['fee_cents'] / 100, 2) : null,
             'meta' => $meta,
         ]);
     }

@@ -111,7 +111,9 @@ scan. It carries a `version` that goes up by one on every change. Send it back a
 | `line_total` | `unit_price` × `quantity`                                                                                                                                                                                |
 | `subtotal`   | Sum of the `line_total`s                                                                                                                                                                                 |
 | `vat`        | Each line's total × its product's VAT rate, rounded per line, summed                                                                                                                                     |
-| `fee`        | Always `0` in the cart. The EXELO sales fee depends on the rail, so it comes back as `fees.platform` on `[POST /payments/quote](payments.md#2-post-apiv1paymentsquote--price-a-payment-before-charging)` |
+| `fee`        | EXELO sales fee percent of `total`, in USD. The percent is **Sales fee (%)** on Admin → Payment Fees, default 2.85%. Not stored on the cart row |
+| `fee_alt`    | The same fee in SLSH, at the shop's exchange rate |
+| `fee_percent`| The percent that was applied, so the register can show "2.85%" |
 | `total`      | `subtotal + vat`                                                                                                                                                                                         |
 | `total_alt`  | `total` in SLSH at the shop's exchange rate                                                                                                                                                              |
 
@@ -180,7 +182,9 @@ client called the first to learn whether a cart existed, then the second to get 
     "totals": {
       "subtotal":  { "amount": 0, "currency": "USD", "display": "$0.00" },
       "vat":       { "amount": 0, "currency": "USD", "display": "$0.00" },
-      "fee":       { "amount": 0, "currency": "USD", "display": "$0.00" },
+      "fee":         { "amount": 0, "currency": "USD", "display": "$0.00" },
+      "fee_alt":     { "amount": 0, "currency": "SLSH", "display": "0 SLSH" },
+      "fee_percent": 2.85,
       "total":     { "amount": 0, "currency": "USD", "display": "$0.00" },
       "total_alt": { "amount": 0, "currency": "SLSH", "display": "0 SLSH" },
       "vat_rate": 0.05,
@@ -233,7 +237,9 @@ on first use.
   "totals": {
     "subtotal":  { "amount": 5575, "currency": "USD", "display": "$55.75" },
     "vat":       { "amount": 279, "currency": "USD", "display": "$2.79" },
-    "fee":       { "amount": 0, "currency": "USD", "display": "$0.00" },
+    "fee":         { "amount": 167, "currency": "USD", "display": "$1.67" },
+    "fee_alt":     { "amount": 13360, "currency": "SLSH", "display": "13,360 SLSH" },
+    "fee_percent": 2.85,
     "total":     { "amount": 5854, "currency": "USD", "display": "$58.54" },
     "total_alt": { "amount": 468320, "currency": "SLSH", "display": "468,320 SLSH" },
     "vat_rate": 0.05,

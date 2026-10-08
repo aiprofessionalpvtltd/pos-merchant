@@ -1231,8 +1231,12 @@ card session and webhooks) are not. How the built part works, and what is open:
   which is 2.85%). On a wallet rail it is that percent of the sale total, added
   to what the customer pays on Gold and taken from the shop otherwise. Cash has
   no fee. The same percent is what `fees.platform` in the quote response is
-  calculated from, and what is stored on the order as `exelo_amount` when the
-  sale is paid. Legacy `POST /api/merchant/transaction/process` and
+  calculated from. When the sale is paid it is stored on the order as
+  `exelo_amount` and on the charge (invoice) as `platform_fee`, both in USD.
+  The cart response shows that same percent of the ticket total as `totals.fee`
+  (USD) and `totals.fee_alt` (SLSH). It is not stored on the cart row. The charge
+  response includes the saved amount as
+  `fees.platform`. Legacy `POST /api/merchant/transaction/process` and
   `POST /api/cart/transactionByCash` use it too. Sending `quote_id` locks the
   quoted fee and must match the rail, purpose and amount (else `410
   quote.expired` or `422`).
