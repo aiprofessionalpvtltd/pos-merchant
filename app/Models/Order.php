@@ -17,6 +17,7 @@ class Order extends Model
         'user_id',
         'order_status', // 'pending', 'completed', etc.
         'total_price',
+        'currency',
         'name',
         'mobile_number',
         'signature',

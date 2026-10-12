@@ -46,12 +46,12 @@ it('summarises revenue, orders, product stock and alerts on the dashboard', func
     $response = test()->withToken($token)->getJson('/api/v1/dashboard?weeks=2&history_limit=5')->assertOk();
 
     $response->assertJsonPath('data.period.timezone', 'Africa/Mogadishu')
-        ->assertJsonPath('data.revenue.total.amount', 3150)
+        ->assertJsonPath('data.revenue.total.amount', 3075)
         ->assertJsonPath('data.series.granularity', 'day')
         ->assertJsonPath('data.series.weeks.0.is_current', true)
-        ->assertJsonPath('data.series.weeks.0.total.amount', 2100)
+        ->assertJsonPath('data.series.weeks.0.total.amount', 2050)
         ->assertJsonPath('data.series.weeks.1.is_current', false)
-        ->assertJsonPath('data.series.weeks.1.total.amount', 1050)
+        ->assertJsonPath('data.series.weeks.1.total.amount', 1025)
         ->assertJsonPath('data.orders.complete_count', 2)
         ->assertJsonPath('data.products.total_sold', 3)
         ->assertJsonPath('data.alerts.alarm_count', 1)
@@ -88,13 +88,13 @@ it('reports sales totals with a payment-method breakdown', function () {
 
     $response = test()->withToken($token)->getJson('/api/v1/reports/sales')->assertOk();
 
-    $response->assertJsonPath('data.totals.gross.amount', 2100)
+    $response->assertJsonPath('data.totals.gross.amount', 2050)
         ->assertJsonPath('data.totals.order_count', 1)
         ->assertJsonPath('data.totals.products_sold', 2)
-        ->assertJsonPath('data.totals.average_order.amount', 2100);
+        ->assertJsonPath('data.totals.average_order.amount', 2050);
 
     $cash = collect($response->json('data.by_payment_method'))->firstWhere('method', 'cash');
-    expect($cash['order_count'])->toBe(1)->and($cash['total']['amount'])->toBe(2100);
+    expect($cash['order_count'])->toBe(1)->and($cash['total']['amount'])->toBe(2050);
 });
 
 it('groups the sales report rows by week and by payment method', function () {

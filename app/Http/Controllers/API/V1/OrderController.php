@@ -61,10 +61,15 @@ class OrderController extends Controller
         $order = Order::where('shop_id', $merchant->id)->find($id)
             ?? throw new ApiException('order.not_found', 'We could not find that order', 404);
 
+        $currency = strtoupper((string) ($order->currency ?: 'USD'));
+        $amount = $currency === 'SLSH'
+            ? ['amount' => (int) round((float) $order->total_price_sls), 'currency' => 'SLSH']
+            : ['amount' => Money::toMinor((float) $order->total_price, 'USD'), 'currency' => 'USD'];
+
         $result = $this->charges->create($request->user(), $merchant, [
             'rail' => $request->validated('rail'),
             'purpose' => 'order_settlement',
-            'amount' => ['amount' => Money::toMinor((float) $order->total_price, 'USD'), 'currency' => 'USD'],
+            'amount' => $amount,
             'customer' => $request->validated('customer') ?? [],
             'order_id' => $order->id,
             'idempotency_key' => $request->validated('idempotency_key'),

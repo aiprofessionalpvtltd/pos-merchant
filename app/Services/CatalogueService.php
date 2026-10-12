@@ -119,7 +119,6 @@ class CatalogueService
             $this->assertImage($merchant, $data['image_file_id'] ?? null);
 
             $vatRate = $data['vat_rate'] ?? $merchant->vat_rate;
-            $usd = $this->usdMajor($merchant, $data['price']);
 
             $product = Product::create([
                 'shop_id' => $merchant->id,
@@ -128,15 +127,10 @@ class CatalogueService
                 'bar_code' => $data['bar_code'] ?? null,
                 'category_id' => $data['category_id'] ?? null,
                 'image_file_id' => $data['image_file_id'] ?? null,
-                'price' => $usd,
-                'price_sls' => round($usd * $merchant->effectiveExchangeRate(), 2),
-                'exchange_rate' => $merchant->effectiveExchangeRate(),
-                'vat' => (int) round($vatRate * 100),
-                'total_price' => round($usd * (1 + $vatRate), 2),
                 'stock_limit' => $data['limits']['stock_limit'] ?? 0,
                 'alarm_limit' => $data['limits']['alarm_limit'] ?? 0,
                 'version' => 1,
-            ]);
+            ] + $this->priceAttributes($merchant, $data['price'], $vatRate));
 
             if (isset($data['created_at'])) {
                 $product->forceFill(['created_at' => $data['created_at']])->save();
@@ -192,16 +186,11 @@ class CatalogueService
                 $product->alarm_limit = $data['limits']['alarm_limit'];
             }
 
-            $priceOrVatChanged = isset($data['price']) || isset($data['vat_rate']);
-            if ($priceOrVatChanged) {
-                $usd = isset($data['price']) ? $this->usdMajor($merchant, $data['price']) : (float) $product->price;
-                $vatRate = $data['vat_rate'] ?? $product->vat / 100;
-
-                $product->price = $usd;
-                $product->price_sls = round($usd * $merchant->effectiveExchangeRate(), 2);
-                $product->exchange_rate = $merchant->effectiveExchangeRate();
-                $product->vat = (int) round($vatRate * 100);
-                $product->total_price = round($usd * (1 + $vatRate), 2);
+            if (isset($data['price'])) {
+                $product->fill($this->priceAttributes($merchant, $data['price'], $data['vat_rate'] ?? $product->vat / 100));
+            } elseif (isset($data['vat_rate'])) {
+                $product->vat = (int) round($data['vat_rate'] * 100);
+                $product->total_price = round((float) $product->price * (1 + $data['vat_rate']), 2);
             }
 
             if ($product->isDirty()) {
@@ -346,14 +335,44 @@ class CatalogueService
     }
 
     /**
-     * The catalogue prices in USD; an SLSH price is converted at the shop's own rate.
+     * Keep the price in the currency it was entered in. The USD columns are a
+     * display mirror for older screens; cart totals never read them back.
+     *
+     * @param  array{amount: int, currency: string}  $price
+     * @return array<string, mixed>
      */
-    private function usdMajor(Merchant $merchant, array $price): float
+    private function priceAttributes(Merchant $merchant, array $price, float $vatRate): array
     {
-        if ($price['currency'] === 'USD') {
-            return $price['amount'] / 100;
+        $rate = $merchant->effectiveExchangeRate();
+        $currency = strtoupper($price['currency']);
+        $vatPercent = (int) round($vatRate * 100);
+
+        if ($currency === 'SLSH') {
+            $shillings = (int) $price['amount'];
+            $usd = round($shillings / max($rate, 1), 2);
+
+            return [
+                'price' => $usd,
+                'price_currency' => 'SLSH',
+                'price_amount' => $shillings,
+                'price_sls' => $shillings,
+                'exchange_rate' => $rate,
+                'vat' => $vatPercent,
+                'total_price' => round($usd * (1 + $vatRate), 2),
+            ];
         }
 
-        return round($price['amount'] / $merchant->effectiveExchangeRate(), 2);
+        $cents = (int) $price['amount'];
+        $usd = $cents / 100;
+
+        return [
+            'price' => $usd,
+            'price_currency' => 'USD',
+            'price_amount' => $cents,
+            'price_sls' => round($usd * $rate, 2),
+            'exchange_rate' => $rate,
+            'vat' => $vatPercent,
+            'total_price' => round($usd * (1 + $vatRate), 2),
+        ];
     }
 }

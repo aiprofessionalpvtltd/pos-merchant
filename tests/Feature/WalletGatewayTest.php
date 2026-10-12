@@ -174,11 +174,24 @@ it('pre-authorises a Zaad payment', function () {
             && $params['merchantUid'] === 'M0000001'
             && $params['apiKey'] === 'API-TEST-KEY'
             && $params['payerInfo']['accountNo'] === '252634110101'
-            && $params['transactionInfo']['amount'] === 500
-            && $params['transactionInfo']['currency'] === 'SLSH';
+            && $params['transactionInfo']['amount'] === '500'
+            && $params['transactionInfo']['currency'] === 'SLSH'
+            && $request['billTo']['name'] === ''
+            && $request['shipTo']['name'] === ''
+            && $request['items'][0]['quantity'] === '1'
+            && $request['items'][0]['price'] === '500'
+            && $request['items'][0]['totalAmount'] === '500';
     });
 
-    expect($issued)->toBe(['invoice_id' => '324922', 'transaction_id' => '42750126', 'hash' => '0', 'prompt' => null]);
+    $sentInvoiceId = Http::recorded()[0][0]['serviceParams']['transactionInfo']['invoiceId'];
+
+    expect($issued)->toBe([
+        'invoice_id' => '324922',
+        'transaction_id' => '42750126',
+        'hash' => '0',
+        'prompt' => null,
+        'provider_invoice_id' => $sentInvoiceId,
+    ]);
 });
 
 it('shows the customer what a Zaad payment is for', function () {

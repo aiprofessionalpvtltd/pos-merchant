@@ -1,4 +1,4 @@
-﻿<?php
+<?php
 
 use App\Models\Cart;
 use App\Models\CartItem;
@@ -6,7 +6,6 @@ use App\Models\Merchant;
 use Database\Seeders\PlanCatalogueSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Str;
 
 uses(DatabaseTransactions::class);
 
@@ -55,7 +54,7 @@ it('returns an empty ticket rather than a 404', function () {
     expect(Cart::count())->toBeGreaterThanOrEqual(1);
 });
 
-it('adds lines and prices the ticket with VAT', function () {
+it('adds lines and prices the ticket with GST on the subtotal', function () {
     [, $token, $rice, $tea] = tillWithStock();
 
     addLine($token, $rice['id'], 2)->assertOk();
@@ -72,27 +71,27 @@ it('adds lines and prices the ticket with VAT', function () {
         ->assertJsonPath('data.items.0.available_quantity', 24)
         ->assertJsonPath('data.items.0.held', false)
         ->assertJsonPath('data.totals.subtotal.amount', 4200)
-        ->assertJsonPath('data.totals.vat.amount', 185)
-        ->assertJsonPath('data.totals.fee.amount', 125)
+        ->assertJsonPath('data.totals.vat.amount', 0)
+        ->assertJsonPath('data.totals.fee.amount', 0)
         ->assertJsonPath('data.totals.fee.currency', 'USD')
-        ->assertJsonPath('data.totals.fee.display', '$1.25')
-        ->assertJsonPath('data.totals.fee_alt.amount', 10000)
+        ->assertJsonPath('data.totals.fee.display', '$0.00')
+        ->assertJsonPath('data.totals.fee_alt.amount', 0)
         ->assertJsonPath('data.totals.fee_alt.currency', 'SLSH')
         ->assertJsonPath('data.totals.fee_percent', 2.85)
-        ->assertJsonPath('data.totals.gst.amount', 110)
+        ->assertJsonPath('data.totals.gst.amount', 105)
         ->assertJsonPath('data.totals.gst.currency', 'USD')
-        ->assertJsonPath('data.totals.gst.display', '$1.10')
-        ->assertJsonPath('data.totals.gst_alt.amount', 8800)
+        ->assertJsonPath('data.totals.gst.display', '$1.05')
+        ->assertJsonPath('data.totals.gst_alt.amount', 8400)
         ->assertJsonPath('data.totals.gst_alt.currency', 'SLSH')
         ->assertJsonPath('data.totals.gst_percent', 2.5)
-        ->assertJsonPath('data.totals.total.amount', 4385)
-        ->assertJsonPath('data.totals.total.display', '$43.85')
-        ->assertJsonPath('data.totals.total_alt.amount', 350800)
-        ->assertJsonPath('data.totals.vat_rate', 0.05)
+        ->assertJsonPath('data.totals.total.amount', 4305)
+        ->assertJsonPath('data.totals.total.display', '$43.05')
+        ->assertJsonPath('data.totals.total_alt.amount', 344400)
+        ->assertJsonPath('data.totals.vat_rate', 0)
         ->assertJsonPath('data.totals.exchange_rate', 8000)
         ->assertJsonPath('data.version', 3);
 
-    test()->withToken($token)->getJson('/api/v1/cart')->assertJsonPath('data.totals.total.amount', 4385);
+    test()->withToken($token)->getJson('/api/v1/cart')->assertJsonPath('data.totals.total.amount', 4305);
 });
 
 it('adds to the quantity of a line already on the ticket', function () {
@@ -145,7 +144,11 @@ it('lets the shopkeeper override a line price in either currency', function () {
         ->assertOk()->assertJsonPath('data.items.0.unit_price.amount', 1500)->assertJsonPath('data.totals.subtotal.amount', 1500);
 
     test()->withToken($token)->patchJson('/api/v1/cart/items/'.$rice['id'], ['unit_price' => ['amount' => 80000, 'currency' => 'SLSH']])
-        ->assertOk()->assertJsonPath('data.items.0.unit_price.amount', 1000)->assertJsonPath('data.items.0.quantity', 1);
+        ->assertOk()
+        ->assertJsonPath('data.items.0.unit_price.amount', 80000)
+        ->assertJsonPath('data.items.0.unit_price.currency', 'SLSH')
+        ->assertJsonPath('data.items.0.unit_price_alt.amount', 1000)
+        ->assertJsonPath('data.items.0.quantity', 1);
 });
 
 it('changes a quantity and refuses a stale edit', function () {
@@ -284,6 +287,36 @@ it('merges into or replaces the server ticket when syncing', function () {
     $sync(['lines' => []])->assertStatus(422);
     $sync(['strategy' => 'other'])->assertStatus(422);
     $sync(['lines' => [['client_line_id' => 'a', 'product_id' => 1, 'quantity' => 1], ['client_line_id' => 'a', 'product_id' => 2, 'quantity' => 1]]])->assertStatus(422);
+});
+
+it('prices an SLSH cart in shillings and adds GST once', function () {
+    [$owner, $token] = tillWithStock();
+    $owner->merchant->update(['exchange_rate' => 10000]);
+    app('auth')->forgetGuards();
+
+    $drink = addProduct($token, [
+        'bar_code' => 'CEL-1', 'product_name' => 'Celcius',
+        'price' => ['amount' => 10000, 'currency' => 'SLSH'], 'quantity' => 5,
+    ]);
+
+    expect($drink['price']['amount'])->toBe(10000)
+        ->and($drink['price']['currency'])->toBe('SLSH');
+
+    addLine($token, $drink['id'], 2)->assertOk()
+        ->assertJsonPath('data.items.0.unit_price.amount', 10000)
+        ->assertJsonPath('data.items.0.unit_price.currency', 'SLSH')
+        ->assertJsonPath('data.totals.subtotal.amount', 20000)
+        ->assertJsonPath('data.totals.subtotal.currency', 'SLSH')
+        ->assertJsonPath('data.totals.subtotal_alt.amount', 200)
+        ->assertJsonPath('data.totals.gst.amount', 500)
+        ->assertJsonPath('data.totals.gst_alt.amount', 5)
+        ->assertJsonPath('data.totals.vat.amount', 0)
+        ->assertJsonPath('data.totals.vat_rate', 0)
+        ->assertJsonPath('data.totals.total.amount', 20500)
+        ->assertJsonPath('data.totals.total.currency', 'SLSH')
+        ->assertJsonPath('data.totals.total_alt.amount', 205)
+        ->assertJsonPath('data.totals.total_alt.display', '$2.05')
+        ->assertJsonPath('data.totals.exchange_rate', 10000);
 });
 
 it('rejects a held line with a zero quantity without failing the batch', function () {

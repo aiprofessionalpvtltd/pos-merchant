@@ -18,30 +18,57 @@ class WaafiProvider implements WalletProvider
     public function issue(string $walletE164, int $amount, string $currency, string $description): array
     {
         $referenceId = (string) random_int(100000, 999999);
+        $invoiceId = (string) random_int(100000, 999999);
 
         $body = $this->post('API_PREAUTHORIZE', ['our_reference' => $referenceId], [
             'paymentMethod' => 'MWALLET_ACCOUNT',
             'payerInfo' => ['accountNo' => substr($walletE164, 1)],
             'transactionInfo' => [
                 'referenceId' => $referenceId,
-                'invoiceId' => (string) random_int(100000, 999999),
-                'amount' => $amount,
+                'invoiceId' => $invoiceId,
+                'amount' => (string) $amount,
                 'currency' => $currency,
                 'description' => $description,
                 'paymentBrand' => 'WAAFI',
             ],
-        ]);
+        ], $this->preauthorizeEnvelope($amount, $description));
 
         if (! $this->isSuccess($body)) {
             throw new ApiException('payment.wallet_invalid', $body['responseMsg'] ?? 'That wallet number is not valid', 422, [], 'wallet_number');
         }
 
-        return [
+        $issued = [
             'invoice_id' => (string) $body['params']['referenceId'],
             'transaction_id' => (string) $body['params']['transactionId'],
             'hash' => '0',
             'prompt' => null,
+            'provider_invoice_id' => $invoiceId,
         ];
+
+        if (! empty($body['params']['orderId'])) {
+            $issued['provider_order_id'] = (string) $body['params']['orderId'];
+        }
+
+        return $issued;
+    }
+
+    /**
+     * Release a hold. This is not a status check: API_PREAUTHORIZE_COMMIT would take the money.
+     */
+    public function cancel(Invoice $invoice): void
+    {
+        $this->post('API_CANCEL', [
+            'invoice_id' => $invoice->id,
+            'our_reference' => $invoice->invoice_id,
+        ], [
+            'transactionInfo' => [
+                'referenceId' => $invoice->invoice_id,
+                'invoiceId' => (string) ($invoice->meta['provider_invoice_id'] ?? $invoice->invoice_id),
+                'amount' => (int) round((float) $invoice->amount),
+                'currency' => $invoice->currency ?: 'SLSH',
+                'description' => 'Cancel transaction',
+            ],
+        ]);
     }
 
     /**
@@ -73,9 +100,50 @@ class WaafiProvider implements WalletProvider
     }
 
     /**
-     * @param  array{invoice_id?: ?int, our_reference?: ?string}  $context
+     * The extra objects WaafiPay's working API_PREAUTHORIZE body includes.
+     *
+     * @return array{billTo: array<string, string>, shipTo: array<string, string>, items: array<int, array<string, string>>}
      */
-    private function post(string $serviceName, array $context, array $serviceParams): array
+    private function preauthorizeEnvelope(int $amount, string $description): array
+    {
+        $party = [
+            'id' => '',
+            'name' => '',
+            'phone' => '',
+            'email' => '',
+            'addressLine1' => '',
+            'addressLine2' => '',
+            'city' => '',
+            'state' => '',
+            'country' => '',
+        ];
+        $price = (string) $amount;
+
+        return [
+            'billTo' => $party,
+            'shipTo' => $party,
+            'items' => [[
+                'id' => '1',
+                'merchantItemId' => 'item001',
+                'description' => $description,
+                'name' => $description,
+                'type' => 'PHYSICAL',
+                'quantity' => '1',
+                'price' => $price,
+                'tax' => '0',
+                'taxAmount' => '0',
+                'discountPercentage' => '0',
+                'shippingAmount' => '0',
+                'totalAmount' => $price,
+            ]],
+        ];
+    }
+
+    /**
+     * @param  array{invoice_id?: ?int, our_reference?: ?string}  $context
+     * @param  array<string, mixed>  $extra  Root fields beside serviceParams, used by API_PREAUTHORIZE
+     */
+    private function post(string $serviceName, array $context, array $serviceParams, array $extra = []): array
     {
         $config = config('exelo.providers.waafi');
 
@@ -90,7 +158,7 @@ class WaafiProvider implements WalletProvider
                 'apiUserId' => $config['api_user_id'],
                 'apiKey' => $config['api_key'],
             ] + $serviceParams,
-        ];
+        ] + $extra;
 
         return $this->http->send(
             'waafi',

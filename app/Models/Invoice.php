@@ -95,11 +95,25 @@ class Invoice extends Model
     /**
      * Meta to store for a freshly issued wallet invoice.
      *
-     * @param  array{prompt?: ?string}  $issued
+     * @param  array{prompt?: ?string, provider_invoice_id?: ?string, provider_order_id?: ?string}  $issued
      */
     public static function issuedMeta(array $issued): array
     {
-        return isset($issued['prompt']) ? ['provider_prompt' => $issued['prompt']] : [];
+        $meta = [];
+
+        if (isset($issued['prompt'])) {
+            $meta['provider_prompt'] = $issued['prompt'];
+        }
+
+        if (! empty($issued['provider_invoice_id'])) {
+            $meta['provider_invoice_id'] = $issued['provider_invoice_id'];
+        }
+
+        if (! empty($issued['provider_order_id'])) {
+            $meta['provider_order_id'] = $issued['provider_order_id'];
+        }
+
+        return $meta;
     }
 
     /**

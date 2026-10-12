@@ -32,16 +32,19 @@ class ProductResource extends JsonResource
             return ['id' => $product->id, 'version' => $product->version, 'deleted_at' => ApiResponse::iso($product->deleted_at)];
         }
 
-        $cents = Money::toMinor((float) $product->price, 'USD');
+        $entered = $product->enteredPrice();
         $quantities = $this->quantities($product);
+        $rate = max($this->exchangeRate, 1);
 
         $data = [
             'id' => $product->id,
             'version' => $product->version,
             'product_name' => $product->product_name,
             'bar_code' => $product->bar_code,
-            'price' => Money::usd($cents),
-            'price_alt' => Money::of((int) round($cents * $this->exchangeRate / 100), config('exelo.alt_currency')),
+            'price' => Money::of($entered['amount'], $entered['currency']),
+            'price_alt' => $entered['currency'] === 'SLSH'
+                ? Money::usd((int) round($entered['amount'] / $rate * 100))
+                : Money::of((int) round($entered['amount'] * $rate / 100), config('exelo.alt_currency')),
             'vat_rate' => round($product->vat / 100, 4),
             'category' => $product->category ? ['id' => $product->category->id, 'name' => $product->category->name] : null,
         ];

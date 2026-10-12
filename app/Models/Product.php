@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\Money;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -17,6 +18,8 @@ class Product extends Model
         'shop_id',
         'merchant_id',
         'price',
+        'price_currency',
+        'price_amount',
         'price_sls',
         'exchange_rate',
         'vat',
@@ -37,6 +40,30 @@ class Product extends Model
                 $product->merchant_id = Shop::whereKey($product->shop_id)->value('merchant_id');
             }
         });
+    }
+
+    /**
+     * The price as it was entered: whole shillings for SLSH, cents for USD.
+     *
+     * @return array{amount: int, currency: string}
+     */
+    public function enteredPrice(): array
+    {
+        $currency = strtoupper((string) ($this->price_currency ?: 'USD'));
+
+        if ($currency === 'SLSH') {
+            $amount = $this->price_amount !== null
+                ? (int) $this->price_amount
+                : (int) round((float) $this->price_sls);
+
+            return ['amount' => $amount, 'currency' => 'SLSH'];
+        }
+
+        $amount = $this->price_currency === 'USD' && $this->price_amount !== null
+            ? (int) $this->price_amount
+            : Money::toMinor((float) $this->price, 'USD');
+
+        return ['amount' => $amount, 'currency' => 'USD'];
     }
 
     public function category()

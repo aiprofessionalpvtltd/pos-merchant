@@ -157,7 +157,7 @@ class InvoicePaymentService
     /**
      * The shopkeeper abandoned a payment that is still waiting. eDahab is checked
      * first so a payment that already came back Paid is settled instead of cancelled.
-     * Zaad is not asked: its status call would take the money.
+     * Zaad is released with API_CANCEL. Its status call commits the hold and would take the money.
      */
     public function cancel(Invoice $invoice): Invoice
     {
@@ -184,6 +184,16 @@ class InvoicePaymentService
 
             if ($invoice->status !== 'Pending') {
                 throw new ApiException('payment.already_settled', 'This payment is already finished', 409);
+            }
+        } elseif ($invoice->rail === 'zaad') {
+            try {
+                $this->gateway->release($invoice);
+            } catch (ApiException $e) {
+                if ($e->errorCode !== 'payment.provider_unavailable') {
+                    throw $e;
+                }
+
+                $reason = 'Cancelled by the shop. Zaad could not be checked.';
             }
         }
 

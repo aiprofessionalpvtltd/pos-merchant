@@ -39,4 +39,15 @@ class Money
     {
         return ['amount' => $cents, 'currency' => 'USD', 'display' => '$'.number_format($cents / 100, 2)];
     }
+
+    /**
+     * A percent of an amount in minor units, rounded once to the nearest unit.
+     * 2.5% of 20,000 is 500. Half units round away from zero (92.5 → 93).
+     */
+    public static function share(int $amount, float $percent): int
+    {
+        $basisPoints = (int) round($percent * 100);
+
+        return (int) round($amount * $basisPoints / 10000);
+    }
 }

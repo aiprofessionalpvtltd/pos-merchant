@@ -21,7 +21,10 @@ class OrderService
 {
     private const COMPLETE_STATUSES = ['complete', 'paid'];
 
-    public function __construct(private readonly StockService $stock) {}
+    public function __construct(
+        private readonly StockService $stock,
+        private readonly PaymentSettingsService $paymentSettings,
+    ) {}
 
     /**
      * @param  array<string, mixed>  $filters
@@ -108,7 +111,17 @@ class OrderService
                 $product = Product::where('shop_id', $merchant->id)->find($item['product_id'])
                     ?? throw new ApiException('product.not_found', 'We could not find that product', 404, ['product_id' => $item['product_id']]);
 
-                $lines[] = ['product_id' => $product->id, 'quantity' => (int) $item['quantity'], 'unit_cents' => Money::toMinor((float) $product->price, 'USD'), 'vat_percent' => (int) $product->vat];
+                $entered = $product->enteredPrice();
+                $lines[] = [
+                    'product_id' => $product->id,
+                    'quantity' => (int) $item['quantity'],
+                    'unit_amount' => $entered['amount'],
+                    'currency' => $entered['currency'],
+                    'unit_cents' => $entered['currency'] === 'SLSH'
+                        ? (int) round($entered['amount'] / max($merchant->effectiveExchangeRate(), 1) * 100)
+                        : $entered['amount'],
+                    'vat_percent' => 0,
+                ];
             }
 
             $order = $this->createFromLines($actor, $merchant, $lines, $data['customer'] ?? [], [
@@ -129,32 +142,68 @@ class OrderService
     /**
      * Writes an order and its lines. Prices are USD minor units as they were on the ticket.
      *
-     * @param  array<int, array{product_id: int, quantity: int, unit_cents: int, vat_percent: int}>  $lines
+     * @param  array<int, array{product_id: int, quantity: int, unit_cents: int, vat_percent?: int, unit_amount?: int, currency?: string}>  $lines
      * @param  array<string, mixed>  $customer
      * @param  array<string, mixed>  $attributes
      */
     public function createFromLines(User $actor, Merchant $merchant, array $lines, array $customer, array $attributes, int $feeCents = 0): Order
     {
-        $subtotal = 0;
-        $vat = 0;
+        $rate = $merchant->effectiveExchangeRate();
+        $currency = $this->saleCurrency($lines);
+        $gstPercent = $this->paymentSettings->gst()['percent'];
 
-        foreach ($lines as $line) {
-            $lineCents = $line['unit_cents'] * $line['quantity'];
-            $subtotal += $lineCents;
-            $vat += (int) round($lineCents * $line['vat_percent'] / 100);
+        if ($currency === 'SLSH') {
+            $subtotal = 0;
+            foreach ($lines as $line) {
+                $subtotal += (int) $line['unit_amount'] * (int) $line['quantity'];
+            }
+            $gst = Money::share($subtotal, $gstPercent);
+            $total = $subtotal + $gst;
+
+            $order = Order::create($attributes + [
+                'shop_id' => $merchant->id,
+                'user_id' => $actor->id,
+                'version' => 1,
+                'currency' => 'SLSH',
+                'name' => $customer['name'] ?? null,
+                'mobile_number' => $customer['mobile_number'] ?? null,
+                'sub_total' => round($subtotal / max($rate, 1), 2),
+                'vat' => round($gst / max($rate, 1), 2),
+                'exelo_amount' => $feeCents / 100,
+                'total_price' => round($total / max($rate, 1), 2),
+                'total_price_sls' => $total,
+                'exchange_rate' => $rate,
+            ]);
+
+            foreach ($lines as $line) {
+                OrderItem::create([
+                    'order_id' => $order->id,
+                    'product_id' => $line['product_id'],
+                    'quantity' => $line['quantity'],
+                    'price' => round($line['unit_amount'] / max($rate, 1), 2),
+                ]);
+            }
+
+            return $order;
         }
 
-        $total = $subtotal + $vat;
-        $rate = $merchant->effectiveExchangeRate();
+        $subtotal = 0;
+        foreach ($lines as $line) {
+            $subtotal += $line['unit_cents'] * $line['quantity'];
+        }
+
+        $gst = Money::share($subtotal, $gstPercent);
+        $total = $subtotal + $gst;
 
         $order = Order::create($attributes + [
             'shop_id' => $merchant->id,
             'user_id' => $actor->id,
             'version' => 1,
+            'currency' => 'USD',
             'name' => $customer['name'] ?? null,
             'mobile_number' => $customer['mobile_number'] ?? null,
             'sub_total' => $subtotal / 100,
-            'vat' => $vat / 100,
+            'vat' => $gst / 100,
             'exelo_amount' => $feeCents / 100,
             'total_price' => $total / 100,
             'total_price_sls' => round($total * $rate / 100, 2),
@@ -166,6 +215,16 @@ class OrderService
         }
 
         return $order;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $lines
+     */
+    private function saleCurrency(array $lines): string
+    {
+        $currencies = collect($lines)->map(fn (array $line) => strtoupper((string) ($line['currency'] ?? 'USD')))->unique();
+
+        return $currencies->count() === 1 ? (string) $currencies->first() : 'USD';
     }
 
     /**
@@ -289,7 +348,7 @@ class OrderService
         $rate = $merchant->effectiveExchangeRate();
         $totals = $this->totals($order, $rate);
         $charge = $this->latestCharge($order);
-        $vatLabel = rtrim(rtrim(number_format($merchant->vat_rate * 100, 2, '.', ''), '0'), '.').'%';
+        $vatLabel = rtrim(rtrim(number_format($this->paymentSettings->gst()['percent'], 2, '.', ''), '0'), '.').'%';
         $preferences = array_replace_recursive(config('exelo.preference_defaults'), $merchant->preferences ?? []);
 
         return [

@@ -8,7 +8,7 @@ use App\Models\Order;
 use App\Models\User;
 use App\Support\ApiResponse;
 use App\Support\Idempotency;
-use App\Support\Money;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -45,12 +45,22 @@ class CheckoutService
                 throw new ApiException('cart.empty', 'There is nothing to pay for', 422);
             }
 
-            $total = $snapshot['totals']['total']['amount'];
+            $total = $snapshot['totals']['total'];
+            $amount = ['amount' => $total['amount'], 'currency' => $total['currency']];
+
+            if (! empty($data['quote_id'])) {
+                $stored = Cache::get('payment-quote:'.$data['quote_id']);
+                $quoted = is_array($stored) ? ($stored['quote']['amount'] ?? null) : null;
+
+                if (is_array($quoted) && isset($quoted['amount'], $quoted['currency'])) {
+                    $amount = ['amount' => (int) $quoted['amount'], 'currency' => strtoupper((string) $quoted['currency'])];
+                }
+            }
 
             $charge = $this->charges->create($user, $merchant, [
                 'rail' => $data['rail'],
                 'purpose' => 'pos_sale',
-                'amount' => ['amount' => $total, 'currency' => 'USD'],
+                'amount' => $amount,
                 'customer' => $data['customer'] ?? [],
                 'cart_id' => $cart->id,
                 'cart_version' => $cart->version,
@@ -97,12 +107,7 @@ class CheckoutService
                 throw new ApiException('cart.empty', 'There is nothing to hold', 422);
             }
 
-            $lines = $cart->items->map(fn ($item) => [
-                'product_id' => $item->product_id,
-                'quantity' => $item->quantity,
-                'unit_cents' => Money::toMinor((float) $item->price, 'USD'),
-                'vat_percent' => (int) ($item->product->vat ?? 0),
-            ])->all();
+            $lines = $this->carts->orderLines($cart, $merchant);
 
             $signatureFileId = $data['signature_file_id'] ?? null;
 

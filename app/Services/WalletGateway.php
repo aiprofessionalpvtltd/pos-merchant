@@ -35,6 +35,18 @@ class WalletGateway
         return $this->provider($invoice->rail)->status($invoice);
     }
 
+    /**
+     * Release a Zaad hold. eDahab has no release call; its cancel path
+     * re-checks the invoice instead. Zaad must not be re-checked here,
+     * because that call commits the hold and takes the money.
+     */
+    public function release(Invoice $invoice): void
+    {
+        if ($invoice->rail === 'zaad') {
+            $this->waafi->cancel($invoice);
+        }
+    }
+
     private function provider(string $rail): WalletProvider
     {
         return $rail === 'edahab' ? $this->edahab : $this->waafi;

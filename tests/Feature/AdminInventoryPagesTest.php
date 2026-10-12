@@ -162,7 +162,7 @@ it('lists the open tickets on each till and hides empty ones', function () {
         ->and($row['type'])->toBe('Shop')
         ->and($row['lines'])->toBe(2)
         ->and($row['units'])->toBe(3)
-        ->and($row['total'])->toBe('$40.69')
+        ->and($row['total'])->toBe('$39.72')
         ->and($row['action'])->toContain('/admin/carts/'.$row['id']);
 
     $all = collect(table($admin, 'admin.carts.index', ['include_empty' => 1], ['device_id'])->assertOk()->json('data'))->where('merchant', 'Exelo Retail');
@@ -182,9 +182,9 @@ it('shows a ticket with its lines and totals exactly as the till does', function
         ->assertSee('Kalid Ahmed')
         ->assertSee('dev-1')
         ->assertSee('$37.00')
-        ->assertSee('$1.85')
-        ->assertSee('$38.85')
-        ->assertSee('310,800 SLSH');
+        ->assertSee('$0.93')
+        ->assertSee('$37.93')
+        ->assertSee('303,440 SLSH');
 
     test()->actingAs($admin, 'web')->get(route('admin.carts.view', 999999))->assertNotFound();
 });

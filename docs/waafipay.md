@@ -143,10 +143,30 @@ A failure has **no `params` at all**. Read `params` only after checking
 | `params.transactionId` | WaafiPay's transaction id. Needed to commit or cancel |
 | `params.txAmount` | Amount WaafiPay processed |
 
-This shape is taken from the fields the code reads (`errorCode`, `responseMsg`,
-`params.state`, `params.referenceId`, `params.transactionId`, `params.txAmount`).
-**No real response has been captured for this doc yet.** Copy one from `api_logs`
-and replace the example (see [Responses still to capture](#responses-still-to-capture)).
+A captured `API_PREAUTHORIZE` approval (2026-10-11) looks like this. `params.state`
+is `APPROVED` and `params.orderId` matches `params.transactionId`. That answer
+means the hold was accepted. The money is taken later by `API_PREAUTHORIZE_COMMIT`.
+
+```json
+{
+  "schemaVersion": "1.0",
+  "timestamp": "2026-10-11 11:52:03.415",
+  "responseId": "7897342019",
+  "responseCode": "2001",
+  "errorCode": "0",
+  "responseMsg": "RCS_SUCCESS",
+  "params": {
+    "orderId": "98175032",
+    "state": "APPROVED",
+    "referenceId": "11111",
+    "transactionId": "98175032",
+    "txAmount": "500.0"
+  }
+}
+```
+
+`orderId` is stored as `invoices.meta.provider_order_id`. Commit and cancel still
+use `transactionId` and our `referenceId`.
 
 ---
 
@@ -175,12 +195,30 @@ released by [`API_CANCEL`](#3-api_cancel--release-a-hold).
     "transactionInfo": {
       "referenceId": "324922",
       "invoiceId": "781402",
-      "amount": 301920,
+      "amount": "301920",
       "currency": "SLSH",
       "description": "EXELO sale",
       "paymentBrand": "WAAFI"
     }
-  }
+  },
+  "billTo": { "id": "", "name": "", "phone": "", "email": "", "addressLine1": "", "addressLine2": "", "city": "", "state": "", "country": "" },
+  "shipTo": { "id": "", "name": "", "phone": "", "email": "", "addressLine1": "", "addressLine2": "", "city": "", "state": "", "country": "" },
+  "items": [
+    {
+      "id": "1",
+      "merchantItemId": "item001",
+      "description": "EXELO sale",
+      "name": "EXELO sale",
+      "type": "PHYSICAL",
+      "quantity": "1",
+      "price": "301920",
+      "tax": "0",
+      "taxAmount": "0",
+      "discountPercentage": "0",
+      "shippingAmount": "0",
+      "totalAmount": "301920"
+    }
+  ]
 }
 ```
 
@@ -189,8 +227,10 @@ released by [`API_CANCEL`](#3-api_cancel--release-a-hold).
 | `paymentMethod` | string | yes | `MWALLET_ACCOUNT` |
 | `payerInfo.accountNo` | string | yes | Customer number **with** country code, no `+`: `252634110101`. From E.164: `substr($e164, 1)`. Zaad numbers start `63` |
 | `transactionInfo.referenceId` | string | yes | **Our** id for this payment. Stored as `invoices.invoice_id` and needed for commit and cancel |
-| `transactionInfo.invoiceId` | string | yes | Our invoice number. `WalletGateway` sends a random 6-digit number and does not store it |
-| `transactionInfo.amount` | number | yes | Whole shillings for `SLSH` |
+| `transactionInfo.invoiceId` | string | yes | Our invoice number. A random 6-digit number, stored as `invoices.meta.provider_invoice_id` |
+| `transactionInfo.amount` | string | yes | Whole shillings for `SLSH`, sent as a string (`"500"`) |
+| `billTo`, `shipTo` | object | yes | Empty address objects. WaafiPay's working pre-authorise includes them |
+| `items` | array | yes | One line for the payment. `price` and `totalAmount` are the same string as `transactionInfo.amount` |
 | `transactionInfo.currency` | string | yes | `SLSH` (what EXELO bills in); `USD` if the merchant account allows it |
 | `transactionInfo.description` | string | yes | Shown to the customer. `WalletGateway` sends `EXELO signup` for **every** payment, sales included (gap 6) |
 | `transactionInfo.paymentBrand` | string | no | `WAAFI` |
@@ -262,8 +302,10 @@ depends on them:
 ## 3. `API_CANCEL` — release a hold
 
 Gives the held money back to the customer: the shopkeeper backed out, or the
-payment was never committed. **Not in `WalletGateway`**, so a v1 charge that is
-abandoned keeps the customer's money held until WaafiPay releases it itself.
+payment was never committed. `POST /payments/charges/{id}/cancel` calls
+`WalletGateway::release()`, which sends this request. It does not call
+`API_PREAUTHORIZE_COMMIT`, so backing out does not take the money. The
+`invoiceId` is the one stored on the invoice when the hold was created.
 
 **Request** (as the legacy code sends it)
 
@@ -293,17 +335,16 @@ abandoned keeps the customer's money held until WaafiPay releases it itself.
 | Field | Type | Required | Notes |
 | --- | --- | --- | --- |
 | `transactionInfo.referenceId` | string | yes | Our `referenceId` from `API_PREAUTHORIZE` |
-| `transactionInfo.invoiceId` | string | yes | The `invoiceId` sent on `API_PREAUTHORIZE`. **`WalletGateway` does not store it today**, so it would have to be kept before cancel can be built |
+| `transactionInfo.invoiceId` | string | yes | The `invoiceId` sent on `API_PREAUTHORIZE`, stored as `invoices.meta.provider_invoice_id` |
 | `transactionInfo.amount` / `currency` | — | yes | As held |
 | `transactionInfo.description` | string | yes | Free text |
 
 `errorCode == 0` means released; mark the invoice `Cancelled`.
 
-> The legacy code sends `API_CANCEL` without WaafiPay's `transactionId`.
-> WaafiPay's published API also has `API_PREAUTHORIZE_CANCEL`, which takes
-> `transactionId` in `serviceParams` like the commit. Confirm with WaafiPay which
-> service releases a pre-authorisation before building this; this doc has no
-> captured cancel response.
+The v1 cancel uses this same `API_CANCEL` body the legacy app sends, without
+WaafiPay's `transactionId`. WaafiPay's published API also has
+`API_PREAUTHORIZE_CANCEL`, which takes `transactionId` in `serviceParams` like
+the commit. No captured cancel response is on file.
 
 ## 4. `API_CREDITACCOUNT` — send money to a wallet (payout)
 
@@ -454,7 +495,7 @@ decline from a bad number would be guesswork.
 | 1 ✅ | Real WaafiPay credentials (two merchant accounts) are hard-coded as `env()` fallbacks in the legacy controller; eDahab's key is in `config/services.php` | Remove the fallbacks, use `config('exelo.providers.waafi.*')`; add the keys to `.env.example`; **rotate the keys** with WaafiPay and eDahab | `API\PaymentController`, `config/services.php`, `.env.example` |
 | 2 | Every `API_PREAUTHORIZE` failure becomes `422 payment.wallet_invalid`, even a customer decline or low balance; every commit failure means "still pending" | Map `responseMsg` / `errorCode` to `payment.declined` (with `reason`) vs `payment.wallet_invalid`; mark the invoice `Failed` on a definite decline. Needs captured failure responses first | `app/Services/WalletGateway.php` |
 | 3 ✅ | `zaadStatus()` checks `params.state === 'approved'` (exact, lower-case). WaafiPay's published examples use `APPROVED` | Compare with `strtolower()`; check real values in `api_logs` | `app/Services/WalletGateway.php` |
-| 4 | No cancel in `WalletGateway`, so [`POST /payments/charges/{id}/cancel`](payments.md#6-post-apiv1paymentschargescharge_idcancel--cancel-a-pending-payment) can't release a Zaad hold | Store the `invoiceId` sent on pre-authorise (e.g. in `invoices.meta`); add `WalletGateway::cancel(Invoice $invoice)` once WaafiPay confirms `API_CANCEL` vs `API_PREAUTHORIZE_CANCEL` | `app/Services/WalletGateway.php`, `ChargeService` |
+| 4 ✅ | No cancel in `WalletGateway`, so [`POST /payments/charges/{id}/cancel`](payments.md#6-post-apiv1paymentschargescharge_idcancel--cancel-a-pending-payment) can't release a Zaad hold | Store the `invoiceId` sent on pre-authorise in `invoices.meta.provider_invoice_id` and release with the legacy `API_CANCEL` shape via `WalletGateway::release()` | `WaafiProvider`, `WalletGateway`, `InvoicePaymentService` |
 | 5 | `API_CREDITACCOUNT` exists only in the legacy controller | Add `WalletGateway::payout('zaad', …)` next to the eDahab payout ([edahab.md gap 2](edahab.md#gaps-and-implementation-plan)), used by the same v1 payout endpoint | `app/Services/WalletGateway.php`, `PayoutService` |
 | 6 ✅ | Every Zaad prompt says `EXELO signup`, including sales and subscriptions | Pass a description per purpose (`EXELO sale`, `EXELO subscription`, …) into `issue()` | `app/Services/WalletGateway.php` and its callers |
 | 7 | Legacy payout sends `accountType: "MERCHANT"` even when falling back to a personal number | Send `CUSTOMER` with a `252…` number, `MERCHANT` only with a merchant code | New payout code (don't patch the legacy one) |
@@ -472,7 +513,7 @@ payout. 8 and 9 are small fixes if the legacy routes are still called.
 Copy these from `api_logs` (`url = https://api.waafipay.net/asm`) or a Postman run,
 and paste them into this doc:
 
-- `API_PREAUTHORIZE`: approved, customer declined / wrong PIN, low balance, no answer
+- `API_PREAUTHORIZE`: approved is captured (2026-10-11). Still needed: customer declined / wrong PIN, low balance, no answer
 - `API_PREAUTHORIZE_COMMIT`: after approval, **before** approval, and a second
   commit of the same transaction
 - `API_CANCEL`: released, and cancelling an already committed payment

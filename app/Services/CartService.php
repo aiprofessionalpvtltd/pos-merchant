@@ -66,7 +66,7 @@ class CartService
 
             $this->assertInStock($product, $type, $wanted);
 
-            $this->saveLine($cart, $product, $line, $wanted, $merchant, $data['unit_price'] ?? null);
+            $this->saveLine($cart, $product, $line, $wanted, $data['unit_price'] ?? null);
             $this->touch($cart);
 
             return ['data' => null, 'message' => null, 'status' => 200];
@@ -104,7 +104,7 @@ class CartService
                 $this->assertInStock($product, $type, $quantity);
             }
 
-            $this->saveLine($cart, $product, $line, $quantity, $merchant, $data['unit_price'] ?? null);
+            $this->saveLine($cart, $product, $line, $quantity, $data['unit_price'] ?? null);
             $this->touch($cart);
         });
 
@@ -203,65 +203,29 @@ class CartService
      */
     public function snapshot(Cart $cart, Merchant $merchant): array
     {
-        $rate = $merchant->effectiveExchangeRate();
-        $cart->load(['items.product' => fn ($query) => $query->withTrashed()->with('inventories')]);
-
-        $subtotal = 0;
-        $vat = 0;
-        $units = 0;
-        $items = [];
-
-        foreach ($cart->items->sortBy('id') as $line) {
-            $product = $line->product;
-            $unitCents = Money::toMinor((float) $line->price, 'USD');
-            $lineCents = $unitCents * $line->quantity;
-
-            $subtotal += $lineCents;
-            $vat += (int) round($lineCents * ($product->vat ?? 0) / 100);
-            $units += $line->quantity;
-
-            $items[] = [
-                'product_id' => $line->product_id,
-                'product_name' => $product->product_name,
-                'bar_code' => $product->bar_code,
-                'quantity' => $line->quantity,
-                'unit_price' => Money::usd($unitCents),
-                'unit_price_alt' => $this->alt($unitCents, $rate),
-                'line_total' => Money::usd($lineCents),
-                'line_total_alt' => $this->alt($lineCents, $rate),
-                'available_quantity' => $this->stock->quantities($product)[$cart->cart_type],
-                'held' => false,
-            ];
-        }
-
-        $total = $subtotal + $vat;
-        $feeCents = (int) round($total * $this->paymentSettings->salesFeeRate());
-        $gstCents = (int) round($total * $this->paymentSettings->gstRate());
+        $priced = $this->priced($cart, $merchant);
 
         return [
             'cart_id' => $cart->id,
             'type' => $cart->cart_type,
             'version' => $cart->version,
-            'is_empty' => $items === [],
-            'items' => $items,
-            'totals' => [
-                'subtotal' => Money::usd($subtotal),
-                'vat' => Money::usd($vat),
-                'fee' => Money::usd($feeCents),
-                'fee_alt' => $this->alt($feeCents, $rate),
-                'fee_percent' => $this->paymentSettings->salesFee()['percent'],
-                'gst' => Money::usd($gstCents),
-                'gst_alt' => $this->alt($gstCents, $rate),
-                'gst_percent' => $this->paymentSettings->gst()['percent'],
-                'total' => Money::usd($total),
-                'total_alt' => $this->alt($total, $rate),
-                'vat_rate' => $merchant->vat_rate,
-                'exchange_rate' => $rate,
-            ],
-            'item_count' => count($items),
-            'unit_count' => $units,
+            'is_empty' => $priced['items'] === [],
+            'items' => $priced['items'],
+            'totals' => $priced['totals'],
+            'item_count' => count($priced['items']),
+            'unit_count' => $priced['units'],
             'updated_at' => ApiResponse::iso($cart->updated_at),
         ];
+    }
+
+    /**
+     * Lines for an order, priced the same way as the ticket.
+     *
+     * @return array<int, array{product_id: int, quantity: int, unit_cents: int, unit_amount: int, currency: string, vat_percent: int}>
+     */
+    public function orderLines(Cart $cart, Merchant $merchant): array
+    {
+        return $this->priced($cart, $merchant)['lines'];
     }
 
     /**
@@ -290,7 +254,7 @@ class CartService
         }
 
         $applied = min($quantity, $room);
-        $this->saveLine($cart, $product, $existing, ($existing?->quantity ?? 0) + $applied, $merchant, $line['unit_price'] ?? null);
+        $this->saveLine($cart, $product, $existing, ($existing?->quantity ?? 0) + $applied, $line['unit_price'] ?? null);
 
         if ($applied < $quantity) {
             return ['status' => 'adjusted'] + $result + ['quantity' => $applied, 'reason' => ['code' => 'product.partial_stock', 'message' => "Only $applied left in the shop"]];
@@ -299,21 +263,34 @@ class CartService
         return ['status' => 'applied'] + $result + ['quantity' => $applied];
     }
 
-    private function saveLine(Cart $cart, Product $product, ?CartItem $line, int $quantity, Merchant $merchant, ?array $unitPrice): void
+    private function saveLine(Cart $cart, Product $product, ?CartItem $line, int $quantity, ?array $unitPrice): void
     {
-        $price = $line?->price ?? $product->price;
-
         if ($unitPrice) {
-            $price = $unitPrice['currency'] === 'USD'
-                ? $unitPrice['amount'] / 100
-                : round($unitPrice['amount'] / $merchant->effectiveExchangeRate(), 2);
+            $stored = $this->storedPrice((int) $unitPrice['amount'], strtoupper($unitPrice['currency']));
+        } elseif ($line) {
+            $stored = ['price' => $line->price, 'price_currency' => $line->price_currency ?: 'USD'];
+        } else {
+            $entered = $product->enteredPrice();
+            $stored = $this->storedPrice($entered['amount'], $entered['currency']);
         }
 
         if ($line) {
-            $line->update(['quantity' => $quantity, 'price' => $price]);
+            $line->update(['quantity' => $quantity] + $stored);
         } else {
-            $cart->items()->create(['product_id' => $product->id, 'quantity' => $quantity, 'price' => $price]);
+            $cart->items()->create(['product_id' => $product->id, 'quantity' => $quantity] + $stored);
         }
+    }
+
+    /**
+     * @return array{price: string, price_currency: string}
+     */
+    private function storedPrice(int $amount, string $currency): array
+    {
+        if ($currency === 'SLSH') {
+            return ['price' => (string) $amount, 'price_currency' => 'SLSH'];
+        }
+
+        return ['price' => (string) ($amount / 100), 'price_currency' => 'USD'];
     }
 
     private function assertInStock(Product $product, string $type, int $wanted): void
@@ -336,9 +313,126 @@ class CartService
         $cart->forceFill(['version' => $cart->version + 1])->save();
     }
 
-    private function alt(int $usdCents, int $rate): array
+    /**
+     * Subtotal, GST and total in the price's own currency. GST is applied once
+     * to the subtotal and rounded once. The other currency is display only.
+     *
+     * @return array{items: array<int, array<string, mixed>>, lines: array<int, array<string, mixed>>, totals: array<string, mixed>, units: int}
+     */
+    private function priced(Cart $cart, Merchant $merchant): array
     {
-        return Money::of((int) round($usdCents * $rate / 100), config('exelo.alt_currency'));
+        $rate = $merchant->effectiveExchangeRate();
+        $cart->load(['items.product' => fn ($query) => $query->withTrashed()->with('inventories')]);
+
+        $rows = [];
+        foreach ($cart->items->sortBy('id') as $line) {
+            $money = $this->lineMoney($line);
+            $rows[] = ['line' => $line, 'unit' => $money['amount'], 'currency' => $money['currency']];
+        }
+
+        $currencies = collect($rows)->pluck('currency')->unique()->values();
+        $currency = $currencies->count() === 1 ? (string) $currencies->first() : 'USD';
+
+        $subtotal = 0;
+        $units = 0;
+        $items = [];
+        $lines = [];
+
+        foreach ($rows as $row) {
+            /** @var CartItem $line */
+            $line = $row['line'];
+            $product = $line->product;
+            $lineTotal = $row['currency'] === $currency
+                ? $row['unit'] * $line->quantity
+                : $this->convertAmount($row['unit'] * $line->quantity, $row['currency'], $currency, $rate);
+            $unit = $row['currency'] === $currency ? $row['unit'] : (int) round($lineTotal / max($line->quantity, 1));
+
+            $subtotal += $lineTotal;
+            $units += $line->quantity;
+
+            $items[] = [
+                'product_id' => $line->product_id,
+                'product_name' => $product->product_name,
+                'bar_code' => $product->bar_code,
+                'quantity' => $line->quantity,
+                'unit_price' => Money::of($unit, $currency),
+                'unit_price_alt' => $this->converted($unit, $currency, $rate),
+                'line_total' => Money::of($lineTotal, $currency),
+                'line_total_alt' => $this->converted($lineTotal, $currency, $rate),
+                'available_quantity' => $this->stock->quantities($product)[$cart->cart_type],
+                'held' => false,
+            ];
+
+            $lines[] = [
+                'product_id' => $line->product_id,
+                'quantity' => $line->quantity,
+                'unit_amount' => $row['unit'],
+                'currency' => $row['currency'],
+                'unit_cents' => $row['currency'] === 'SLSH'
+                    ? (int) round($row['unit'] / max($rate, 1) * 100)
+                    : $row['unit'],
+                'vat_percent' => 0,
+            ];
+        }
+
+        $gst = Money::share($subtotal, $this->paymentSettings->gst()['percent']);
+        $total = $subtotal + $gst;
+
+        return [
+            'items' => $items,
+            'lines' => $lines,
+            'units' => $units,
+            'totals' => [
+                'subtotal' => Money::of($subtotal, $currency),
+                'subtotal_alt' => $this->converted($subtotal, $currency, $rate),
+                'vat' => Money::of(0, $currency),
+                // The wallet fee is added on /payments/quote, not on the ticket.
+                'fee' => Money::of(0, $currency),
+                'fee_alt' => $this->converted(0, $currency, $rate),
+                'fee_percent' => $this->paymentSettings->salesFee()['percent'],
+                'gst' => Money::of($gst, $currency),
+                'gst_alt' => $this->converted($gst, $currency, $rate),
+                'gst_percent' => $this->paymentSettings->gst()['percent'],
+                'total' => Money::of($total, $currency),
+                'total_alt' => $this->converted($total, $currency, $rate),
+                'vat_rate' => 0,
+                'exchange_rate' => $rate,
+            ],
+        ];
+    }
+
+    /**
+     * @return array{amount: int, currency: string}
+     */
+    private function lineMoney(CartItem $line): array
+    {
+        $currency = strtoupper((string) ($line->price_currency ?: 'USD'));
+
+        if ($currency === 'SLSH') {
+            return ['amount' => (int) round((float) $line->price), 'currency' => 'SLSH'];
+        }
+
+        return ['amount' => Money::toMinor((float) $line->price, 'USD'), 'currency' => 'USD'];
+    }
+
+    private function convertAmount(int $amount, string $from, string $to, int $rate): int
+    {
+        if ($from === $to || $rate < 1) {
+            return $amount;
+        }
+
+        return $from === 'SLSH'
+            ? (int) round($amount / $rate * 100)
+            : (int) round($amount * $rate / 100);
+    }
+
+    private function converted(int $amount, string $currency, int $rate): array
+    {
+        if (strtoupper($currency) === 'SLSH') {
+            return Money::usd($rate > 0 ? (int) round($amount / $rate * 100) : 0);
+        }
+
+        return Money::of($rate > 0 ? (int) round($amount * $rate / 100) : 0, (string) config('exelo.alt_currency'));
     }
 
     private function deviceId(User $user): string

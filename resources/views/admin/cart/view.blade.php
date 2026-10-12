@@ -87,7 +87,7 @@
                         <div class="col-md-4 offset-md-8">
                             <table class="table table-sm">
                                 <tr><th>Subtotal</th><td class="text-end">{{ $ticket['totals']['subtotal']['display'] }}</td></tr>
-                                <tr><th>VAT</th><td class="text-end">{{ $ticket['totals']['vat']['display'] }}</td></tr>
+                                <tr><th>GST {{ rtrim(rtrim(number_format($ticket['totals']['gst_percent'], 2, '.', ''), '0'), '.') }}%</th><td class="text-end">{{ $ticket['totals']['gst']['display'] }}</td></tr>
                                 <tr><th>Total</th><td class="text-end"><strong>{{ $ticket['totals']['total']['display'] }}</strong></td></tr>
                                 <tr><th></th><td class="text-end text-muted">{{ $ticket['totals']['total_alt']['display'] }} at {{ number_format($ticket['totals']['exchange_rate']) }}</td></tr>
                             </table>

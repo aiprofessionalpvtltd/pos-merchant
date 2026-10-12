@@ -48,20 +48,29 @@ class ChargeService
                 ? $this->saleFromCart($actor, $merchant, $data)
                 : $this->saleFromOrder($merchant, $data);
 
-            $this->assertAmount($merchant, $data, $sale['total_cents']);
+            $this->assertAmount($merchant, $data, $sale);
             $fee = $this->fee($merchant, $data, $rail, $sale['total_cents']);
-            $chargeCents = $sale['total_cents'] + ($fee['payer'] === 'customer' && $fee['unit'] === 'USD' ? $fee['amount'] : 0);
-            $billedShillings = $fee['unit'] === 'SLSH'
-                ? (int) $data['amount']['amount'] + ($fee['payer'] === 'customer' ? $fee['amount'] : 0)
-                : null;
+            $rate = $merchant->effectiveExchangeRate();
+            $given = (int) $data['amount']['amount'];
+            $givenCurrency = strtoupper($data['amount']['currency']);
+            $customerPays = $fee['payer'] === 'customer';
+
+            if ($givenCurrency === 'SLSH') {
+                $billedShillings = $given + ($customerPays && $fee['unit'] === 'SLSH' ? $fee['amount'] : 0);
+                $chargeCents = (int) round($billedShillings / max($rate, 1) * 100);
+                $due = ['amount' => $billedShillings, 'currency' => 'SLSH'];
+            } else {
+                $billedShillings = null;
+                $chargeCents = $given + ($customerPays && $fee['unit'] === 'USD' ? $fee['amount'] : 0);
+                $due = ['amount' => $chargeCents, 'currency' => 'USD'];
+            }
 
             $this->assertNoOpenCharge($sale);
 
             $tendered = $data['tendered'] ?? null;
-            $rate = $merchant->effectiveExchangeRate();
 
-            if ($rail === 'cash' && $tendered && $this->toUsdCents($tendered, $rate) < $chargeCents) {
-                throw new ApiException('payment.tender_too_low', 'The cash given is less than the total', 422, ['due' => Money::usd($chargeCents)], 'amount_tendered');
+            if ($rail === 'cash' && $tendered && $this->convert($tendered, $due['currency'], $rate) < $due['amount']) {
+                throw new ApiException('payment.tender_too_low', 'The cash given is less than the total', 422, ['due' => Money::of($due['amount'], $due['currency'])], 'amount_tendered');
             }
 
             $meta = [
@@ -70,10 +79,12 @@ class ChargeService
                 'cart_type' => $sale['cart_type'],
                 'order_id' => $sale['order_id'],
                 'total_cents' => $sale['total_cents'],
+                'merchant_amount' => $sale['native_subtotal'],
                 'fee_cents' => $fee['unit'] === 'USD' ? $fee['amount'] : (int) round($fee['amount'] / $rate * 100),
                 'fee_payer' => $fee['payer'],
                 'customer_charge_cents' => $chargeCents,
                 'billed_shillings' => $billedShillings,
+                'due' => $due,
                 'tendered' => $tendered,
                 'rate' => $rate,
             ];
@@ -144,17 +155,25 @@ class ChargeService
             throw new ApiException('payment.cart_changed', 'The ticket changed. Check the total and try again.', 409, ['current' => $this->carts->snapshot($cart, $merchant)]);
         }
 
-        $lines = [];
-        $total = 0;
+        $snapshot = $this->carts->snapshot($cart, $merchant);
+        $native = $snapshot['totals']['total'];
+        $subtotal = $snapshot['totals']['subtotal'];
+        $rate = max((int) $snapshot['totals']['exchange_rate'], 1);
+        $totalCents = $native['currency'] === 'USD'
+            ? $native['amount']
+            : (int) round($native['amount'] / $rate * 100);
 
-        foreach ($cart->items as $item) {
-            $unit = Money::toMinor((float) $item->price, 'USD');
-            $vatPercent = (int) ($item->product->vat ?? 0);
-            $lines[] = ['product_id' => $item->product_id, 'quantity' => $item->quantity, 'unit_cents' => $unit, 'vat_percent' => $vatPercent];
-            $total += $unit * $item->quantity + (int) round($unit * $item->quantity * $vatPercent / 100);
-        }
-
-        return ['lines' => $lines, 'total_cents' => $total, 'cart_type' => $cart->cart_type, 'order_id' => null, 'cart_id' => $cart->id, 'cart_version' => $cart->version, 'source' => "cart:{$cart->id}"];
+        return [
+            'lines' => $this->carts->orderLines($cart, $merchant),
+            'total_cents' => $totalCents,
+            'native_total' => ['amount' => $native['amount'], 'currency' => $native['currency']],
+            'native_subtotal' => ['amount' => $subtotal['amount'], 'currency' => $subtotal['currency']],
+            'cart_type' => $cart->cart_type,
+            'order_id' => null,
+            'cart_id' => $cart->id,
+            'cart_version' => $cart->version,
+            'source' => "cart:{$cart->id}",
+        ];
     }
 
     /**
@@ -173,33 +192,76 @@ class ChargeService
             throw new ApiException('order.invalid_transition', 'Only a pending order can be paid', 409, ['from' => strtolower($order->order_status), 'allowed' => []]);
         }
 
+        $currency = strtoupper((string) ($order->currency ?: 'USD'));
+        $rate = max($merchant->effectiveExchangeRate(), 1);
+
+        if ($currency === 'SLSH') {
+            $nativeAmount = (int) round((float) $order->total_price_sls);
+            $native = ['amount' => $nativeAmount, 'currency' => 'SLSH'];
+            $totalCents = (int) round($nativeAmount / $rate * 100);
+            $subtotal = ['amount' => (int) round((float) $order->sub_total * $rate), 'currency' => 'SLSH'];
+        } else {
+            $totalCents = Money::toMinor((float) $order->total_price, 'USD');
+            $native = ['amount' => $totalCents, 'currency' => 'USD'];
+            $subtotal = ['amount' => Money::toMinor((float) $order->sub_total, 'USD'), 'currency' => 'USD'];
+        }
+
         return [
-            'lines' => [], 'total_cents' => Money::toMinor((float) $order->total_price, 'USD'), 'cart_type' => $order->order_type ?? 'shop',
+            'lines' => [], 'total_cents' => $totalCents, 'native_total' => $native, 'native_subtotal' => $subtotal,
+            'cart_type' => $order->order_type ?? 'shop',
             'order_id' => $order->id, 'cart_id' => null, 'cart_version' => null, 'source' => "order:{$order->id}",
         ];
     }
 
-    private function assertAmount(Merchant $merchant, array $data, int $totalCents): void
+    /**
+     * @param  array{native_total: array{amount: int, currency: string}, total_cents: int}  $sale
+     */
+    private function assertAmount(Merchant $merchant, array $data, array $sale): void
     {
         $currency = strtoupper($data['amount']['currency']);
         $given = (int) $data['amount']['amount'];
+        $rate = max($merchant->effectiveExchangeRate(), 1);
+        $native = $sale['native_total'];
 
         if ($currency === 'USD') {
-            if ($given !== $totalCents) {
-                throw new ApiException('payment.cart_changed', 'The amount does not match the sale total', 409, ['current_total' => Money::usd($totalCents)]);
+            $expected = $native['currency'] === 'USD'
+                ? $native['amount']
+                : (int) round($native['amount'] / $rate * 100);
+
+            if ($given === $expected || $this->quotedCents($merchant, $data) === $given) {
+                return;
             }
 
+            throw new ApiException('payment.cart_changed', 'The amount does not match the sale total', 409, ['current_total' => Money::usd($expected)]);
+        }
+
+        $expected = $native['currency'] === 'SLSH'
+            ? $native['amount']
+            : (int) round($native['amount'] * $rate / 100);
+
+        if ($given === $expected || $this->quotedShillings($merchant, $data) === $given) {
             return;
         }
 
-        $rate = $merchant->effectiveExchangeRate();
-        $cartShillings = (int) round($totalCents * $rate / 100);
+        throw new ApiException('payment.cart_changed', 'The amount does not match the sale total', 409, ['current_total' => Money::of($expected, 'SLSH')]);
+    }
 
-        if ($given === $cartShillings || $this->quotedShillings($merchant, $data) === $given) {
-            return;
+    /**
+     * The USD sale total locked by a quote, when this charge is using that quote.
+     */
+    private function quotedCents(Merchant $merchant, array $data): ?int
+    {
+        if (empty($data['quote_id'])) {
+            return null;
         }
 
-        throw new ApiException('payment.cart_changed', 'The amount does not match the sale total', 409, ['current_total' => Money::of($cartShillings, 'SLSH')]);
+        $stored = Cache::get('payment-quote:'.$data['quote_id']);
+
+        if (! $stored || $stored['merchant_id'] !== $merchant->id || $stored['rail'] !== $data['rail'] || $stored['purpose'] !== $data['purpose']) {
+            return null;
+        }
+
+        return isset($stored['sale_cents']) ? (int) $stored['sale_cents'] : null;
     }
 
     /**
@@ -238,7 +300,7 @@ class ChargeService
             $saleShillings = $stored['sale_slsh'] ?? null;
             $matchesSale = $currency === 'SLSH'
                 ? $saleShillings === (int) $data['amount']['amount']
-                : $saleCents === $totalCents;
+                : $saleCents === (int) $data['amount']['amount'];
 
             if ($stored['merchant_id'] !== $merchant->id || $stored['rail'] !== $rail || $stored['purpose'] !== $data['purpose'] || ! $matchesSale) {
                 throw new ApiException('validation.failed', 'Please check the form', 422, ['quote_id' => ['This quote is for a different payment']], 'quote_id');
@@ -252,8 +314,7 @@ class ChargeService
         }
 
         if ($currency === 'SLSH') {
-            $shillings = (int) round($totalCents * $merchant->effectiveExchangeRate() / 100);
-            $fee = $this->payments->fee($merchant, $rail, $shillings);
+            $fee = $this->payments->fee($merchant, $rail, (int) $data['amount']['amount']);
 
             return $fee + ['unit' => 'SLSH'];
         }
@@ -279,9 +340,12 @@ class ChargeService
     private function chargeCash(User $actor, Merchant $merchant, array $data, array $sale, array $meta, int $chargeCents): array
     {
         return DB::transaction(function () use ($actor, $merchant, $data, $sale, $meta, $chargeCents) {
+            $due = $meta['due'];
             $invoice = $this->record($actor, $merchant, $data, $sale, $meta, [
                 'invoice_id' => 'CASH', 'transaction_id' => 'CASH', 'hash' => '0', 'mobile_number' => $merchant->phone_number,
-                'amount' => $chargeCents / 100, 'currency' => 'USD', 'expires_at' => now()->addMinutes(10),
+                'amount' => $due['currency'] === 'SLSH' ? $due['amount'] : $chargeCents / 100,
+                'currency' => $due['currency'] === 'SLSH' ? 'SLSH' : 'USD',
+                'expires_at' => now()->addMinutes(10),
             ]);
 
             $invoice = $this->invoices->markPaid($invoice, 'CASH');
@@ -357,45 +421,46 @@ class ChargeService
         $meta = $invoice->meta ?? [];
         $payload = $this->invoices->chargePayload($invoice) + ['customer_charge' => Money::usd($meta['customer_charge_cents'] ?? 0)];
 
-        if (! empty($meta['tendered'])) {
+        if (! empty($meta['tendered']) && ! empty($meta['due'])) {
             $rate = (int) ($meta['rate'] ?? $merchant->effectiveExchangeRate());
-            $payload['change_due'] = $this->changeDue($meta['tendered'], (int) ($meta['customer_charge_cents'] ?? 0), $rate);
+            $payload['change_due'] = $this->changeDue($meta['tendered'], $meta['due'], $rate);
         }
 
         return $payload;
     }
 
     /**
-     * A money amount (`amount`, `currency`) converted to USD cents, at the given
-     * SLSH-per-USD rate. Used to compare cash tendered in either currency against
-     * the charge total, which is always tracked internally in USD.
+     * Convert a money amount into $toCurrency once, at the shop's SLSH-per-USD rate.
      *
      * @param  array{amount: int, currency: string}  $money
      */
-    private function toUsdCents(array $money, int $rate): int
+    private function convert(array $money, string $toCurrency, int $rate): int
     {
-        return strtoupper($money['currency']) === 'SLSH'
-            ? (int) round($money['amount'] * 100 / $rate)
-            : (int) $money['amount'];
+        $from = strtoupper($money['currency']);
+        $to = strtoupper($toCurrency);
+        $amount = (int) $money['amount'];
+
+        if ($from === $to || $rate < 1) {
+            return $amount;
+        }
+
+        return $from === 'SLSH'
+            ? (int) round($amount / $rate * 100)
+            : (int) round($amount * $rate / 100);
     }
 
     /**
-     * Change due, in the same currency the customer actually handed over — a
-     * shopkeeper given shillings should get shillings back, not a dollar figure
-     * they'd have to convert themselves.
+     * Change due, in the same currency the customer actually handed over.
      *
      * @param  array{amount: int, currency: string}  $tendered
+     * @param  array{amount: int, currency: string}  $due
      * @return array<string, mixed>
      */
-    private function changeDue(array $tendered, int $chargeCents, int $rate): array
+    private function changeDue(array $tendered, array $due, int $rate): array
     {
-        if (strtoupper($tendered['currency']) === 'SLSH') {
-            $chargeSls = (int) round($chargeCents * $rate / 100);
+        $currency = strtoupper($tendered['currency']);
 
-            return Money::of($tendered['amount'] - $chargeSls, 'SLSH');
-        }
-
-        return Money::usd($tendered['amount'] - $chargeCents);
+        return Money::of($tendered['amount'] - $this->convert($due, $currency, $rate), $currency);
     }
 
     private function clearCart(Invoice $invoice): void

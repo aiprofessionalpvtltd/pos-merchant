@@ -632,8 +632,9 @@ another rail. Needs the `pos` permission.
 For **eDahab**, EXELO calls `CheckInvoiceStatus` first. If that answer is
 `Paid`, the invoice is updated to paid and this call returns `409` — read the
 charge with GET and show the receipt. A charge that is still waiting is stored
-as `Cancelled`. For **Zaad**, the charge is cancelled locally and the hold is
-not committed.
+as `Cancelled`. For **Zaad**, EXELO calls `API_CANCEL` to release the hold.
+That call does not commit it. If Zaad cannot be reached, the charge is still
+cancelled locally so the shop can charge again.
 
 Cancelling an already-cancelled charge returns the same `200`. A paid, failed
 or expired charge returns `409 payment.already_settled`.
@@ -1256,8 +1257,8 @@ card session and webhooks) are not. How the built part works, and what is open:
   runs the same `CheckInvoiceStatus` check as GET. Paid only when eDahab says so.
 - **Cancel** (`POST /payments/charges/{id}/cancel`) is only for a `pending` charge.
   eDahab is checked first, so a payment that just came back `Paid` is settled and
-  the cancel is refused. Zaad is not asked, because that status call would take
-  the money. The cart is not cleared.
+  the cancel is refused. Zaad is released with `API_CANCEL`. That call does not
+  commit the hold. The cart is not cleared.
 - **Built code:** `PaymentService` (methods, quote, fee), `ChargeService` (charges,
   order creation on paid), `V1\PaymentController`, `FinalizeSaleOnPaid` (the
   `InvoicePaid` listener), `PaymentSettingsService` (the sales fee percent), and

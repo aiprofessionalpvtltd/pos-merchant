@@ -14,6 +14,7 @@ class CartItem extends Model
         'product_id',
         'quantity',
         'price',
+        'price_currency',
     ];
 
     // Relationship with Cart

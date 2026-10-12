@@ -70,8 +70,8 @@ it('takes a cash sale in one call: order, stock and cleared ticket', function ()
         ->assertJsonPath('message', 'Sale complete')
         ->assertJsonPath('data.status', 'paid')
         ->assertJsonPath('data.order.order_status', 'Complete')
-        ->assertJsonPath('data.order.total.amount', 3885)
-        ->assertJsonPath('data.change_due.amount', 115)
+        ->assertJsonPath('data.order.total.amount', 3793)
+        ->assertJsonPath('data.change_due.amount', 207)
         ->assertJsonPath('data.cart.is_empty', true);
 
     $orderId = $response->json('data.order.id');
@@ -83,13 +83,14 @@ it('takes a cash sale in one call: order, stock and cleared ticket', function ()
     expect($order->paid_at)->not->toBeNull()
         ->and($order->payment_method)->toBe('cash')
         ->and($order->name)->toBe('Amina Yusuf')
-        ->and((float) $order->total_price)->toBe(38.85)
-        ->and((float) $order->vat)->toBe(1.85)
+        ->and((float) $order->sub_total)->toBe(37.0)
+        ->and((float) $order->total_price)->toBe(37.93)
+        ->and((float) $order->vat)->toBe(0.93)
         ->and($order->items)->toHaveCount(1)
         ->and(InventoryHistory::where('product_id', $rice['id'])->where('kind', 'sale')->sum('quantity'))->toEqual(2);
 
     test()->withToken($token)->getJson('/api/v1/payments/charges/'.$response->json('data.charge_id'))
-        ->assertOk()->assertJsonPath('data.status', 'paid')->assertJsonPath('data.order.id', $orderId)->assertJsonPath('data.amount.amount', 3885)
+        ->assertOk()->assertJsonPath('data.status', 'paid')->assertJsonPath('data.order.id', $orderId)->assertJsonPath('data.amount.amount', 3793)
         ->assertJsonPath('data.shop.id', $owner->merchant->id)->assertJsonPath('data.shop.business_name', $owner->merchant->business_name);
 });
 
@@ -97,12 +98,58 @@ it('takes a cash sale with the customer paying in SLSH, and gives change in SLSH
     [, $token, $rice] = till();
     fillTicket($token, $rice['id']);
 
-    // Total is $38.85 at the shop's rate of 8000: 310,800 SLSH.
+    // Total is $37.93 at the shop's rate of 8000: 303,440 SLSH.
     payCart($token, ['amount_tendered' => ['amount' => 320000, 'currency' => 'SLSH']])
         ->assertOk()
         ->assertJsonPath('data.status', 'paid')
         ->assertJsonPath('data.change_due.currency', 'SLSH')
-        ->assertJsonPath('data.change_due.amount', 9200);
+        ->assertJsonPath('data.change_due.amount', 16560);
+});
+
+it('bills an SLSH cart in whole shillings, with GST added once', function () {
+    [$owner, $token] = till();
+    $owner->merchant->update(['exchange_rate' => 10000]);
+    app('auth')->forgetGuards();
+
+    $drink = addProduct($token, [
+        'bar_code' => 'CEL-1', 'product_name' => 'Celcius',
+        'price' => ['amount' => 10000, 'currency' => 'SLSH'], 'quantity' => 5,
+    ]);
+    addLine($token, $drink['id'], 2)->assertOk();
+
+    $paid = payCart($token, ['amount_tendered' => ['amount' => 20500, 'currency' => 'SLSH']])
+        ->assertOk()
+        ->assertJsonPath('data.order.total.amount', 20500)
+        ->assertJsonPath('data.order.total.currency', 'SLSH')
+        ->assertJsonPath('data.order.total_alt.amount', 205)
+        ->assertJsonPath('data.change_due.amount', 0);
+
+    $order = Order::find($paid->json('data.order.id'));
+    $invoice = Invoice::where('order_id', $order->id)->first();
+
+    expect((float) $order->sub_total)->toBe(2.0)
+        ->and((int) $order->total_price_sls)->toBe(20500)
+        ->and($invoice->meta['merchant_amount']['amount'])->toBe(20000)
+        ->and($invoice->currency)->toBe('SLSH')
+        ->and((int) $invoice->amount)->toBe(20500);
+
+    addLine($token, $drink['id'], 2)->assertOk();
+    $cart = ticket($token);
+    $quoteId = test()->withToken($token)->postJson('/api/v1/payments/quote', [
+        'amount' => ['amount' => 20500, 'currency' => 'SLSH'], 'rail' => 'edahab', 'purpose' => 'pos_sale',
+    ])->assertOk()->json('data.quote_id');
+
+    $chargeId = test()->withToken($token)->postJson('/api/v1/cart/pay', [
+        'cart_version' => $cart['version'], 'rail' => 'edahab', 'quote_id' => $quoteId,
+        'customer' => ['wallet_number' => '+252651110009'], 'idempotency_key' => freshKey(),
+    ])->assertStatus(202)->json('data.charge_id');
+
+    test()->withToken($token)->getJson('/api/v1/payments/charges/'.$chargeId)
+        ->assertOk()
+        ->assertJsonPath('data.amount.amount', 20500)
+        ->assertJsonPath('data.amount.currency', 'SLSH');
+
+    Http::assertSent(fn ($request) => str_contains($request->url(), 'IssueInvoice') && (int) json_decode($request->body(), true)['Amount'] === 20500);
 });
 
 it('refuses cash tendered in SLSH that falls short of the total', function () {
@@ -138,7 +185,7 @@ it('refuses a payment that is wrong for the ticket', function () {
         ->assertStatus(409)->assertJsonPath('error.code', 'cart.version_conflict')->assertJsonPath('error.details.current.version', $version);
 
     payCart($token, ['amount_tendered' => ['amount' => 1000, 'currency' => 'USD']])
-        ->assertStatus(422)->assertJsonPath('error.code', 'payment.tender_too_low')->assertJsonPath('error.details.due.amount', 3885);
+        ->assertStatus(422)->assertJsonPath('error.code', 'payment.tender_too_low')->assertJsonPath('error.details.due.amount', 3793);
 
     payCart($token, ['rail' => 'zaad'])->assertStatus(422)->assertJsonPath('error.code', 'payment.rail_unavailable');
     payCart($token, ['rail' => 'bitcoin'])->assertStatus(422)->assertJsonPath('error.code', 'validation.failed');
@@ -286,6 +333,148 @@ it('refuses to confirm a cash sale through the eDahab SMS endpoint', function ()
     ])->assertStatus(422)->assertJsonPath('error.code', 'payment.rail_unavailable');
 });
 
+it('takes a Zaad payment the same way: the sale waits, then a poll commits it', function () {
+    [$owner, $token, $rice] = till();
+    $owner->merchant->update(['zaad_number' => '+252632220001']);
+    app('auth')->forgetGuards();
+    fillTicket($token, $rice['id']);
+
+    Http::fake([
+        'api.waafipay.net/*' => function ($request) {
+            $body = $request->data();
+            $service = $body['serviceName'] ?? '';
+
+            if ($service === 'API_PREAUTHORIZE') {
+                return Http::response([
+                    'errorCode' => '0',
+                    'responseMsg' => 'RCS_SUCCESS',
+                    'params' => [
+                        'state' => 'APPROVED',
+                        'transactionId' => '42750126',
+                        'referenceId' => $body['serviceParams']['transactionInfo']['referenceId'],
+                    ],
+                ]);
+            }
+
+            $approved = Cache::get('test-zaad-state') === 'approved';
+
+            return Http::response([
+                'errorCode' => $approved ? '0' : 'E100',
+                'responseMsg' => $approved ? 'RCS_SUCCESS' : 'Not approved',
+                'params' => [
+                    'state' => $approved ? 'approved' : 'pending',
+                    'transactionId' => '42750126',
+                    'referenceId' => $body['serviceParams']['referenceId'] ?? null,
+                ],
+            ]);
+        },
+    ]);
+
+    $pending = payCart($token, ['rail' => 'zaad', 'customer' => ['wallet_number' => '+252632220009', 'name' => 'Hodan']])
+        ->assertStatus(202)
+        ->assertJsonPath('message', 'Ask the customer to approve the payment')
+        ->assertJsonPath('data.status', 'pending');
+
+    $chargeId = $pending->json('data.charge_id');
+    expect(orders()->count())->toBe(0)->and(shelf($rice['id']))->toBe(24)->and(ticket($token)['is_empty'])->toBeFalse();
+
+    Cache::put('test-zaad-state', 'pending');
+    test()->withToken($token)->getJson('/api/v1/payments/charges/'.$chargeId)
+        ->assertOk()->assertJsonPath('data.status', 'pending')->assertJsonPath('data.amount.amount', 303440)->assertJsonPath('data.amount.currency', 'SLSH');
+
+    Cache::put('test-zaad-state', 'approved');
+    test()->withToken($token)->getJson('/api/v1/payments/charges/'.$chargeId)
+        ->assertOk()->assertJsonPath('data.status', 'paid')->assertJsonPath('data.order.order_status', 'Complete');
+
+    expect(orders()->count())->toBe(1)->and(shelf($rice['id']))->toBe(22)->and(ticket($token)['is_empty'])->toBeTrue()
+        ->and(orders()->first()->payment_method)->toBe('zaad')
+        ->and(collect(Http::recorded())->map(fn ($pair) => $pair[0]->data()['serviceName'])->all())
+        ->toBe(['API_PREAUTHORIZE', 'API_PREAUTHORIZE_COMMIT', 'API_PREAUTHORIZE_COMMIT']);
+});
+
+it('releases a waiting Zaad hold when the shop cancels, without taking the money', function () {
+    [$owner, $token, $rice] = till();
+    $owner->merchant->update(['zaad_number' => '+252632220001']);
+    app('auth')->forgetGuards();
+    fillTicket($token, $rice['id']);
+
+    Http::fake([
+        'api.waafipay.net/*' => function ($request) {
+            $body = $request->data();
+
+            if (($body['serviceName'] ?? '') === 'API_CANCEL') {
+                return Http::response(['errorCode' => '0', 'responseMsg' => 'RCS_SUCCESS']);
+            }
+
+            return Http::response([
+                'errorCode' => '0',
+                'responseMsg' => 'RCS_SUCCESS',
+                'params' => [
+                    'state' => 'APPROVED',
+                    'transactionId' => '42750126',
+                    'referenceId' => $body['serviceParams']['transactionInfo']['referenceId'],
+                ],
+            ]);
+        },
+    ]);
+
+    $chargeId = payCart($token, ['rail' => 'zaad', 'customer' => ['wallet_number' => '+252632220009']])
+        ->assertStatus(202)
+        ->json('data.charge_id');
+
+    test()->withToken($token)->postJson('/api/v1/payments/charges/'.$chargeId.'/cancel')
+        ->assertOk()
+        ->assertJsonPath('data.status', 'cancelled');
+
+    $invoice = Invoice::where('public_id', $chargeId)->first();
+    $cancel = collect(Http::recorded())->first(fn ($pair) => ($pair[0]->data()['serviceName'] ?? null) === 'API_CANCEL');
+    $info = $cancel[0]->data()['serviceParams']['transactionInfo'];
+
+    expect($info['referenceId'])->toBe($invoice->invoice_id)
+        ->and($info['invoiceId'])->toBe($invoice->meta['provider_invoice_id'])
+        ->and($info['amount'])->toBe(303440)
+        ->and($info['currency'])->toBe('SLSH')
+        ->and(collect(Http::recorded())->contains(fn ($pair) => ($pair[0]->data()['serviceName'] ?? null) === 'API_PREAUTHORIZE_COMMIT'))->toBeFalse()
+        ->and(orders()->count())->toBe(0)->and(shelf($rice['id']))->toBe(24)->and(ticket($token)['is_empty'])->toBeFalse();
+});
+
+it('cancels a waiting Zaad charge when Zaad cannot be reached', function () {
+    [$owner, $token, $rice] = till();
+    $owner->merchant->update(['zaad_number' => '+252632220001']);
+    app('auth')->forgetGuards();
+    fillTicket($token, $rice['id']);
+
+    Http::fake([
+        'api.waafipay.net/*' => function ($request) {
+            $body = $request->data();
+
+            if (($body['serviceName'] ?? '') === 'API_CANCEL') {
+                return Http::response('down', 500);
+            }
+
+            return Http::response([
+                'errorCode' => '0',
+                'responseMsg' => 'RCS_SUCCESS',
+                'params' => [
+                    'state' => 'APPROVED',
+                    'transactionId' => '42750126',
+                    'referenceId' => $body['serviceParams']['transactionInfo']['referenceId'],
+                ],
+            ]);
+        },
+    ]);
+
+    $chargeId = payCart($token, ['rail' => 'zaad', 'customer' => ['wallet_number' => '+252632220009']])
+        ->assertStatus(202)
+        ->json('data.charge_id');
+
+    test()->withToken($token)->postJson('/api/v1/payments/charges/'.$chargeId.'/cancel')
+        ->assertOk()
+        ->assertJsonPath('data.status', 'cancelled');
+
+    expect(ticket($token)['is_empty'])->toBeFalse();
+});
+
 it('takes a wallet payment: the sale waits for the customer, then completes when they approve', function () {
     [, $token, $rice] = till();
     fillTicket($token, $rice['id']);
@@ -302,7 +491,7 @@ it('takes a wallet payment: the sale waits for the customer, then completes when
 
     Cache::put('test-edahab-status', 'Pending');
     test()->withToken($token)->getJson('/api/v1/payments/charges/'.$chargeId)
-        ->assertOk()->assertJsonPath('data.status', 'pending')->assertJsonPath('data.amount.amount', 310800)->assertJsonPath('data.amount.currency', 'SLSH')
+        ->assertOk()->assertJsonPath('data.status', 'pending')->assertJsonPath('data.amount.amount', 303440)->assertJsonPath('data.amount.currency', 'SLSH')
         ->assertJsonPath('data.purpose', 'pos_sale')->assertJsonPath('data.customer.name', 'Hodan');
 
     Cache::put('test-edahab-status', 'Paid');
@@ -319,7 +508,7 @@ it('takes a wallet payment: the sale waits for the customer, then completes when
         ->assertOk()
         ->assertJsonPath('data.totals.paid_currency', 'SLSH')
         ->assertJsonPath('data.totals.total.currency', 'SLSH')
-        ->assertJsonPath('data.totals.total.amount', 310800)
+        ->assertJsonPath('data.totals.total.amount', 303440)
         ->assertJsonPath('data.totals.total_alt.currency', 'USD');
 });
 
@@ -353,11 +542,11 @@ it('passes the wallet fee to the customer on Gold', function () {
     Cache::put('test-edahab-status', 'Paid');
     app('auth')->forgetGuards();
     test()->withToken($token)->getJson('/api/v1/payments/charges/'.$chargeId)
-        ->assertJsonPath('data.status', 'paid')->assertJsonPath('data.amount.amount', 319680);
+        ->assertJsonPath('data.status', 'paid')->assertJsonPath('data.amount.amount', 312080);
 
-    expect((float) orders()->first()->exelo_amount)->toBe(1.11)
-        ->and((float) orders()->first()->total_price)->toBe(38.85)
-        ->and((float) Invoice::where('public_id', $chargeId)->value('platform_fee'))->toBe(1.11);
+    expect((float) orders()->first()->exelo_amount)->toBe(1.08)
+        ->and((float) orders()->first()->total_price)->toBe(37.93)
+        ->and((float) Invoice::where('public_id', $chargeId)->value('platform_fee'))->toBe(1.08);
 });
 
 it('applies the saved EXELO sales fee when a checkout sale is paid', function () {
@@ -378,12 +567,12 @@ it('applies the saved EXELO sales fee when a checkout sale is paid', function ()
     Cache::put('test-edahab-status', 'Paid');
     app('auth')->forgetGuards();
     test()->withToken($token)->getJson('/api/v1/payments/charges/'.$chargeId)
-        ->assertJsonPath('data.status', 'paid')->assertJsonPath('data.amount.amount', 326320);
+        ->assertJsonPath('data.status', 'paid')->assertJsonPath('data.amount.amount', 318640);
 
-    // $38.85 sale at 5% is $1.94, added to the customer charge on Gold.
-    expect((float) orders()->first()->exelo_amount)->toBe(1.94)
-        ->and((float) orders()->first()->total_price)->toBe(38.85)
-        ->and((float) Invoice::where('public_id', $chargeId)->value('platform_fee'))->toBe(1.94);
+    // $37.93 sale at 5% is $1.90, added to the customer charge on Gold.
+    expect((float) orders()->first()->exelo_amount)->toBe(1.90)
+        ->and((float) orders()->first()->total_price)->toBe(37.93)
+        ->and((float) Invoice::where('public_id', $chargeId)->value('platform_fee'))->toBe(1.90);
 });
 
 it('holds a ticket as a pending order without touching stock', function () {
@@ -395,7 +584,7 @@ it('holds a ticket as a pending order without touching stock', function () {
     $held = test()->withToken($token)->postJson('/api/v1/cart/hold', $body)->assertCreated()
         ->assertJsonPath('message', 'Order held for Amina Yusuf')
         ->assertJsonPath('data.order.order_status', 'Pending')
-        ->assertJsonPath('data.order.total.amount', 3885)
+        ->assertJsonPath('data.order.total.amount', 3793)
         ->assertJsonPath('data.cart.is_empty', true);
 
     expect(shelf($rice['id']))->toBe(24)->and(orders()->first()->paid_at)->toBeNull()->and(orders()->first()->note)->toBe('Collecting Thursday')
@@ -422,7 +611,7 @@ it('lists and reads orders', function () {
         ->assertJsonPath('meta.pagination.total', 2)
         ->assertJsonPath('meta.summary.pending_count', 1)
         ->assertJsonPath('meta.summary.complete_count', 1)
-        ->assertJsonPath('meta.summary.pending_value.amount', 500)
+        ->assertJsonPath('meta.summary.pending_value.amount', 513)
         ->assertJsonPath('data.0.order_status', 'Pending')
         ->assertJsonPath('data.0.initial_name', 'AY')
         ->assertJsonPath('data.0.item_count', 1)
@@ -437,8 +626,8 @@ it('lists and reads orders', function () {
     $list('?q=amina')->assertJsonCount(1, 'data');
     $list('?q='.$all->json('data.1.id'))->assertJsonCount(1, 'data');
     $list('?from='.now()->addDay()->toDateString())->assertJsonCount(0, 'data');
-    $list('?sort=total')->assertJsonPath('data.0.total.amount', 500);
-    $list('?sort=-total')->assertJsonPath('data.0.total.amount', 3885);
+    $list('?sort=total')->assertJsonPath('data.0.total.amount', 513);
+    $list('?sort=-total')->assertJsonPath('data.0.total.amount', 3793);
     $list('?per_page=1')->assertJsonCount(1, 'data')->assertJsonPath('meta.pagination.has_more', true);
     $list('?status=paid')->assertStatus(422);
 
@@ -447,9 +636,9 @@ it('lists and reads orders', function () {
         ->assertJsonPath('data.items.0.product_name', 'Rice')
         ->assertJsonPath('data.items.0.quantity', 2)
         ->assertJsonPath('data.totals.subtotal.amount', 3700)
-        ->assertJsonPath('data.totals.vat.amount', 185)
-        ->assertJsonPath('data.totals.total.amount', 3885)
-        ->assertJsonPath('data.totals.total_alt.amount', 310800)
+        ->assertJsonPath('data.totals.vat.amount', 93)
+        ->assertJsonPath('data.totals.total.amount', 3793)
+        ->assertJsonPath('data.totals.total_alt.amount', 303440)
         ->assertJsonPath('data.charge.rail', 'cash')
         ->assertJsonPath('data.charge.status', 'paid')
         ->assertJsonPath('data.employee.name', 'Kalid Ahmed')
@@ -487,7 +676,7 @@ it('settles a held order with cash', function () {
         ->assertJsonPath('data.status', 'paid')
         ->assertJsonPath('data.order.order_status', 'Complete')
         ->assertJsonPath('data.order.paid_at', fn ($value) => $value !== null)
-        ->assertJsonPath('data.change_due.amount', 1115);
+        ->assertJsonPath('data.change_due.amount', 1207);
 
     expect(shelf($rice['id']))->toBe(22);
 
@@ -512,8 +701,8 @@ it('settles a held order through a wallet once the customer approves', function 
 
     expect($order->paid_at)->not->toBeNull()
         ->and($order->payment_method)->toBe('edahab')
-        ->and((float) $order->exelo_amount)->toBe(1.11)
-        ->and((float) Invoice::where('public_id', $pending->json('data.charge_id'))->value('platform_fee'))->toBe(1.11)
+        ->and((float) $order->exelo_amount)->toBe(1.08)
+        ->and((float) Invoice::where('public_id', $pending->json('data.charge_id'))->value('platform_fee'))->toBe(1.08)
         ->and(shelf($rice['id']))->toBe(22);
 });
 
@@ -597,7 +786,7 @@ it('saves an order composed offline, once', function () {
     $created = test()->withToken($token)->postJson('/api/v1/orders', $body)->assertCreated()
         ->assertJsonPath('data.client_order_id', 'ord_local_44')
         ->assertJsonPath('data.order_status', 'Pending')
-        ->assertJsonPath('data.totals.total.amount', 3443)
+        ->assertJsonPath('data.totals.total.amount', 3434)
         ->assertJsonPath('data.created_at', '2026-09-18T11:02:00Z');
 
     test()->withToken($token)->postJson('/api/v1/orders', $body)->assertOk()->assertJsonPath('data.id', $created->json('data.id'))->assertJsonPath('message', 'Order already saved');
@@ -624,8 +813,8 @@ it('produces a receipt for an order', function () {
         ->assertJsonPath('data.invoice.payment_method', 'cash')
         ->assertJsonPath('data.customer.name', 'Amina Yusuf')
         ->assertJsonPath('data.items.0.line_total.amount', 3700)
-        ->assertJsonPath('data.totals.total.amount', 3885)
-        ->assertJsonPath('data.totals.vat_label', '5%')
+        ->assertJsonPath('data.totals.total.amount', 3793)
+        ->assertJsonPath('data.totals.vat_label', '2.5%')
         ->assertJsonPath('data.footer', 'Mahadsanid!');
 
     test()->withToken($token)->getJson('/api/v1/orders/999999/receipt')->assertStatus(404);
@@ -656,26 +845,26 @@ it('starts a charge directly for a ticket, locking a quote and refusing a change
     fillTicket($token, $rice['id']);
     $cart = ticket($token);
     $charge = fn (array $extra = []) => test()->withToken($token)->postJson('/api/v1/payments/charges', $extra + [
-        'rail' => 'cash', 'purpose' => 'pos_sale', 'amount' => ['amount' => 3885, 'currency' => 'USD'], 'cart_id' => $cart['cart_id'], 'idempotency_key' => freshKey(),
+        'rail' => 'cash', 'purpose' => 'pos_sale', 'amount' => ['amount' => 3793, 'currency' => 'USD'], 'cart_id' => $cart['cart_id'], 'idempotency_key' => freshKey(),
     ]);
 
-    $charge(['amount' => ['amount' => 3000, 'currency' => 'USD']])->assertStatus(409)->assertJsonPath('error.code', 'payment.cart_changed')->assertJsonPath('error.details.current_total.amount', 3885);
+    $charge(['amount' => ['amount' => 3000, 'currency' => 'USD']])->assertStatus(409)->assertJsonPath('error.code', 'payment.cart_changed')->assertJsonPath('error.details.current_total.amount', 3793);
     $charge(['cart_version' => $cart['version'] - 1])->assertStatus(409)->assertJsonPath('error.code', 'payment.cart_changed');
     $charge(['cart_id' => 999999])->assertStatus(404)->assertJsonPath('error.code', 'cart.not_found');
     $charge(['quote_id' => 'qte_GONE'])->assertStatus(410)->assertJsonPath('error.code', 'quote.expired');
-    $charge(['amount' => ['amount' => 3885, 'currency' => 'SLSH']])
+    $charge(['amount' => ['amount' => 3793, 'currency' => 'SLSH']])
         ->assertStatus(409)
         ->assertJsonPath('error.code', 'payment.cart_changed')
-        ->assertJsonPath('error.details.current_total.amount', 310800)
+        ->assertJsonPath('error.details.current_total.amount', 303440)
         ->assertJsonPath('error.details.current_total.currency', 'SLSH');
     $charge(['cart_id' => null])->assertStatus(422);
 
-    $quote = test()->withToken($token)->postJson('/api/v1/payments/quote', ['amount' => ['amount' => 3885, 'currency' => 'USD'], 'rail' => 'edahab', 'purpose' => 'pos_sale'])->json('data.quote_id');
+    $quote = test()->withToken($token)->postJson('/api/v1/payments/quote', ['amount' => ['amount' => 3793, 'currency' => 'USD'], 'rail' => 'edahab', 'purpose' => 'pos_sale'])->json('data.quote_id');
     $charge(['quote_id' => $quote])->assertStatus(422)->assertJsonPath('error.field', 'quote_id');
 
-    $cashQuote = test()->withToken($token)->postJson('/api/v1/payments/quote', ['amount' => ['amount' => 3885, 'currency' => 'USD'], 'rail' => 'cash', 'purpose' => 'pos_sale'])->json('data.quote_id');
+    $cashQuote = test()->withToken($token)->postJson('/api/v1/payments/quote', ['amount' => ['amount' => 3793, 'currency' => 'USD'], 'rail' => 'cash', 'purpose' => 'pos_sale'])->json('data.quote_id');
     $charge(['quote_id' => $cashQuote, 'customer' => ['name' => 'Amina']])->assertOk()->assertJsonPath('data.status', 'paid')->assertJsonPath('data.order.order_status', 'Complete')
-        ->assertJsonPath('data.customer_charge.amount', 3885);
+        ->assertJsonPath('data.customer_charge.amount', 3793);
 
     expect(orders()->count())->toBe(1);
 });
@@ -684,7 +873,7 @@ it('settles an order through the charge endpoint too', function () {
     [, $token, $rice] = till();
     $id = heldOrder($token, $rice['id']);
 
-    test()->withToken($token)->postJson('/api/v1/payments/charges', ['rail' => 'cash', 'purpose' => 'order_settlement', 'amount' => ['amount' => 3885, 'currency' => 'USD'], 'order_id' => $id, 'idempotency_key' => freshKey()])
+    test()->withToken($token)->postJson('/api/v1/payments/charges', ['rail' => 'cash', 'purpose' => 'order_settlement', 'amount' => ['amount' => 3793, 'currency' => 'USD'], 'order_id' => $id, 'idempotency_key' => freshKey()])
         ->assertOk()->assertJsonPath('data.purpose', 'order_settlement')->assertJsonPath('data.status', 'paid');
 
     expect(Order::find($id)->paid_at)->not->toBeNull()->and(orders()->count())->toBe(1);
